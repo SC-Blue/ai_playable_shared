@@ -1,0 +1,14 @@
+{
+  "name": "Supercent.PlayableAI.Authoring.Shared",
+  "references": [
+    "Supercent.PlayableAI.Contracts",
+    "Supercent.PlayableAI.Runtime",
+    "Supercent.PlayableAI.FacilityFoundation",
+    "Supercent.PlayableAI.MoneyFoundation",
+    "Supercent.PlayableAI.NpcFoundation",
+    "PlayableModules.Facility"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}
