@@ -108,7 +108,6 @@ namespace Supercent.PlayableAI.Common.Format
         public PromptIntentObjectScenarioOptions scenarioOptions;
         public PhysicsAreaOptionsDefinition physicsAreaOptions;
         public RailOptionsDefinition railOptions;
-        public PromptIntentObjectPlacementDefinition placement;
     }
 
     [Serializable]
@@ -250,7 +249,6 @@ namespace Supercent.PlayableAI.Common.Format
         public ScenarioModelSellerRequestableItemDefinition[] sellerRequestableItems = new ScenarioModelSellerRequestableItemDefinition[0];
         public PhysicsAreaOptionsDefinition physicsAreaOptions;
         public RailOptionsDefinition railOptions;
-        public PromptIntentObjectPlacementDefinition placement;
         public bool startsPresent = true;
         public bool startsActive = true;
         public string firstPresentingStageId;

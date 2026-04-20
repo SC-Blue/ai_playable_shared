@@ -21,14 +21,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
     {
         public static PromptIntentJsonValidationResult Validate(string json, PlayableObjectCatalog catalog)
         {
-            return Validate(json, catalog, false);
-        }
-
-        public static PromptIntentJsonValidationResult Validate(
-            string json,
-            PlayableObjectCatalog catalog,
-            bool allowLayoutBackedPlacement)
-        {
             var result = new PromptIntentJsonValidationResult();
             _ = catalog;
 
@@ -36,7 +28,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (!detection.IsPromptIntent)
                 return Fail(result, PlayableFailureCode.UnsupportedInputContract, detection.Message);
 
-            PromptIntentJsonShapeValidationResult shapeValidation = PromptIntentJsonShapeValidator.Validate(json, allowLayoutBackedPlacement);
+            PromptIntentJsonShapeValidationResult shapeValidation = PromptIntentJsonShapeValidator.Validate(json);
             if (!shapeValidation.IsValid)
                 return CopyFailure(result, shapeValidation.FailureCode, shapeValidation.Errors);
 
@@ -59,7 +51,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             ValidateCurrencies(result.Contract.currencies, result);
             ValidateSaleValues(result.Contract.saleValues, result);
-            ValidateObjects(result.Contract.objects, result, allowLayoutBackedPlacement);
+            ValidateObjects(result.Contract.objects, result);
             ValidateStages(result.Contract.stages, result);
             ValidateScenarioOptions(result.Contract.scenarioOptions, result);
 
@@ -122,8 +114,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static void ValidateObjects(
             PromptIntentObjectDefinition[] values,
-            PromptIntentJsonValidationResult result,
-            bool allowLayoutBackedPlacement)
+            PromptIntentJsonValidationResult result)
         {
             var seenIds = new HashSet<string>(StringComparer.Ordinal);
             PromptIntentObjectDefinition[] safeValues = values ?? new PromptIntentObjectDefinition[0];
@@ -154,14 +145,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     !string.IsNullOrEmpty(Normalize(value.designId)))
                 {
                     Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].designId는 physics_area에서 사용할 수 없습니다.");
-                }
-
-                if (!allowLayoutBackedPlacement && value.placement != null)
-                {
-                    Fail(
-                        result,
-                        PlayableFailureCode.InvalidValue,
-                        "objects[" + i + "].placement는 Step 3 draft_layout.json에서 작성해야 하며 Step 2 raw intent에서는 허용되지 않습니다.");
                 }
 
                 ValidateObjectScenarioOptions(value.scenarioOptions, role, "objects[" + i + "].scenarioOptions", result);
@@ -697,7 +680,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         }
     }
 
-    internal sealed class PromptIntentJsonShapeValidationResult
+    public sealed class PromptIntentJsonShapeValidationResult
     {
         public bool IsValid;
         public PlayableFailureCode FailureCode;
@@ -705,7 +688,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         public List<string> Errors = new List<string>();
     }
 
-    internal static class PromptIntentJsonShapeValidator
+    public static class PromptIntentJsonShapeValidator
     {
         private enum JsonObjectSchema
         {
@@ -715,7 +698,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ScenarioObject,
             PhysicsAreaOptions,
             RailOptions,
-            Placement,
             PhysicsAreaLayout,
             RailLayout,
             RailPathAnchor,
@@ -740,7 +722,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ObjectArray,
             PhysicsAreaOptionsObject,
             RailOptionsObject,
-            PlacementObject,
             PhysicsAreaLayoutObject,
             RailLayoutObject,
             RailPathAnchorArray,
@@ -759,11 +740,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         public static PromptIntentJsonShapeValidationResult Validate(string json)
         {
-            return Validate(json, false);
-        }
-
-        public static PromptIntentJsonShapeValidationResult Validate(string json, bool allowLayoutBackedPlacement)
-        {
             var result = new PromptIntentJsonShapeValidationResult
             {
                 FailureCode = PlayableFailureCode.None,
@@ -773,7 +749,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (string.IsNullOrWhiteSpace(json))
                 return Fail(result, PlayableFailureCode.InvalidJson, "JSON 입력이 비어 있습니다.");
 
-            var parser = new JsonShapeParser(json, result, allowLayoutBackedPlacement);
+            var parser = new JsonShapeParser(json, result);
             parser.Validate();
             if (result.Errors.Count == 0)
             {
@@ -807,17 +783,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         {
             private readonly string _json;
             private readonly PromptIntentJsonShapeValidationResult _result;
-            private readonly bool _allowLayoutBackedPlacement;
             private int _index;
 
             public JsonShapeParser(
                 string json,
-                PromptIntentJsonShapeValidationResult result,
-                bool allowLayoutBackedPlacement)
+                PromptIntentJsonShapeValidationResult result)
             {
                 _json = json ?? string.Empty;
                 _result = result;
-                _allowLayoutBackedPlacement = allowLayoutBackedPlacement;
                 _index = 0;
             }
 
@@ -860,8 +833,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                     if (!TryResolveContract(schema, key, out JsonValueContract contract))
                     {
-                        if (TryGetDisallowedPropertyMessage(schema, label, key, out string disallowedMessage))
-                            return Fail(PlayableFailureCode.InvalidValue, disallowedMessage);
                         return Fail(PlayableFailureCode.UnknownKey, BuildUnknownKeyMessage(label, key));
                     }
 
@@ -879,24 +850,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 }
 
                 return Fail(PlayableFailureCode.InvalidJson, label + " object가 올바르게 닫히지 않았습니다.");
-            }
-
-            private bool TryGetDisallowedPropertyMessage(
-                JsonObjectSchema schema,
-                string label,
-                string key,
-                out string message)
-            {
-                message = string.Empty;
-                if (!_allowLayoutBackedPlacement &&
-                    schema == JsonObjectSchema.ScenarioObject &&
-                    string.Equals(key, "placement", StringComparison.Ordinal))
-                {
-                    message = label + ".placement는 Step 3 draft_layout.json에서 작성해야 하며 Step 2 raw intent에서는 허용되지 않습니다.";
-                    return true;
-                }
-
-                return false;
             }
 
             private bool ValidateArray(JsonObjectSchema itemSchema, string label)
@@ -960,10 +913,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     case JsonValueContract.RailOptionsObject:
                         if (Peek() == '{')
                             return ValidateObject(JsonObjectSchema.RailOptions, label);
-                        return SkipValue();
-                    case JsonValueContract.PlacementObject:
-                        if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.Placement, label);
                         return SkipValue();
                     case JsonValueContract.PhysicsAreaLayoutObject:
                         if (Peek() == '{')
@@ -1284,39 +1233,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                                 return true;
                             case "railOptions":
                                 contract = JsonValueContract.RailOptionsObject;
-                                return true;
-                            case "placement":
-                                if (!_allowLayoutBackedPlacement)
-                                    return false;
-                                contract = JsonValueContract.PlacementObject;
-                                return true;
-                            default:
-                                return false;
-                        }
-                    case JsonObjectSchema.Placement:
-                        switch (key)
-                        {
-                            case "hasWorldPosition":
-                            case "worldX":
-                            case "worldZ":
-                            case "hasResolvedYaw":
-                            case "resolvedYawDegrees":
-                            case "solverPlacementSource":
-                            case "orientationReason":
-                            case "anchorDeltaCellsX":
-                            case "anchorDeltaCellsZ":
-                            case "hasImageBounds":
-                            case "centerPxX":
-                            case "centerPxY":
-                            case "bboxWidthPx":
-                            case "bboxHeightPx":
-                            case "bboxConfidence":
-                                return true;
-                            case "physicsAreaLayout":
-                                contract = JsonValueContract.PhysicsAreaLayoutObject;
-                                return true;
-                            case "railLayout":
-                                contract = JsonValueContract.RailLayoutObject;
                                 return true;
                             default:
                                 return false;

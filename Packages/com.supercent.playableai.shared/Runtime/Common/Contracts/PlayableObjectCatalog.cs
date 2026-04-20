@@ -267,6 +267,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string ITEMS_ARRAY_PATH = "_gameplayCatalog._items";
         public const string PLAYER_MODELS_ARRAY_PATH = "_gameplayCatalog._playerModels";
         public const string CUSTOMERS_ARRAY_PATH = "_gameplayCatalog._customers";
+        public const string FACILITY_CATEGORY = "facility";
+        public const string UNLOCKER_CATEGORY = "unlocker";
+        public const string ITEM_CATEGORY = "item";
+        public const string PLAYER_MODEL_CATEGORY = "playermodel";
+        public const string CUSTOMER_CATEGORY = "customer";
 
         [SerializeField] private GameplayCatalogEntry[] _generators = new GameplayCatalogEntry[0];
         [SerializeField] private GameplayCatalogEntry[] _rails = new GameplayCatalogEntry[0];
@@ -299,14 +304,14 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             return new GameplayCatalogSectionDefinition[]
             {
-                CreateSection(GENERATORS_ARRAY_PATH, "생성기", "Facility", GameplayDesignMode.SinglePrefab, _generators),
-                CreateSection(RAILS_ARRAY_PATH, "레일", "Facility", GameplayDesignMode.AssembledPath, _rails),
-                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", "Facility", GameplayDesignMode.SinglePrefab, _converters),
-                CreateSection(SELLERS_ARRAY_PATH, "판매기", "Facility", GameplayDesignMode.SinglePrefab, _sellers),
-                CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", "Unlocker", GameplayDesignMode.SinglePrefab, _unlockers),
-                CreateSection(ITEMS_ARRAY_PATH, "아이템", "Item", GameplayDesignMode.SinglePrefab, _items),
-                CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", "PlayerModel", GameplayDesignMode.SinglePrefab, _playerModels),
-                CreateSection(CUSTOMERS_ARRAY_PATH, "손님", "Customer", GameplayDesignMode.SinglePrefab, _customers),
+                CreateSection(GENERATORS_ARRAY_PATH, "생성기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _generators),
+                CreateSection(RAILS_ARRAY_PATH, "레일", FACILITY_CATEGORY, GameplayDesignMode.AssembledPath, _rails),
+                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _converters),
+                CreateSection(SELLERS_ARRAY_PATH, "판매기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _sellers),
+                CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", UNLOCKER_CATEGORY, GameplayDesignMode.SinglePrefab, _unlockers),
+                CreateSection(ITEMS_ARRAY_PATH, "아이템", ITEM_CATEGORY, GameplayDesignMode.SinglePrefab, _items),
+                CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", PLAYER_MODEL_CATEGORY, GameplayDesignMode.SinglePrefab, _playerModels),
+                CreateSection(CUSTOMERS_ARRAY_PATH, "손님", CUSTOMER_CATEGORY, GameplayDesignMode.SinglePrefab, _customers),
             };
         }
 
@@ -551,10 +556,10 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string WALLS_ARRAY_PATH = "_environmentCatalog._walls";
         public const string FENCES_ARRAY_PATH = "_environmentCatalog._fences";
         public const string ROADS_ARRAY_PATH = "_environmentCatalog._roads";
-        public const string FLOOR_CATEGORY = "Floor";
-        public const string WALL_CATEGORY = "Wall";
-        public const string FENCE_CATEGORY = "Fence";
-        public const string ROAD_CATEGORY = "Road";
+        public const string FLOOR_CATEGORY = "floor";
+        public const string WALL_CATEGORY = "wall";
+        public const string FENCE_CATEGORY = "fence";
+        public const string ROAD_CATEGORY = "road";
         public const string PLACEMENT_MODE_PERIMETER = "perimeter";
         public const string PLACEMENT_MODE_FILL = "fill";
         public const string VARIATION_MODE_SINGLE = "single";
@@ -570,7 +575,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             get
             {
-                if (TryResolveFloorPrefab(PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID, out GameObject prefab, out _))
+                if (TryResolveFloorPrefab(string.Empty, out GameObject prefab, out _))
                     return prefab;
                 return _floorPrefab;
             }
@@ -601,15 +606,29 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             design = null;
             resolvedDesignIndex = -1;
-            string requestedDesignId = string.IsNullOrEmpty(Normalize(designId))
-                ? PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID
-                : Normalize(designId);
+            string requestedDesignId = Normalize(designId);
             if (!TryFindEnvironmentEntryByCategory(FLOOR_CATEGORY, _floors, out EnvironmentCatalogEntry floorEntry) || floorEntry == null)
                 return false;
-            if (!TryResolveEnvironmentDesignIndex(floorEntry.designs, requestedDesignId, out resolvedDesignIndex))
+            EnvironmentDesignVariantEntry[] floorDesigns = floorEntry.designs ?? new EnvironmentDesignVariantEntry[0];
+            if (string.IsNullOrEmpty(requestedDesignId))
+            {
+                for (int index = 0; index < floorDesigns.Length; index++)
+                {
+                    EnvironmentDesignVariantEntry candidate = floorDesigns[index];
+                    if (candidate == null || candidate.prefab == null || string.IsNullOrEmpty(Normalize(candidate.designId)))
+                        continue;
+
+                    resolvedDesignIndex = index;
+                    design = candidate;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveEnvironmentDesignIndex(floorDesigns, requestedDesignId, out resolvedDesignIndex))
                 return false;
 
-            EnvironmentDesignVariantEntry[] floorDesigns = floorEntry.designs ?? new EnvironmentDesignVariantEntry[0];
             if (resolvedDesignIndex < 0 || resolvedDesignIndex >= floorDesigns.Length)
                 return false;
             design = floorDesigns[resolvedDesignIndex];
@@ -1156,7 +1175,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return false;
 
             string normalizedObjectId = itemStableKey != null ? itemStableKey.Trim() : string.Empty;
-            return string.Equals(entry.category, "Item", System.StringComparison.Ordinal) &&
+            return string.Equals(entry.category, GameplayCatalog.ITEM_CATEGORY, System.StringComparison.Ordinal) &&
                    !string.Equals(normalizedObjectId, "money", System.StringComparison.Ordinal) &&
                    !string.Equals(normalizedObjectId, "money/default", System.StringComparison.Ordinal);
         }
@@ -1366,8 +1385,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return true;
 
             string normalizedCategory = Normalize(entry.category);
-            if (string.Equals(normalizedCategory, "Unlocker", System.StringComparison.Ordinal) ||
-                string.Equals(normalizedCategory, "PlayerModel", System.StringComparison.Ordinal))
+            if (string.Equals(normalizedCategory, GameplayCatalog.UNLOCKER_CATEGORY, System.StringComparison.Ordinal) ||
+                string.Equals(normalizedCategory, GameplayCatalog.PLAYER_MODEL_CATEGORY, System.StringComparison.Ordinal))
             {
                 widthCells = 1;
                 depthCells = 1;
@@ -1511,7 +1530,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             }
 
             var seenDesignIds = new HashSet<string>(System.StringComparer.Ordinal);
-            int defaultDesignCount = 0;
             for (int designIndex = 0; designIndex < designs.Length; designIndex++)
             {
                 DesignVariantEntry design = designs[designIndex];
@@ -1531,9 +1549,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 {
                     if (!seenDesignIds.Add(designId))
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "의 designId '" + design.designId + "'가 같은 entry 안에서 중복됩니다.");
-
-                    if (string.Equals(designId, DEFAULT_DESIGN_ID, System.StringComparison.Ordinal))
-                        defaultDesignCount++;
                 }
 
                 if (design.prefab == null)
@@ -1555,10 +1570,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 }
             }
 
-            if (defaultDesignCount == 0)
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "에는 stable designId 'default' variation이 정확히 1개 필요합니다.");
-            else if (defaultDesignCount > 1)
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "에는 stable designId 'default' variation이 1개만 있어야 합니다.");
         }
 
         private static void ValidateEnvironmentSection(EnvironmentCatalogSectionDefinition section, PlayableObjectCatalogValidationResult result)
@@ -1624,7 +1635,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             }
 
             var seenDesignIds = new HashSet<string>(System.StringComparer.Ordinal);
-            int defaultDesignCount = 0;
             for (int designIndex = 0; designIndex < designs.Length; designIndex++)
             {
                 EnvironmentDesignVariantEntry design = designs[designIndex];
@@ -1646,9 +1656,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 {
                     if (!seenDesignIds.Add(designId))
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "의 designId '" + design.designId + "'가 같은 entry 안에서 중복됩니다.");
-
-                    if (string.Equals(designId, DEFAULT_DESIGN_ID, System.StringComparison.Ordinal))
-                        defaultDesignCount++;
                 }
 
                 if (design.prefab == null)
@@ -1676,10 +1683,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 }
             }
 
-            if (defaultDesignCount == 0)
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "에는 stable designId 'default' variation이 정확히 1개 필요합니다.");
-            else if (defaultDesignCount > 1)
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "에는 stable designId 'default' variation이 1개만 있어야 합니다.");
         }
 
         private static string BuildEntryLabel(GameplayCatalogSectionDefinition section, int entryIndex, string objectId)

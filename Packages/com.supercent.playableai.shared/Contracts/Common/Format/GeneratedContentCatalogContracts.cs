@@ -4,32 +4,32 @@ namespace Supercent.PlayableAI.Common.Format
 {
     public enum ContentCatalogCategory
     {
-        Unknown = 0,
-        Core = 1,
-        UI = 2,
-        Facility = 3,
-        Character = 4,
-        Environment = 5,
-        Item = 6,
-        Guide = 7,
+        unknown = 0,
+        core = 1,
+        ui = 2,
+        facility = 3,
+        character = 4,
+        environment = 5,
+        item = 6,
+        guide = 7,
     }
 
     public enum ContentCatalogSubscriptionType
     {
-        None = 0,
-        Object = 1,
-        Design = 2,
-        Dependency = 3,
+        none = 0,
+        @object = 1,
+        design = 2,
+        dependency = 3,
     }
 
     public enum ContentCatalogPlacementMode
     {
-        None = 0,
-        Free = 1,
-        Fill = 2,
-        Perimeter = 3,
-        Path = 4,
-        Guide = 5,
+        none = 0,
+        free = 1,
+        fill = 2,
+        perimeter = 3,
+        path = 4,
+        guide = 5,
     }
 
     public static class GeneratedContentCatalogContracts
@@ -67,13 +67,13 @@ namespace Supercent.PlayableAI.Common.Format
         {
             return value switch
             {
-                ContentCatalogCategory.Core => "core",
-                ContentCatalogCategory.UI => "ui",
-                ContentCatalogCategory.Facility => "facility",
-                ContentCatalogCategory.Character => "character",
-                ContentCatalogCategory.Environment => "environment",
-                ContentCatalogCategory.Item => "item",
-                ContentCatalogCategory.Guide => "guide",
+                ContentCatalogCategory.core => "core",
+                ContentCatalogCategory.ui => "ui",
+                ContentCatalogCategory.facility => "facility",
+                ContentCatalogCategory.character => "character",
+                ContentCatalogCategory.environment => "environment",
+                ContentCatalogCategory.item => "item",
+                ContentCatalogCategory.guide => "guide",
                 _ => "unknown",
             };
         }
@@ -82,9 +82,9 @@ namespace Supercent.PlayableAI.Common.Format
         {
             return value switch
             {
-                ContentCatalogSubscriptionType.Object => "object",
-                ContentCatalogSubscriptionType.Design => "design",
-                ContentCatalogSubscriptionType.Dependency => "dependency",
+                ContentCatalogSubscriptionType.@object => "object",
+                ContentCatalogSubscriptionType.design => "design",
+                ContentCatalogSubscriptionType.dependency => "dependency",
                 _ => "none",
             };
         }
@@ -93,11 +93,11 @@ namespace Supercent.PlayableAI.Common.Format
         {
             return value switch
             {
-                ContentCatalogPlacementMode.Free => "free",
-                ContentCatalogPlacementMode.Fill => "fill",
-                ContentCatalogPlacementMode.Perimeter => "perimeter",
-                ContentCatalogPlacementMode.Path => "path",
-                ContentCatalogPlacementMode.Guide => "guide",
+                ContentCatalogPlacementMode.free => "free",
+                ContentCatalogPlacementMode.fill => "fill",
+                ContentCatalogPlacementMode.perimeter => "perimeter",
+                ContentCatalogPlacementMode.path => "path",
+                ContentCatalogPlacementMode.guide => "guide",
                 _ => "none",
             };
         }

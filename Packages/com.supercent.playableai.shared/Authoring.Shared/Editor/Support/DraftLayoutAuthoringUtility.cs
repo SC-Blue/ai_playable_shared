@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
 using Supercent.PlayableAI.Common.Format;
+using Supercent.PlayableAI.Generation.Editor.Compile;
 using UnityEngine;
 
 namespace PlayableAI.AuthoringCore
@@ -48,22 +49,23 @@ namespace PlayableAI.AuthoringCore
             for (int i = 0; i < draftEnvironment.Length; i++)
             {
                 DraftLayoutEnvironmentEntry entry = draftEnvironment[i] ?? new DraftLayoutEnvironmentEntry();
+                LayoutSpecEnvironmentEntry normalizedEntry = BuildLayoutSpecEnvironmentEntry(entry, catalog);
                 environment[i] = new LayoutSpecEnvironmentEntry
                 {
-                    objectId = Normalize(entry.objectId),
-                    designId = Normalize(entry.designId),
-                    kind = string.Empty,
-                    widthCells = entry.widthCells,
-                    depthCells = entry.depthCells,
-                    hasWorldBounds = entry.hasWorldBounds,
-                    worldX = entry.worldX,
-                    worldZ = entry.worldZ,
-                    worldWidth = entry.worldWidth,
-                    worldDepth = entry.worldDepth,
-                    rotationY = entry.rotationY,
-                    includeInBounds = entry.includeInBounds,
-                    singleLayer = entry.singleLayer,
-                    isOuterBoundary = entry.isOuterBoundary,
+                    objectId = normalizedEntry.objectId,
+                    designId = normalizedEntry.designId,
+                    kind = normalizedEntry.kind,
+                    widthCells = normalizedEntry.widthCells,
+                    depthCells = normalizedEntry.depthCells,
+                    hasWorldBounds = normalizedEntry.hasWorldBounds,
+                    worldX = normalizedEntry.worldX,
+                    worldZ = normalizedEntry.worldZ,
+                    worldWidth = normalizedEntry.worldWidth,
+                    worldDepth = normalizedEntry.worldDepth,
+                    rotationY = normalizedEntry.rotationY,
+                    includeInBounds = normalizedEntry.includeInBounds,
+                    singleLayer = normalizedEntry.singleLayer,
+                    isOuterBoundary = normalizedEntry.isOuterBoundary,
                 };
             }
 
@@ -74,7 +76,7 @@ namespace PlayableAI.AuthoringCore
                 DraftLayoutCustomerPathEntry entry = draftCustomerPaths[i] ?? new DraftLayoutCustomerPathEntry();
                 customerPaths[i] = new LayoutSpecCustomerPathEntry
                 {
-                    targetId = CanonicalizeCustomerPathTargetId(entry.targetId),
+                    targetId = Normalize(entry.targetId),
                     spawnPoint = TranslateCustomerPathPoint(entry.spawnPoint),
                     leavePoint = TranslateCustomerPathPoint(entry.leavePoint),
                     queuePoints = TranslateCustomerPathPoints(entry.queuePoints),
@@ -101,110 +103,6 @@ namespace PlayableAI.AuthoringCore
             };
         }
 
-        public static PlayablePromptIntent ApplyDraftLayoutToIntent(PlayablePromptIntent sourceIntent, DraftLayoutDocument draftLayout)
-        {
-            PlayablePromptIntent intent = CloneIntent(sourceIntent);
-            intent.objects ??= Array.Empty<PromptIntentObjectDefinition>();
-
-            var placementLookup = new Dictionary<string, DraftLayoutPlacementEntry>(StringComparer.Ordinal);
-            var roleLookup = new Dictionary<string, string>(StringComparer.Ordinal);
-            DraftLayoutPlacementEntry[] draftPlacements = draftLayout != null ? draftLayout.placements ?? Array.Empty<DraftLayoutPlacementEntry>() : Array.Empty<DraftLayoutPlacementEntry>();
-            for (int i = 0; i < draftPlacements.Length; i++)
-            {
-                DraftLayoutPlacementEntry entry = draftPlacements[i];
-                if (entry == null || string.IsNullOrWhiteSpace(entry.objectId))
-                    continue;
-
-                placementLookup[Normalize(entry.objectId)] = entry;
-            }
-
-            for (int i = 0; i < intent.objects.Length; i++)
-            {
-                PromptIntentObjectDefinition value = intent.objects[i];
-                if (value == null || string.IsNullOrWhiteSpace(value.id))
-                    continue;
-
-                roleLookup[Normalize(value.id)] = Normalize(value.role);
-            }
-
-            for (int i = 0; i < intent.objects.Length; i++)
-            {
-                PromptIntentObjectDefinition value = intent.objects[i];
-                if (value == null)
-                    continue;
-
-                string objectId = Normalize(value.id);
-                value.scenarioOptions = CreateSanitizedScenarioOptions(value.role, value.scenarioOptions);
-                value.placement ??= new PromptIntentObjectPlacementDefinition();
-
-                if (string.Equals(Normalize(value.role), PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
-                {
-                    DraftLayoutPlayerStartEntry playerStart = draftLayout != null ? draftLayout.playerStart ?? new DraftLayoutPlayerStartEntry() : new DraftLayoutPlayerStartEntry();
-                    if (string.Equals(objectId, Normalize(playerStart.objectId), StringComparison.Ordinal))
-                    {
-                        value.placement.hasWorldPosition = true;
-                        value.placement.worldX = playerStart.worldX;
-                        value.placement.worldZ = playerStart.worldZ;
-                        value.placement.hasResolvedYaw = playerStart.hasResolvedYaw;
-                        value.placement.resolvedYawDegrees = playerStart.resolvedYawDegrees;
-                        value.placement.solverPlacementSource = "draft_layout";
-                        value.placement.orientationReason = playerStart.hasResolvedYaw ? "draft_layout" : string.Empty;
-                        value.placement.hasImageBounds = false;
-                        value.placement.centerPxX = 0f;
-                        value.placement.centerPxY = 0f;
-                        value.placement.bboxWidthPx = 0f;
-                        value.placement.bboxHeightPx = 0f;
-                        value.placement.bboxConfidence = 0f;
-                    }
-
-                    continue;
-                }
-
-                if (!placementLookup.TryGetValue(objectId, out DraftLayoutPlacementEntry placement))
-                    continue;
-
-                value.placement.hasWorldPosition = true;
-                value.placement.worldX = placement.worldX;
-                value.placement.worldZ = placement.worldZ;
-                value.placement.hasResolvedYaw = placement.hasResolvedYaw;
-                value.placement.resolvedYawDegrees = placement.resolvedYawDegrees;
-                value.placement.solverPlacementSource = "draft_layout";
-                value.placement.orientationReason = placement.hasResolvedYaw ? "draft_layout" : string.Empty;
-                value.placement.anchorDeltaCellsX = 0f;
-                value.placement.anchorDeltaCellsZ = 0f;
-                value.placement.hasImageBounds = false;
-                value.placement.centerPxX = 0f;
-                value.placement.centerPxY = 0f;
-                value.placement.bboxWidthPx = 0f;
-                value.placement.bboxHeightPx = 0f;
-                value.placement.bboxConfidence = 0f;
-
-                string normalizedRole = Normalize(value.role);
-                value.placement.physicsAreaLayout = string.Equals(normalizedRole, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal)
-                    ? new PhysicsAreaLayoutDefinition
-                    {
-                        realPhysicsZoneBounds = TranslateWorldBounds(placement.physicsAreaLayout != null ? placement.physicsAreaLayout.realPhysicsZoneBounds : null),
-                        fakeSpriteZoneBounds = TranslateWorldBounds(placement.physicsAreaLayout != null ? placement.physicsAreaLayout.fakeSpriteZoneBounds : null),
-                        overlapAllowances = Array.Empty<PlacementOverlapAllowanceDefinition>(),
-                    }
-                    : null;
-                value.placement.railLayout = string.Equals(normalizedRole, PromptIntentObjectRoles.RAIL, StringComparison.Ordinal)
-                    ? new RailLayoutDefinition
-                    {
-                        pathCells = CloneRailPathAnchors(placement.railLayout != null ? placement.railLayout.pathCells : null),
-                    }
-                    : null;
-            }
-
-            return intent;
-        }
-
-        private static PlayablePromptIntent CloneIntent(PlayablePromptIntent sourceIntent)
-        {
-            string json = JsonUtility.ToJson(sourceIntent ?? new PlayablePromptIntent());
-            return JsonUtility.FromJson<PlayablePromptIntent>(json);
-        }
-
         private static LayoutSpecPlayerStartEntry BuildLayoutSpecPlayerStartFromDraftLayout(
             DraftLayoutDocument draftLayout,
             PlayablePromptIntent intent,
@@ -224,6 +122,8 @@ namespace PlayableAI.AuthoringCore
                 hasWorldPosition = true,
                 worldX = draftPlayerStart.worldX,
                 worldZ = draftPlayerStart.worldZ,
+                hasResolvedYaw = draftPlayerStart.hasResolvedYaw,
+                resolvedYawDegrees = draftPlayerStart.resolvedYawDegrees,
                 hasImageBounds = true,
                 centerPxX = draftPlayerStart.worldX,
                 centerPxY = draftPlayerStart.worldZ,
@@ -294,7 +194,7 @@ namespace PlayableAI.AuthoringCore
                     objectId = "unlocker";
                     return true;
                 case PromptIntentObjectRoles.PLAYER:
-                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, "PlayerModel", out objectId);
+                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId);
                 default:
                     return false;
             }
@@ -410,15 +310,124 @@ namespace PlayableAI.AuthoringCore
             return translated;
         }
 
-        private static string CanonicalizeCustomerPathTargetId(string targetId)
+        private static LayoutSpecEnvironmentEntry BuildLayoutSpecEnvironmentEntry(
+            DraftLayoutEnvironmentEntry entry,
+            PlayableObjectCatalog catalog)
         {
-            string normalizedTargetId = Normalize(targetId);
-            if (string.IsNullOrEmpty(normalizedTargetId))
-                return string.Empty;
+            entry ??= new DraftLayoutEnvironmentEntry();
+            string objectId = Normalize(entry.objectId);
+            string designId = Normalize(entry.designId);
+            if (string.IsNullOrEmpty(designId))
+                designId = PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID;
 
-            return normalizedTargetId.StartsWith("spawn_", StringComparison.Ordinal)
-                ? normalizedTargetId
-                : "spawn_" + normalizedTargetId;
+            float worldWidth = entry.worldWidth;
+            float worldDepth = entry.worldDepth;
+            int widthCells = entry.widthCells;
+            int depthCells = entry.depthCells;
+            if (entry.hasWorldBounds &&
+                TryResolveEnvironmentTileStep(catalog, objectId, designId, out float tileStep))
+            {
+                worldWidth = SnapEnvironmentWorldSpan(worldWidth, tileStep);
+                worldDepth = SnapEnvironmentWorldSpan(worldDepth, tileStep);
+                widthCells = Math.Max(1, ResolveRoundedCellCount(worldWidth));
+                depthCells = Math.Max(1, ResolveRoundedCellCount(worldDepth));
+            }
+
+            return new LayoutSpecEnvironmentEntry
+            {
+                objectId = objectId,
+                designId = designId,
+                kind = string.Empty,
+                widthCells = widthCells,
+                depthCells = depthCells,
+                hasWorldBounds = entry.hasWorldBounds,
+                worldX = entry.worldX,
+                worldZ = entry.worldZ,
+                worldWidth = worldWidth,
+                worldDepth = worldDepth,
+                rotationY = entry.rotationY,
+                includeInBounds = entry.includeInBounds,
+                singleLayer = entry.singleLayer,
+                isOuterBoundary = entry.isOuterBoundary,
+            };
+        }
+
+        private static bool TryResolveEnvironmentTileStep(
+            PlayableObjectCatalog catalog,
+            string objectId,
+            string designId,
+            out float tileStep)
+        {
+            tileStep = 0f;
+            if (catalog == null || string.IsNullOrEmpty(objectId))
+                return false;
+
+            if (!catalog.TryGetEnvironmentDesign(
+                    objectId,
+                    string.IsNullOrEmpty(designId) ? PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID : designId,
+                    out EnvironmentDesignVariantEntry design,
+                    out _,
+                    out _,
+                    out _))
+            {
+                return false;
+            }
+
+            if (!TryResolveEnvironmentFootprintCells(design, out int footprintCells))
+                return false;
+
+            tileStep = Math.Max(1, footprintCells) * IntentAuthoringUtility.LAYOUT_SPACING;
+            return true;
+        }
+
+        private static bool TryResolveEnvironmentFootprintCells(EnvironmentDesignVariantEntry design, out int footprintCells)
+        {
+            footprintCells = 0;
+            if (TryReadEnvironmentPrefabFootprintCells(design != null ? design.prefab : null, out footprintCells) ||
+                TryReadEnvironmentPrefabFootprintCells(design != null ? design.straightPrefab : null, out footprintCells) ||
+                TryReadEnvironmentPrefabFootprintCells(design != null ? design.cornerPrefab : null, out footprintCells) ||
+                TryReadEnvironmentPrefabFootprintCells(design != null ? design.tJunctionPrefab : null, out footprintCells) ||
+                TryReadEnvironmentPrefabFootprintCells(design != null ? design.crossPrefab : null, out footprintCells))
+            {
+                return footprintCells > 0;
+            }
+
+            return false;
+        }
+
+        private static bool TryReadEnvironmentPrefabFootprintCells(GameObject prefab, out int footprintCells)
+        {
+            footprintCells = 0;
+            if (prefab == null)
+                return false;
+
+            if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
+                return false;
+
+            int widthCells = metadata.placementFootprintWidthCells > 0 ? metadata.placementFootprintWidthCells : 1;
+            int depthCells = metadata.placementFootprintDepthCells > 0 ? metadata.placementFootprintDepthCells : 1;
+            if (widthCells != depthCells)
+                return false;
+
+            footprintCells = widthCells;
+            return true;
+        }
+
+        private static float SnapEnvironmentWorldSpan(float worldSpan, float tileStep)
+        {
+            if (worldSpan <= 0f || tileStep <= 0f)
+                return worldSpan;
+
+            int tileCount = Math.Max(1, (int)Math.Round(worldSpan / tileStep, MidpointRounding.AwayFromZero));
+            return tileCount * tileStep;
+        }
+
+        private static int ResolveRoundedCellCount(float worldSpan)
+        {
+            if (worldSpan <= 0f)
+                return 1;
+
+            return Math.Max(1, (int)Math.Round(worldSpan / IntentAuthoringUtility.LAYOUT_SPACING, MidpointRounding.AwayFromZero));
         }
 
         private static PromptIntentObjectScenarioOptions CreateSanitizedScenarioOptions(

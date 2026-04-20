@@ -50,8 +50,7 @@ namespace PlayableAI.AuthoringCore
             if (!detection.IsPromptIntent)
                 return Fail(result, GenerationStageNames.INTENT_VALIDATION, detection.FailureCode, detection.Message, detection.Message);
 
-            bool allowLayoutBackedPlacement = LayoutAuthoringModeUtility.HasAuthoringContent(layoutSpec);
-            PromptIntentJsonValidationResult intentValidation = PromptIntentJsonValidator.Validate(intentJson, catalog, allowLayoutBackedPlacement);
+            PromptIntentJsonValidationResult intentValidation = PromptIntentJsonValidator.Validate(intentJson, catalog);
             if (!intentValidation.IsValid)
                 return Fail(result, GenerationStageNames.INTENT_VALIDATION, intentValidation.FailureCode, intentValidation.Message, intentValidation.Errors);
 
@@ -80,7 +79,7 @@ namespace PlayableAI.AuthoringCore
             AuthoringCoreExecutionProfile profile,
             LayoutSpecDocument layoutSpec)
         {
-            PromptIntentSemanticValidationResult semanticValidation = PromptIntentSemanticValidator.Validate(intent, catalog, layoutSpec);
+            PromptIntentSemanticValidationResult semanticValidation = PromptIntentSemanticValidator.Validate(intent, catalog);
             if (!semanticValidation.IsValid)
                 return Fail(result, GenerationStageNames.INTENT_VALIDATION, semanticValidation.FailureCode, semanticValidation.Message, semanticValidation.Errors);
 
@@ -93,6 +92,20 @@ namespace PlayableAI.AuthoringCore
             ScenarioModelValidationResult modelValidation = ScenarioModelValidator.Validate(modelBuild.Model);
             if (!modelValidation.IsValid)
                 return Fail(result, GenerationStageNames.MODEL_VALIDATION, modelValidation.FailureCode, modelValidation.Message, modelValidation.Errors);
+
+            bool hasLayoutSpec = layoutSpec != null;
+            if (!hasLayoutSpec)
+            {
+                if (profile == AuthoringCoreExecutionProfile.Validate)
+                    return Success(result, GenerationStageNames.MODEL_VALIDATION, "intent 검증이 완료되었습니다.");
+
+                return Fail(
+                    result,
+                    GenerationStageNames.LOWERING,
+                    PlayableFailureCode.MissingRequiredField,
+                    "layoutSpec이 필요합니다. Step3 geometry 없이 compile/generate를 진행할 수 없습니다.",
+                    "layoutSpec이 필요합니다. Step3 geometry 없이 compile/generate를 진행할 수 없습니다.");
+            }
 
             ScenarioModelLoweringResult lowering = ScenarioModelLoweringCompiler.Compile(modelBuild.Model, catalog, layoutSpec);
             if (!lowering.IsValid)

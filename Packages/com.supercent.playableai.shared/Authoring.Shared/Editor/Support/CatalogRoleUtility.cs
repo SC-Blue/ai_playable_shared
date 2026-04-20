@@ -37,7 +37,7 @@ namespace PlayableAI.AuthoringCore
                     objectId = "unlocker";
                     return true;
                 case PromptIntentObjectRoles.PLAYER:
-                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, "PlayerModel", out objectId, out error);
+                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId, out error);
                 case PromptIntentObjectRoles.PHYSICS_AREA:
                     error = "physics_area는 catalog-backed role이 아닙니다.";
                     return false;

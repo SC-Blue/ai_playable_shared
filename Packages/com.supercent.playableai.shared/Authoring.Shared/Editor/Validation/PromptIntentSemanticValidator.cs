@@ -19,8 +19,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
     {
         public static PromptIntentSemanticValidationResult Validate(
             PlayablePromptIntent intent,
-            PlayableObjectCatalog catalog,
-            LayoutSpecDocument layoutSpec = null)
+            PlayableObjectCatalog catalog)
         {
             var result = new PromptIntentSemanticValidationResult
             {
@@ -35,18 +34,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (!ValidateCatalogContract(catalog, result))
                 return FinalizeResult(result);
 
-            if (!string.IsNullOrWhiteSpace(catalog.ThemeId) &&
-                !string.Equals(Normalize(intent.themeId), Normalize(catalog.ThemeId), StringComparison.Ordinal))
+            string normalizedIntentThemeId = Normalize(intent.themeId);
+            string normalizedCatalogThemeId = Normalize(catalog.ThemeId);
+            if (string.IsNullOrEmpty(normalizedIntentThemeId))
+            {
+                Fail(result, "themeId는 필수이며 비워둘 수 없습니다.");
+            }
+            else if (string.IsNullOrEmpty(normalizedCatalogThemeId))
+            {
+                Fail(result, "catalog.ThemeId가 비어 있어 themeId를 검증할 수 없습니다.");
+            }
+            else if (!string.Equals(normalizedIntentThemeId, normalizedCatalogThemeId, StringComparison.Ordinal))
             {
                 Fail(result, "themeId '" + intent.themeId + "'가 catalog.ThemeId '" + catalog.ThemeId + "'와 일치하지 않습니다.");
             }
 
-            bool allowLayoutBackedPlacement = LayoutAuthoringModeUtility.HasAuthoringContent(layoutSpec);
             var objectById = BuildObjectLookup(intent.objects, result);
             var currencyById = BuildCurrencyLookup(intent.currencies, result);
             var saleValueByItemKey = BuildSaleValueLookup(intent.saleValues, result);
             ValidateCurrencies(intent.currencies, result);
-            ValidateObjects(intent.objects, objectById, currencyById, catalog, allowLayoutBackedPlacement, result);
+            ValidateObjects(intent.objects, objectById, currencyById, catalog, result);
             if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.IntentValidationFailed;
             ValidateSaleValues(intent.saleValues, currencyById, catalog, result);
@@ -152,7 +159,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             Dictionary<string, PromptIntentObjectDefinition> objectById,
             Dictionary<string, PromptIntentCurrencyDefinition> currencyById,
             PlayableObjectCatalog catalog,
-            bool allowLayoutBackedPlacement,
             PromptIntentSemanticValidationResult result)
         {
             PromptIntentObjectDefinition[] safeObjects = objects ?? new PromptIntentObjectDefinition[0];
@@ -170,9 +176,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 if (string.Equals(role, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
                     playerCount++;
-
-                if (!allowLayoutBackedPlacement && value.placement != null)
-                    Fail(result, "objects[" + i + "].placement는 Step 3 draft_layout.json에서 작성해야 하며 Step 2 final intent에는 포함할 수 없습니다.");
 
                 if (string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
                 {
@@ -271,6 +274,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "stages[" + i + "]는 unlock_object objective를 1개까지만 지원합니다.");
 
                 ValidateStageArrowObjectiveMapping(stage, i, result);
+                ValidateTerminalEndGameUsage(stage, i, safeStages, result);
             }
         }
 
@@ -349,20 +353,20 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         result);
                 }
 
-                if (string.Equals(kind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal))
+                if (IsArrowGuideEffectKind(kind))
                 {
                     ValidateTargetEventKeyCompatibility(
                         effect.targetObjectId,
                         effect.eventKey,
                         objectById,
                         label + "[" + i + "]",
-                        "show_arrow",
+                        kind,
                         result);
                 }
 
                 string timing = Normalize(effect.timing);
                 if (!string.IsNullOrEmpty(timing) && !PromptIntentEffectKinds.SupportsExplicitTiming(kind))
-                    Fail(result, label + "[" + i + "].timing은 spawn_customer 또는 show_arrow에서만 사용할 수 있습니다.");
+                    Fail(result, label + "[" + i + "].timing은 spawn_customer, show_arrow 또는 show_guide_arrow에서만 사용할 수 있습니다.");
             }
         }
 
@@ -459,7 +463,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 PromptIntentEffectDefinition effect = safeEffects[i];
                 if (effect == null ||
-                    !string.Equals(Normalize(effect.kind), PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal))
+                    !IsArrowGuideEffectKind(Normalize(effect.kind)))
                 {
                     continue;
                 }
@@ -476,7 +480,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 if (!allowExplicitTiming)
                 {
-                    Fail(result, label + "[" + i + "].timing은 same-stage onEnter focus_camera와 직접 연결되는 show_arrow에서만 사용할 수 있습니다. 생략하면 completed 기본 동작을 사용합니다.");
+                    Fail(result, label + "[" + i + "].timing은 same-stage onEnter focus_camera와 직접 연결되는 show_arrow/show_guide_arrow에서만 사용할 수 있습니다. 생략하면 completed 기본 동작을 사용합니다.");
                 }
             }
         }
@@ -489,6 +493,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             PromptIntentEffectDefinition[] entryEffects = stage != null ? stage.onEnter ?? new PromptIntentEffectDefinition[0] : new PromptIntentEffectDefinition[0];
             PromptIntentObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new PromptIntentObjectiveDefinition[0] : new PromptIntentObjectiveDefinition[0];
             var stageArrows = new List<PromptIntentEffectDefinition>();
+            int guideArrowCount = 0;
             var absorbableObjectives = new List<PromptIntentObjectiveDefinition>();
             var requiredArrowObjectiveIndices = new List<int>();
             var requiredArrowAbsorbableIndices = new List<int>();
@@ -497,13 +502,24 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < entryEffects.Length; i++)
             {
                 PromptIntentEffectDefinition effect = entryEffects[i];
-                if (effect == null ||
-                    !string.Equals(Normalize(effect.kind), PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal))
+                if (effect == null)
+                    continue;
+
+                string kind = Normalize(effect.kind);
+                if (string.Equals(kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal))
+                    guideArrowCount++;
+
+                if (!string.Equals(kind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
                 stageArrows.Add(effect);
+            }
+
+            if (guideArrowCount > 0 && objectives.Length > 0)
+            {
+                Fail(result, "stages[" + stageIndex + "]는 show_guide_arrow와 objective를 같은 stage에 둘 수 없습니다. show_guide_arrow는 presentation-only stage에서만 사용하고, objective가 필요하면 show_arrow를 쓰거나 stage를 분리하세요.");
             }
 
             for (int i = 0; i < objectives.Length; i++)
@@ -545,6 +561,57 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "stages[" + stageIndex + "].objectives[" + objectiveIndex + "]에는 show_arrow(eventKey='" + requiredArrowEventKey + "')를 사용해야 합니다.");
                 }
             }
+
+            if (HasEntryFocus(entryEffects) && stageArrows.Count > 0 && absorbableObjectives.Count > 0)
+            {
+                string firstArrowTiming = Normalize(stageArrows[0] != null ? stageArrows[0].timing : string.Empty);
+                if (!string.Equals(firstArrowTiming, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
+                {
+                    Fail(result, "stages[" + stageIndex + "].onEnter의 첫 absorbed show_arrow는 same-stage focus_camera가 있으면 timing 'arrival'을 명시해야 합니다.");
+                }
+            }
+        }
+
+        private static bool IsArrowGuideEffectKind(string kind)
+        {
+            string normalizedKind = Normalize(kind);
+            return string.Equals(normalizedKind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal) ||
+                string.Equals(normalizedKind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal);
+        }
+
+        private static void ValidateTerminalEndGameUsage(
+            PromptIntentStageDefinition stage,
+            int stageIndex,
+            PromptIntentStageDefinition[] allStages,
+            PromptIntentSemanticValidationResult result)
+        {
+            PromptIntentEffectDefinition[] entryEffects = stage != null ? stage.onEnter ?? new PromptIntentEffectDefinition[0] : new PromptIntentEffectDefinition[0];
+            PromptIntentEffectDefinition[] completionEffects = stage != null ? stage.onComplete ?? new PromptIntentEffectDefinition[0] : new PromptIntentEffectDefinition[0];
+            PromptIntentObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new PromptIntentObjectiveDefinition[0] : new PromptIntentObjectiveDefinition[0];
+
+            int onEnterEndGameCount = CountEffects(entryEffects, PromptIntentEffectKinds.END_GAME);
+            int onCompleteEndGameCount = CountEffects(completionEffects, PromptIntentEffectKinds.END_GAME);
+            if (onEnterEndGameCount == 0 && onCompleteEndGameCount == 0)
+                return;
+
+            bool isLastStage = allStages != null && stageIndex == allStages.Length - 1;
+            if (!isLastStage)
+                Fail(result, "stages[" + stageIndex + "]의 end_game은 마지막 stage에서만 사용할 수 있습니다.");
+
+            if (onEnterEndGameCount > 0 && onCompleteEndGameCount > 0)
+                Fail(result, "stages[" + stageIndex + "]는 onEnter와 onComplete에 end_game을 동시에 둘 수 없습니다.");
+
+            if (onCompleteEndGameCount > 0)
+                Fail(result, "stages[" + stageIndex + "]는 end_game을 onComplete에 둘 수 없습니다. 종료가 필요하면 마지막 stage의 onEnter에만 두고, 연출이 필요하면 이전 stage에서 끝낸 뒤 별도 마지막 stage에서 end_game을 호출하세요.");
+
+            if (onEnterEndGameCount > 0 && completionEffects.Length > 0)
+                Fail(result, "stages[" + stageIndex + "]는 onEnter end_game을 쓰면 onComplete effect를 둘 수 없습니다.");
+
+            if (onEnterEndGameCount > 0 && objectives.Length > 0)
+                Fail(result, "stages[" + stageIndex + "]는 onEnter end_game을 쓰면 objective를 둘 수 없습니다.");
+
+            if (onEnterEndGameCount > 0 && entryEffects.Length != onEnterEndGameCount)
+                Fail(result, "stages[" + stageIndex + "]는 onEnter end_game을 쓸 때 다른 onEnter effect를 함께 둘 수 없습니다. 연출이 필요하면 이전 stage에서 끝내고 마지막 stage는 end_game만 두세요.");
         }
 
         private static bool HasPreviousStageFocusAsLastBeat(
@@ -675,7 +742,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     ValidateItemReference(value.item, objectiveLabel + ".item", catalog, result);
                     break;
                 case PromptIntentObjectiveKinds.CONVERT_ITEM:
-                    ValidateItemReference(value.item, objectiveLabel + ".item", catalog, result);
                     ValidateItemReference(value.inputItem, objectiveLabel + ".inputItem", catalog, result);
                     break;
                 case PromptIntentObjectiveKinds.SELL_ITEM:
@@ -821,7 +887,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             PromptIntentSemanticValidationResult result)
         {
             if (value == null)
+            {
+                Fail(result, label + "가 필요합니다. 항상 주문 가능 항목도 startWhen.kind = 'start'로 명시해야 합니다.");
                 return;
+            }
 
             string kind = Normalize(value.kind);
             if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))

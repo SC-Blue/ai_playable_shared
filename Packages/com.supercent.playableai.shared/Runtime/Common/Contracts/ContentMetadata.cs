@@ -12,9 +12,9 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string designId = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
         public string displayName = string.Empty;
         [TextArea] public string description = string.Empty;
-        public ContentCatalogCategory category = ContentCatalogCategory.Unknown;
-        public ContentCatalogSubscriptionType subscriptionType = ContentCatalogSubscriptionType.Object;
-        public ContentCatalogPlacementMode placementMode = ContentCatalogPlacementMode.None;
+        public ContentCatalogCategory category = ContentCatalogCategory.unknown;
+        public ContentCatalogSubscriptionType subscriptionType = ContentCatalogSubscriptionType.@object;
+        public ContentCatalogPlacementMode placementMode = ContentCatalogPlacementMode.none;
 
         private void OnValidate()
         {

@@ -33,8 +33,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
     public static class ScenarioModelLoweringCompiler
     {
-        private const string MULTI_ITEM_SELLER_DESIGN_ID = "dual_lane";
-
         public static ScenarioModelLoweringResult Compile(PlayableScenarioModel model, PlayableObjectCatalog catalog)
         {
             return Compile(model, catalog, null);
@@ -55,17 +53,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return Fail(result, "PlayableScenarioModel이 null입니다.");
             if (catalog == null)
                 return Fail(result, "PlayableObjectCatalog가 필요합니다.");
+            if (layoutSpec == null)
+                return Fail(result, "layoutSpec이 필요합니다. Step3 geometry 없이 lowering할 수 없습니다.");
             if (!ValidateCatalogContract(catalog, result))
                 return FinalizeFailure(result);
 
             ScenarioModelObjectDefinition[] objects = model.objects ?? new ScenarioModelObjectDefinition[0];
-            Dictionary<string, HashSet<string>> sharedSlotLookup = LayoutSpecOverlapIntentRules.BuildDeclaredSharedSlotReferenceLookup(layoutSpec);
-            Dictionary<string, SerializableVector3> positions = IntentAuthoringUtility.BuildDeterministicPositions(
-                objects,
-                model.stages,
-                catalog,
-                result.Errors,
-                sharedSlotLookup);
+            Dictionary<string, SerializableVector3> positions = LayoutSpecGeometryUtility.BuildPositionLookup(objects, layoutSpec, result.Errors);
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId = BuildSaleValueLookup(model.saleValues);
             Dictionary<string, LoweredStageState> stageStatesById = new Dictionary<string, LoweredStageState>(StringComparer.Ordinal);
@@ -94,9 +88,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             SellerRequestableItemRuleDefinition[] sellerRequestRules =
                 BuildSellerRequestableItemRules(model.objects, spawnKeys, facilityAcceptedItems, result);
             ItemPriceDefinition[] itemPrices = BuildItemPrices(model.saleValues);
-            CompiledSpawnData[] spawns = BuildSpawns(objects, positions, catalog, facilityAcceptedItems, result);
-            CompiledPhysicsAreaDefinition[] physicsAreas = BuildPhysicsAreas(objects, positions, result);
-            CompiledRailDefinition[] rails = BuildRails(objects, spawnKeys, result);
+            CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, facilityAcceptedItems, result);
+            CompiledPhysicsAreaDefinition[] physicsAreas = BuildPhysicsAreas(objects, positions, layoutSpec, result);
+            CompiledRailDefinition[] rails = BuildRails(objects, spawnKeys, layoutSpec, result);
             ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, facilityAcceptedItems, facilityOutputItems, itemPrices, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
@@ -607,17 +601,29 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             FlowBeatDefinition[] introBeats = BuildIntroBeats(stage, stageStatesById, spawnKeys, stageId, loweredStage.Actions, result);
             string lastIntroBeatId = introBeats.Length > 0 ? introBeats[introBeats.Length - 1].id : string.Empty;
-            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, stageId, lastIntroBeatId, loweredStage.Actions, result);
-            string lastObjectiveOrIntroBeatId = objectiveBeats.Length > 0
-                ? objectiveBeats[objectiveBeats.Length - 1].id
+            FlowBeatDefinition[] entryGuideBeats = BuildEntryGuideBeats(stage, stageStatesById, spawnKeys, stageId, lastIntroBeatId, loweredStage.Actions, result);
+            string lastEntrySetupBeatId = entryGuideBeats.Length > 0
+                ? entryGuideBeats[entryGuideBeats.Length - 1].id
                 : lastIntroBeatId;
-            FlowBeatDefinition[] completionFocusBeats = BuildCompletionFocusBeats(stage, stageStatesById, spawnKeys, stageId, lastObjectiveOrIntroBeatId, loweredStage.Actions, result);
+            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
+            string lastObjectiveOrEntrySetupBeatId = objectiveBeats.Length > 0
+                ? objectiveBeats[objectiveBeats.Length - 1].id
+                : lastEntrySetupBeatId;
+            FlowBeatDefinition[] completionFocusBeats = BuildCompletionFocusBeats(stage, stageStatesById, spawnKeys, stageId, lastObjectiveOrEntrySetupBeatId, loweredStage.Actions, result);
+            string lastCompletionSetupBeatId = completionFocusBeats.Length > 0
+                ? completionFocusBeats[completionFocusBeats.Length - 1].id
+                : lastObjectiveOrEntrySetupBeatId;
+            FlowBeatDefinition[] completionGuideBeats = BuildCompletionGuideBeats(stage, spawnKeys, stageId, lastCompletionSetupBeatId, loweredStage.Actions, result);
             for (int i = 0; i < introBeats.Length; i++)
                 loweredStage.Beats.Add(introBeats[i]);
+            for (int i = 0; i < entryGuideBeats.Length; i++)
+                loweredStage.Beats.Add(entryGuideBeats[i]);
             for (int i = 0; i < objectiveBeats.Length; i++)
                 loweredStage.Beats.Add(objectiveBeats[i]);
             for (int i = 0; i < completionFocusBeats.Length; i++)
                 loweredStage.Beats.Add(completionFocusBeats[i]);
+            for (int i = 0; i < completionGuideBeats.Length; i++)
+                loweredStage.Beats.Add(completionGuideBeats[i]);
 
             loweredStage.FirstBeatId = loweredStage.Beats.Count > 0 ? loweredStage.Beats[0].id : string.Empty;
             loweredStage.LastBeatId = loweredStage.Beats.Count > 0 ? loweredStage.Beats[loweredStage.Beats.Count - 1].id : string.Empty;
@@ -686,7 +692,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
             string stageId,
-            string lastIntroBeatId,
+            string lastEntrySetupBeatId,
             List<FlowActionDefinition> actions,
             ScenarioModelLoweringResult result)
         {
@@ -704,9 +710,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 {
                     bool usesArrowArrivalTiming = objective.absorbsArrow &&
                         string.Equals(ResolveArrowTiming(objective), PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal);
-                    enterWhen = usesArrowArrivalTiming && !string.IsNullOrEmpty(lastIntroBeatId)
-                        ? BuildActionCompletedShowWhen(BuildBeatScopedFlowActionId(lastIntroBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS))
-                        : BuildFirstObjectiveShowWhen(stage.enterCondition, stageStatesById, spawnKeys, lastIntroBeatId, result);
+                    enterWhen = usesArrowArrivalTiming && !string.IsNullOrEmpty(lastEntrySetupBeatId) && IsFocusBeatId(lastEntrySetupBeatId)
+                        ? BuildActionCompletedShowWhen(BuildBeatScopedFlowActionId(lastEntrySetupBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS))
+                        : BuildFirstObjectiveShowWhen(stage.enterCondition, stageStatesById, spawnKeys, lastEntrySetupBeatId, result);
                 }
                 else
                 {
@@ -776,6 +782,150 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return beats.ToArray();
+        }
+
+        private static FlowBeatDefinition[] BuildEntryGuideBeats(
+            ScenarioModelStageDefinition stage,
+            Dictionary<string, LoweredStageState> stageStatesById,
+            Dictionary<string, string> spawnKeys,
+            string stageId,
+            string lastIntroBeatId,
+            List<FlowActionDefinition> actions,
+            ScenarioModelLoweringResult result)
+        {
+            return BuildGuideBeats(
+                stage != null ? stage.entryEffects : null,
+                stage != null ? stage.enterCondition : null,
+                stageStatesById,
+                spawnKeys,
+                stageId,
+                "__entry_guide_",
+                "__focus_",
+                lastIntroBeatId,
+                actions,
+                result);
+        }
+
+        private static FlowBeatDefinition[] BuildCompletionGuideBeats(
+            ScenarioModelStageDefinition stage,
+            Dictionary<string, string> spawnKeys,
+            string stageId,
+            string lastCompletionSetupBeatId,
+            List<FlowActionDefinition> actions,
+            ScenarioModelLoweringResult result)
+        {
+            return BuildGuideBeats(
+                stage != null ? stage.completionEffects : null,
+                null,
+                null,
+                spawnKeys,
+                stageId,
+                "__completion_guide_",
+                "__completion_focus_",
+                lastCompletionSetupBeatId,
+                actions,
+                result);
+        }
+
+        private static FlowBeatDefinition[] BuildGuideBeats(
+            ScenarioModelEffectDefinition[] effects,
+            ScenarioModelConditionDefinition enterCondition,
+            Dictionary<string, LoweredStageState> stageStatesById,
+            Dictionary<string, string> spawnKeys,
+            string stageId,
+            string beatIdPrefix,
+            string focusBeatPrefix,
+            string firstPrerequisiteBeatId,
+            List<FlowActionDefinition> actions,
+            ScenarioModelLoweringResult result)
+        {
+            var beats = new List<FlowBeatDefinition>();
+            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < safeEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = safeEffects[i];
+                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal))
+                    continue;
+
+                string beatId = stageId + beatIdPrefix + i.ToString("00");
+                string actionId = BuildBeatScopedFlowActionId(beatId, string.Empty, FlowActionKinds.ARROW_GUIDE);
+                beats.Add(new FlowBeatDefinition
+                {
+                    id = beatId,
+                    enterWhen = beats.Count == 0
+                        ? BuildGuideBeatEnterWhen(safeEffects, i, enterCondition, stageStatesById, spawnKeys, stageId, focusBeatPrefix, firstPrerequisiteBeatId, result)
+                        : BuildBeatCompletedShowWhen(beats[beats.Count - 1].id),
+                    completeWhen = BuildActionCompletedShowWhen(actionId),
+                });
+
+                actions.Add(new FlowActionDefinition
+                {
+                    id = actionId,
+                    ownerBeatId = beatId,
+                    kind = FlowActionKinds.ARROW_GUIDE,
+                    triggerMode = FlowActionTriggerModes.ON_BEAT_ENTER,
+                    when = new ReactiveConditionGroupDefinition(),
+                    payload = new FlowActionPayloadDefinition
+                    {
+                        arrowGuide = new ArrowGuideActionPayload
+                        {
+                            targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, beatId + ".actions.arrow_guide.payload.arrowGuide.targetId"),
+                            eventKey = IntentAuthoringUtility.Normalize(effect.eventKey),
+                            autoHideOnBeatExit = true,
+                        },
+                    },
+                });
+            }
+
+            return beats.ToArray();
+        }
+
+        private static StepConditionDefinition BuildGuideBeatEnterWhen(
+            ScenarioModelEffectDefinition[] effects,
+            int effectIndex,
+            ScenarioModelConditionDefinition enterCondition,
+            Dictionary<string, LoweredStageState> stageStatesById,
+            Dictionary<string, string> spawnKeys,
+            string stageId,
+            string focusBeatPrefix,
+            string firstPrerequisiteBeatId,
+            ScenarioModelLoweringResult result)
+        {
+            string timing = IntentAuthoringUtility.Normalize(effects[effectIndex] != null ? effects[effectIndex].timing : string.Empty);
+            string precedingFocusBeatId = ResolvePrecedingFocusBeatId(effects, effectIndex, stageId, focusBeatPrefix);
+            if (!string.IsNullOrEmpty(precedingFocusBeatId))
+            {
+                if (string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
+                    return BuildActionCompletedShowWhen(BuildBeatScopedFlowActionId(precedingFocusBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS));
+
+                return BuildBeatCompletedShowWhen(precedingFocusBeatId);
+            }
+
+            if (!string.IsNullOrEmpty(firstPrerequisiteBeatId))
+                return BuildBeatCompletedShowWhen(firstPrerequisiteBeatId);
+
+            return enterCondition != null
+                ? BuildStageEntryShowWhen(enterCondition, stageStatesById, spawnKeys, result)
+                : new StepConditionDefinition { type = StepConditionRules.ALWAYS };
+        }
+
+        private static string ResolvePrecedingFocusBeatId(
+            ScenarioModelEffectDefinition[] effects,
+            int effectIndex,
+            string stageId,
+            string focusBeatPrefix)
+        {
+            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = effectIndex - 1; i >= 0; i--)
+            {
+                ScenarioModelEffectDefinition effect = safeEffects[i];
+                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                    continue;
+
+                return stageId + focusBeatPrefix + i.ToString("00");
+            }
+
+            return string.Empty;
         }
 
         private static FlowBeatDefinition BuildObjectiveBeat(
@@ -1095,7 +1245,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         {
             var rules = new List<CustomerSpawnRuleDefinition>();
             ScenarioModelEffectDefinition[] effects = stage.entryEffects ?? new ScenarioModelEffectDefinition[0];
-            int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
 
             for (int i = 0; i < effects.Length; i++)
             {
@@ -1103,6 +1252,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
                     continue;
 
+                int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
                 rules.Add(new CustomerSpawnRuleDefinition
                 {
                     targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, "spawn_customer.targetObjectId"),
@@ -1126,13 +1276,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return rules;
 
             ScenarioModelEffectDefinition[] effects = stage.completionEffects ?? new ScenarioModelEffectDefinition[0];
-            int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
             for (int i = 0; i < effects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
                     continue;
 
+                int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
                 rules.Add(new CustomerSpawnRuleDefinition
                 {
                     targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, "spawn_customer.targetObjectId"),
@@ -1544,6 +1694,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static CompiledSpawnData[] BuildSpawns(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, SerializableVector3> positions,
+            LayoutSpecDocument layoutSpec,
             PlayableObjectCatalog catalog,
             FacilityAcceptedItemDefinition[] facilityAcceptedItems,
             ScenarioModelLoweringResult result)
@@ -1586,12 +1737,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     parentRef = string.Empty,
                     startActive = value.startsPresent && value.startsActive,
                     localPosition = position,
-                    hasResolvedYaw = value.placement != null && value.placement.hasResolvedYaw,
-                    resolvedYawDegrees = value.placement != null ? value.placement.resolvedYawDegrees : 0f,
-                    solverPlacementSource = value.placement != null ? value.placement.solverPlacementSource : string.Empty,
-                    orientationReason = value.placement != null ? value.placement.orientationReason : string.Empty,
-                    anchorDeltaCellsX = value.placement != null ? value.placement.anchorDeltaCellsX : 0f,
-                    anchorDeltaCellsZ = value.placement != null ? value.placement.anchorDeltaCellsZ : 0f,
+                    hasResolvedYaw = ResolveHasResolvedYaw(layoutSpec, value, result, "objects[" + i + "]"),
+                    resolvedYawDegrees = ResolveResolvedYawDegrees(layoutSpec, value),
+                    solverPlacementSource = ResolveSolverPlacementSource(layoutSpec, value),
+                    orientationReason = ResolveOrientationReason(layoutSpec, value),
+                    anchorDeltaCellsX = ResolveAnchorDeltaCellsX(layoutSpec, value),
+                    anchorDeltaCellsZ = ResolveAnchorDeltaCellsZ(layoutSpec, value),
                 });
             }
 
@@ -1618,40 +1769,162 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return counts;
         }
 
+        private static bool ResolveHasResolvedYaw(
+            LayoutSpecDocument layoutSpec,
+            ScenarioModelObjectDefinition value,
+            ScenarioModelLoweringResult result,
+            string label)
+        {
+            if (IsPlayer(value))
+                return layoutSpec != null && layoutSpec.playerStart != null && layoutSpec.playerStart.hasResolvedYaw;
+
+            if (TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement))
+                return placement.hasResolvedYaw;
+
+            result.Errors.Add(label + "의 layoutSpec placement를 찾지 못했습니다.");
+            return false;
+        }
+
+        private static float ResolveResolvedYawDegrees(LayoutSpecDocument layoutSpec, ScenarioModelObjectDefinition value)
+        {
+            if (IsPlayer(value))
+                return layoutSpec != null && layoutSpec.playerStart != null ? layoutSpec.playerStart.resolvedYawDegrees : 0f;
+
+            return TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement)
+                ? placement.resolvedYawDegrees
+                : 0f;
+        }
+
+        private static string ResolveSolverPlacementSource(LayoutSpecDocument layoutSpec, ScenarioModelObjectDefinition value)
+        {
+            if (IsPlayer(value))
+                return layoutSpec != null && layoutSpec.playerStart != null && layoutSpec.playerStart.hasWorldPosition
+                    ? "draft_layout"
+                    : string.Empty;
+
+            return TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement)
+                ? placement.solverPlacementSource ?? string.Empty
+                : string.Empty;
+        }
+
+        private static string ResolveOrientationReason(LayoutSpecDocument layoutSpec, ScenarioModelObjectDefinition value)
+        {
+            if (IsPlayer(value))
+            {
+                return layoutSpec != null &&
+                       layoutSpec.playerStart != null &&
+                       layoutSpec.playerStart.hasResolvedYaw
+                    ? "draft_layout"
+                    : string.Empty;
+            }
+
+            return TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement)
+                ? placement.orientationReason ?? string.Empty
+                : string.Empty;
+        }
+
+        private static float ResolveAnchorDeltaCellsX(LayoutSpecDocument layoutSpec, ScenarioModelObjectDefinition value)
+        {
+            return TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement)
+                ? placement.anchorDeltaCellsX
+                : 0f;
+        }
+
+        private static float ResolveAnchorDeltaCellsZ(LayoutSpecDocument layoutSpec, ScenarioModelObjectDefinition value)
+        {
+            return TryGetLayoutPlacement(layoutSpec, value, out LayoutSpecPlacementEntry placement)
+                ? placement.anchorDeltaCellsZ
+                : 0f;
+        }
+
+        private static PhysicsAreaLayoutDefinition ResolvePhysicsAreaLayout(
+            LayoutSpecDocument layoutSpec,
+            string objectId,
+            ScenarioModelLoweringResult result,
+            string label)
+        {
+            if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
+                placement == null)
+            {
+                result.Errors.Add(label + " physics_area의 layoutSpec placement를 찾지 못했습니다.");
+                return new PhysicsAreaLayoutDefinition();
+            }
+
+            LayoutSpecPhysicsAreaLayoutEntry layout = placement.physicsAreaLayout;
+            bool hasRealBounds = layout != null &&
+                                 layout.realPhysicsZoneBounds != null &&
+                                 layout.realPhysicsZoneBounds.hasWorldBounds;
+            bool hasFakeBounds = layout != null &&
+                                 layout.fakeSpriteZoneBounds != null &&
+                                 layout.fakeSpriteZoneBounds.hasWorldBounds;
+            if (!hasRealBounds || !hasFakeBounds)
+            {
+                result.Errors.Add(label + " physics_area에는 layoutSpec.physicsAreaLayout.real/fake bounds가 모두 필요합니다.");
+                return new PhysicsAreaLayoutDefinition();
+            }
+
+            return LayoutSpecGeometryUtility.ToPhysicsAreaLayout(layout);
+        }
+
+        private static RailLayoutDefinition ResolveRailLayout(
+            LayoutSpecDocument layoutSpec,
+            string objectId,
+            ScenarioModelLoweringResult result,
+            string label)
+        {
+            if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
+                placement == null)
+            {
+                result.Errors.Add(label + " rail의 layoutSpec placement를 찾지 못했습니다.");
+                return new RailLayoutDefinition();
+            }
+
+            RailPathAnchorDefinition[] pathCells = placement.railLayout != null
+                ? placement.railLayout.pathCells ?? Array.Empty<RailPathAnchorDefinition>()
+                : Array.Empty<RailPathAnchorDefinition>();
+            if (pathCells.Length == 0)
+            {
+                result.Errors.Add(label + " rail에는 layoutSpec.railLayout.pathCells가 필요합니다.");
+                return new RailLayoutDefinition();
+            }
+
+            return LayoutSpecGeometryUtility.ToRailLayout(placement.railLayout);
+        }
+
+        private static bool TryGetLayoutPlacement(
+            LayoutSpecDocument layoutSpec,
+            ScenarioModelObjectDefinition value,
+            out LayoutSpecPlacementEntry placement)
+        {
+            placement = null;
+            if (IsPlayer(value))
+                return false;
+
+            string objectId = IntentAuthoringUtility.Normalize(value != null ? value.id : string.Empty);
+            return LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out placement);
+        }
+
+        private static bool IsPlayer(ScenarioModelObjectDefinition value)
+        {
+            return string.Equals(
+                IntentAuthoringUtility.Normalize(value != null ? value.role : string.Empty),
+                PromptIntentObjectRoles.PLAYER,
+                StringComparison.Ordinal);
+        }
+
         private static string ResolveSpawnDesignId(
             ScenarioModelObjectDefinition value,
             string gameplayObjectId,
             string scenarioObjectId,
             Dictionary<string, int> acceptedItemCountByFacilityId)
         {
-            if (value == null ||
-                !string.Equals(IntentAuthoringUtility.Normalize(value.role), PromptIntentObjectRoles.SELLER, StringComparison.Ordinal) ||
-                !string.Equals(IntentAuthoringUtility.Normalize(gameplayObjectId), "seller", StringComparison.Ordinal))
-            {
-                return value != null ? value.designId : string.Empty;
-            }
-
-            string authoredDesignId = IntentAuthoringUtility.Normalize(value.designId);
-            if (!string.IsNullOrEmpty(authoredDesignId) &&
-                !string.Equals(authoredDesignId, IntentAuthoringUtility.DEFAULT_DESIGN_ID, StringComparison.Ordinal))
-            {
-                return authoredDesignId;
-            }
-
-            string facilityId = IntentAuthoringUtility.BuildSpawnKey(IntentAuthoringUtility.Normalize(scenarioObjectId));
-            if (acceptedItemCountByFacilityId != null &&
-                acceptedItemCountByFacilityId.TryGetValue(facilityId, out int acceptedItemCount) &&
-                acceptedItemCount > 1)
-            {
-                return MULTI_ITEM_SELLER_DESIGN_ID;
-            }
-
             return value.designId;
         }
 
         private static CompiledPhysicsAreaDefinition[] BuildPhysicsAreas(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, SerializableVector3> positions,
+            LayoutSpecDocument layoutSpec,
             ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
@@ -1685,9 +1958,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     startActive = value.startsPresent && value.startsActive,
                     localPosition = position,
                     options = CopyPhysicsAreaOptions(value.physicsAreaOptions),
-                    layout = value.placement != null && value.placement.physicsAreaLayout != null
-                        ? CopyPhysicsAreaLayout(value.placement.physicsAreaLayout)
-                        : new PhysicsAreaLayoutDefinition(),
+                    layout = ResolvePhysicsAreaLayout(layoutSpec, scenarioObjectId, result, "objects[" + i + "]"),
                 });
             }
 
@@ -1697,6 +1968,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static CompiledRailDefinition[] BuildRails(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, string> spawnKeys,
+            LayoutSpecDocument layoutSpec,
             ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
@@ -1723,9 +1995,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     objectId = scenarioObjectId,
                     spawnKey = spawnKey,
                     options = CopyRailOptions(value.railOptions),
-                    layout = value.placement != null && value.placement.railLayout != null
-                        ? CopyRailLayout(value.placement.railLayout)
-                        : new RailLayoutDefinition(),
+                    layout = ResolveRailLayout(layoutSpec, scenarioObjectId, result, "objects[" + i + "]"),
                 });
             }
 
@@ -1748,7 +2018,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < resolution.RequiredObjectIds.Count; i++)
             {
                 string objectId = resolution.RequiredObjectIds[i];
-                int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(catalog, objectId, IntentAuthoringUtility.DEFAULT_DESIGN_ID, result.Errors, "runtime-owned object '" + objectId + "'");
+                if (!TryResolveRuntimeOwnedDesignSelection(catalog, objectId, result, out int designIndex))
+                    continue;
+
                 if (designIndex < 0)
                     continue;
 
@@ -2067,10 +2339,70 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static int ResolveDefaultCustomerDesignIndex(PlayableObjectCatalog catalog, ScenarioModelLoweringResult result)
         {
-            int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(catalog, "customer", IntentAuthoringUtility.DEFAULT_DESIGN_ID, result.Errors, "customer");
+            int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
+                catalog,
+                "customer",
+                IntentAuthoringUtility.DEFAULT_DESIGN_ID,
+                result.Errors,
+                "customer");
             if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
             return designIndex;
+        }
+
+        private static bool TryResolveRuntimeOwnedDesignSelection(
+            PlayableObjectCatalog catalog,
+            string runtimeOwnedObjectId,
+            ScenarioModelLoweringResult result,
+            out int designIndex)
+        {
+            designIndex = -1;
+            string normalizedObjectId = IntentAuthoringUtility.Normalize(runtimeOwnedObjectId);
+            if (string.IsNullOrEmpty(normalizedObjectId))
+            {
+                result.Errors.Add("runtime-owned objectId가 비어 있습니다.");
+                if (result.FailureCode == PlayableFailureCode.None)
+                    result.FailureCode = PlayableFailureCode.LoweringFailed;
+                return false;
+            }
+
+            if (ItemRefUtility.TryParseStableKey(normalizedObjectId, out ItemRef item) && item != null)
+            {
+                string gameplayObjectId = normalizedObjectId;
+                string requestedDesignId = IntentAuthoringUtility.DEFAULT_DESIGN_ID;
+                if (catalog != null &&
+                    catalog.TryResolveGameplayDesignIndex(gameplayObjectId, requestedDesignId, out designIndex))
+                {
+                    return true;
+                }
+                designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
+                    catalog,
+                    gameplayObjectId,
+                    requestedDesignId,
+                    result.Errors,
+                    "runtime-owned object '" + normalizedObjectId + "'");
+                if (result.FailureCode == PlayableFailureCode.None)
+                    result.FailureCode = PlayableFailureCode.LoweringFailed;
+                return false;
+            }
+
+            if (catalog != null &&
+                catalog.TryResolveGameplayDesignIndex(normalizedObjectId, IntentAuthoringUtility.DEFAULT_DESIGN_ID, out designIndex))
+            {
+                return true;
+            }
+            designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
+                catalog,
+                normalizedObjectId,
+                IntentAuthoringUtility.DEFAULT_DESIGN_ID,
+                result.Errors,
+                "runtime-owned object '" + normalizedObjectId + "'");
+            if (designIndex >= 0)
+                return true;
+
+            if (result.FailureCode == PlayableFailureCode.None)
+                result.FailureCode = PlayableFailureCode.LoweringFailed;
+            return false;
         }
 
         private static string TryResolveSaleCurrencyId(

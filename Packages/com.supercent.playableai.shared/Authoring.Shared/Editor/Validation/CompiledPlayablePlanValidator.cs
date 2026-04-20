@@ -900,7 +900,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 if (!spawnLookup.TryGetValue(targetId, out CompiledSpawnData targetSpawn) || targetSpawn == null)
                 {
-                    Fail(result, "layoutSpec.customerPaths[" + i + "].targetId '" + targetId + "'는 canonical spawnKey여야 합니다.");
+                    Fail(result, "layoutSpec.customerPaths[" + i + "].targetId '" + targetId + "'를 compiled spawn으로 해석하지 못했습니다.");
                     continue;
                 }
 
@@ -1072,10 +1072,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 if (SupportsCustomerPathAuthoring(prefab))
-                    requiredTargets.Add(spawn.spawnKey.Trim());
+                    requiredTargets.Add(ResolveCustomerPathAuthoringId(spawn));
             }
 
             return requiredTargets;
+        }
+
+        private static string ResolveCustomerPathAuthoringId(CompiledSpawnData spawn)
+        {
+            string sceneObjectId = ResolveSceneObjectIdFromSpawnKey(spawn);
+            if (!string.IsNullOrEmpty(sceneObjectId))
+                return sceneObjectId;
+
+            return ResolveSpawnLabel(spawn);
         }
 
         private static bool SupportsCustomerPathAuthoring(GameObject prefab)
@@ -2659,7 +2668,7 @@ private static bool UsesFloorBoundaryBackFacingRule(string objectId)
                 return false;
 
             string category = entry.category != null ? entry.category.Trim() : string.Empty;
-            if (string.Equals(category, "Unlocker", StringComparison.Ordinal))
+            if (string.Equals(category, GameplayCatalog.UNLOCKER_CATEGORY, StringComparison.Ordinal))
                 return IntentAuthoringUtility.IsQuarterTurnOddYaw(0f);
             return false;
         }

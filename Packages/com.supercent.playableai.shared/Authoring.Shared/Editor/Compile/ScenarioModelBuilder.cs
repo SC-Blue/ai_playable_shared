@@ -172,7 +172,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         sellerRequestableItems = BuildSellerRequestableItems(value.scenarioOptions, currencyById, result),
                         physicsAreaOptions = CopyPhysicsAreaOptions(value.physicsAreaOptions),
                         railOptions = BuildRailOptions(value.railOptions),
-                        placement = CopyPlacement(value.placement),
                         startsPresent = true,
                         startsActive = true,
                         firstPresentingStageId = string.Empty,

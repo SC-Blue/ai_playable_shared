@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Supercent.PlayableAI.Common.Contracts;
 using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.AuthoringCore
@@ -26,7 +27,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public const string CATALOG_USAGE_GENERATE = "generate-playable";
         public const string MANIFEST_FILE_NAME = "manifest.json";
         public const string INPUT_INTENT_FILE_NAME = "input_intent.json";
-        public const string ENRICHED_INTENT_FILE_NAME = "enriched_intent.json";
         public const string COMPILED_PLAN_FILE_NAME = "compiled_plan.json";
         public const string CORE_RESULT_FILE_NAME = "core_result.json";
         public const string GENERATION_RESULT_FILE_NAME = "generation_result.json";
@@ -162,32 +162,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
         }
-    }
-
-    [Serializable]
-    public sealed class CatalogFootprintOverlapAllowanceMetadata
-    {
-        public string counterpartRole = string.Empty;
-        public int widthCells = 1;
-        public int depthCells = 1;
-        public float centerOffsetX;
-        public float centerOffsetZ;
-    }
-
-    [Serializable]
-    public sealed class CatalogPrefabMetadata
-    {
-        public string[] generatedItemStableKeys = new string[0];
-        public string[] outputItemStableKeys = new string[0];
-        public bool supportsCustomerFacility;
-        public bool containsCustomerSingleLine;
-        public bool containsItemSellFacility;
-        public bool containsMoneyHandler;
-        public int placementFootprintWidthCells;
-        public int placementFootprintDepthCells;
-        public float placementFootprintCenterOffsetX;
-        public float placementFootprintCenterOffsetZ;
-        public CatalogFootprintOverlapAllowanceMetadata[] placementOverlapAllowances = new CatalogFootprintOverlapAllowanceMetadata[0];
     }
 
     [Serializable]
@@ -643,6 +617,8 @@ namespace Supercent.PlayableAI.AuthoringCore
         public bool hasWorldPosition;
         public float worldX;
         public float worldZ;
+        public bool hasResolvedYaw;
+        public float resolvedYawDegrees;
         public bool hasImageBounds;
         public float centerPxX;
         public float centerPxY;
@@ -1016,6 +992,171 @@ namespace Supercent.PlayableAI.AuthoringCore
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+    }
+
+    public static class LayoutSpecGeometryUtility
+    {
+        public static Dictionary<string, SerializableVector3> BuildPositionLookup(
+            ScenarioModelObjectDefinition[] objects,
+            LayoutSpecDocument layoutSpec,
+            List<string> errors)
+        {
+            var positions = new Dictionary<string, SerializableVector3>(StringComparer.Ordinal);
+            ScenarioModelObjectDefinition[] safeObjects = objects ?? Array.Empty<ScenarioModelObjectDefinition>();
+            if (layoutSpec == null)
+            {
+                errors?.Add("layoutSpec이 필요합니다.");
+                return positions;
+            }
+
+            Dictionary<string, LayoutSpecPlacementEntry> placementLookup = BuildPlacementLookup(layoutSpec);
+            LayoutSpecPlayerStartEntry playerStart = layoutSpec.playerStart ?? new LayoutSpecPlayerStartEntry();
+            string playerStartObjectId = Normalize(playerStart.objectId);
+
+            for (int i = 0; i < safeObjects.Length; i++)
+            {
+                ScenarioModelObjectDefinition value = safeObjects[i];
+                string objectId = Normalize(value != null ? value.id : string.Empty);
+                string role = Normalize(value != null ? value.role : string.Empty);
+                if (string.IsNullOrEmpty(objectId))
+                    continue;
+
+                if (string.Equals(role, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
+                {
+                    if (!string.Equals(playerStartObjectId, objectId, StringComparison.Ordinal))
+                    {
+                        errors?.Add("layoutSpec.playerStart.objectId가 player object '" + objectId + "'와 일치하지 않습니다.");
+                        continue;
+                    }
+
+                    if (!playerStart.hasWorldPosition)
+                    {
+                        errors?.Add("layoutSpec.playerStart에는 world position이 필요합니다.");
+                        continue;
+                    }
+
+                    positions[objectId] = new SerializableVector3(playerStart.worldX, 0f, playerStart.worldZ);
+                    continue;
+                }
+
+                if (!placementLookup.TryGetValue(objectId, out LayoutSpecPlacementEntry placement) || placement == null)
+                {
+                    errors?.Add("layoutSpec.placements에 object '" + objectId + "'가 없습니다.");
+                    continue;
+                }
+
+                if (!placement.hasWorldPosition)
+                {
+                    errors?.Add("layoutSpec.placements['" + objectId + "']에는 world position이 필요합니다.");
+                    continue;
+                }
+
+                positions[objectId] = new SerializableVector3(placement.worldX, 0f, placement.worldZ);
+            }
+
+            return positions;
+        }
+
+        public static Dictionary<string, LayoutSpecPlacementEntry> BuildPlacementLookup(LayoutSpecDocument layoutSpec)
+        {
+            var lookup = new Dictionary<string, LayoutSpecPlacementEntry>(StringComparer.Ordinal);
+            LayoutSpecPlacementEntry[] placements = layoutSpec != null
+                ? layoutSpec.placements ?? Array.Empty<LayoutSpecPlacementEntry>()
+                : Array.Empty<LayoutSpecPlacementEntry>();
+
+            for (int i = 0; i < placements.Length; i++)
+            {
+                LayoutSpecPlacementEntry entry = placements[i];
+                string objectId = Normalize(entry != null ? entry.objectId : string.Empty);
+                if (string.IsNullOrEmpty(objectId) || lookup.ContainsKey(objectId))
+                    continue;
+
+                lookup.Add(objectId, entry);
+            }
+
+            return lookup;
+        }
+
+        public static bool TryGetPlacement(LayoutSpecDocument layoutSpec, string objectId, out LayoutSpecPlacementEntry placement)
+        {
+            placement = null;
+            if (layoutSpec == null || string.IsNullOrWhiteSpace(objectId))
+                return false;
+
+            return BuildPlacementLookup(layoutSpec).TryGetValue(Normalize(objectId), out placement);
+        }
+
+        public static PhysicsAreaLayoutDefinition ToPhysicsAreaLayout(LayoutSpecPhysicsAreaLayoutEntry layout)
+        {
+            return new PhysicsAreaLayoutDefinition
+            {
+                realPhysicsZoneBounds = ToWorldBounds(layout != null ? layout.realPhysicsZoneBounds : null),
+                fakeSpriteZoneBounds = ToWorldBounds(layout != null ? layout.fakeSpriteZoneBounds : null),
+                overlapAllowances = CopyOverlapAllowances(layout != null ? layout.overlapAllowances : null),
+            };
+        }
+
+        public static RailLayoutDefinition ToRailLayout(LayoutSpecRailLayoutEntry layout)
+        {
+            LayoutSpecRailLayoutEntry safeLayout = layout ?? new LayoutSpecRailLayoutEntry();
+            RailPathAnchorDefinition[] safePathCells = safeLayout.pathCells ?? Array.Empty<RailPathAnchorDefinition>();
+            var pathCells = new RailPathAnchorDefinition[safePathCells.Length];
+            for (int i = 0; i < safePathCells.Length; i++)
+            {
+                RailPathAnchorDefinition value = safePathCells[i];
+                pathCells[i] = value == null
+                    ? new RailPathAnchorDefinition()
+                    : new RailPathAnchorDefinition
+                    {
+                        worldX = value.worldX,
+                        worldZ = value.worldZ,
+                    };
+            }
+
+            return new RailLayoutDefinition
+            {
+                pathCells = pathCells,
+            };
+        }
+
+        private static WorldBoundsDefinition ToWorldBounds(LayoutSpecPlacementBoundsEntry bounds)
+        {
+            return new WorldBoundsDefinition
+            {
+                hasWorldBounds = bounds != null && bounds.hasWorldBounds,
+                worldX = bounds != null ? bounds.worldX : 0f,
+                worldZ = bounds != null ? bounds.worldZ : 0f,
+                worldWidth = bounds != null ? bounds.worldWidth : 0f,
+                worldDepth = bounds != null ? bounds.worldDepth : 0f,
+            };
+        }
+
+        private static PlacementOverlapAllowanceDefinition[] CopyOverlapAllowances(PlacementOverlapAllowanceDefinition[] values)
+        {
+            PlacementOverlapAllowanceDefinition[] safeValues = values ?? Array.Empty<PlacementOverlapAllowanceDefinition>();
+            var copies = new PlacementOverlapAllowanceDefinition[safeValues.Length];
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                PlacementOverlapAllowanceDefinition value = safeValues[i];
+                copies[i] = value == null
+                    ? new PlacementOverlapAllowanceDefinition()
+                    : new PlacementOverlapAllowanceDefinition
+                    {
+                        counterpartRole = value.counterpartRole ?? string.Empty,
+                        widthCells = value.widthCells,
+                        depthCells = value.depthCells,
+                        centerOffsetX = value.centerOffsetX,
+                        centerOffsetZ = value.centerOffsetZ,
+                    };
+            }
+
+            return copies;
+        }
+
+        private static string Normalize(string value)
+        {
+            return value != null ? value.Trim() : string.Empty;
         }
     }
 }

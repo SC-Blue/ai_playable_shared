@@ -2,6 +2,7 @@
   "name": "Supercent.PlayableAI.Authoring.Shared",
   "references": [
     "Supercent.PlayableAI.Contracts",
+    "Supercent.PlayableAI.Authoring.PlatformBridge.Editor",
     "Supercent.PlayableAI.Runtime",
     "Supercent.PlayableAI.FacilityFoundation",
     "Supercent.PlayableAI.MoneyFoundation",

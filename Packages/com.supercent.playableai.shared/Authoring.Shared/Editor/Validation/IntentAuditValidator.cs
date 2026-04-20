@@ -44,25 +44,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (catalog == null)
                 return Fail(result, "intent audit를 위해 PlayableObjectCatalog가 필요합니다.");
 
-            bool allowLayoutBackedPlacementAudit = LayoutAuthoringModeUtility.HasAuthoringContent(layoutSpec);
-            Dictionary<string, HashSet<string>> sharedSlotLookup = allowLayoutBackedPlacementAudit
-                ? LayoutSpecOverlapIntentRules.BuildDeclaredSharedSlotReferenceLookup(layoutSpec)
-                : null;
             ValidateItemPrices(model.saleValues, plan.itemPrices, result);
             ValidateFacilityAcceptedItems(model, plan.facilityAcceptedItems, result);
             ValidateFacilityOutputItems(model, plan.facilityOutputItems, result);
             ValidatePlayerOptions(model.playerOptions, plan.playerOptions, result);
             ValidateFacilityOptions(model.objects, plan.facilityOptions, result);
             ValidateSpawnStartState(model.objects, plan.spawns, result);
-            if (allowLayoutBackedPlacementAudit)
-                ValidateSpawnPositions(model.objects, model.stages, plan.spawns, catalog, sharedSlotLookup, result);
+            if (layoutSpec != null)
+                ValidateSpawnPositions(model.objects, plan.spawns, layoutSpec, result);
             ValidatePhysicsAreaStartState(model.objects, plan.physicsAreas, result);
-            if (allowLayoutBackedPlacementAudit)
-                ValidatePhysicsAreaPositions(model.objects, plan.physicsAreas, result);
+            if (layoutSpec != null)
+                ValidatePhysicsAreaPositions(model.objects, plan.physicsAreas, layoutSpec, result);
             ValidateArrowAbsorption(model.stages, plan.beats, plan.actions, result);
             ValidateFirstBeatGating(model.stages, plan.beats, result);
             ValidateIntroBeatSequencing(model.stages, plan.beats, plan.actions, result);
-            ValidateStageInternalBeatSequencing(model.stages, plan.beats, result);
+            ValidateStageInternalBeatSequencing(model.stages, plan.beats, plan.actions, result);
             ValidateStageCompletedEntryRules(model.stages, plan.beats, plan.actions, plan.stageFirstBeatIds, result);
             ValidateUnlockStageCompletionRules(model.stages, plan.unlocks, plan.beats, plan.actions, result);
             return FinalizeResult(result);
@@ -214,6 +210,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 List<string> introBeatIds = BuildEntryFocusBeatIds(stage);
+                List<string> entryGuideBeatIds = BuildEntryGuideBeatIds(stage);
                 for (int introIndex = 1; introIndex < introBeatIds.Count; introIndex++)
                 {
                     string prerequisiteActionId = GetPrimaryOwnedActionId(actions, introBeatIds[introIndex - 1], FlowActionKinds.CAMERA_FOCUS);
@@ -224,21 +221,51 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
                 }
 
-                if (introBeatIds.Count == 0)
+                if (entryGuideBeatIds.Count > 0)
+                {
+                    string expectedFirstGuidePrerequisite = introBeatIds.Count > 0
+                        ? introBeatIds[introBeatIds.Count - 1]
+                        : string.Empty;
+                    if (!string.IsNullOrEmpty(expectedFirstGuidePrerequisite) &&
+                        !HasOneOfEnterWhen(
+                            beatById,
+                            entryGuideBeatIds[0],
+                            BuildActionCompletedTargetId(expectedFirstGuidePrerequisite, actions),
+                            expectedFirstGuidePrerequisite))
+                    {
+                        Fail(result, "stages[" + i + "]의 첫 entry guide beat는 직전 focus camera 이후에만 시작되어야 합니다.");
+                    }
+
+                    for (int guideIndex = 1; guideIndex < entryGuideBeatIds.Count; guideIndex++)
+                    {
+                        if (!HasBeatCompletedEnterWhen(beatById, entryGuideBeatIds[guideIndex], entryGuideBeatIds[guideIndex - 1]))
+                        {
+                            Fail(result, "stages[" + i + "]의 entry guide beat는 이전 guide beat 완료 후에만 시작되어야 합니다.");
+                        }
+                    }
+                }
+
+                string lastEntrySetupBeatId = entryGuideBeatIds.Count > 0
+                    ? entryGuideBeatIds[entryGuideBeatIds.Count - 1]
+                    : (introBeatIds.Count > 0 ? introBeatIds[introBeatIds.Count - 1] : string.Empty);
+
+                if (string.IsNullOrEmpty(lastEntrySetupBeatId))
                     continue;
 
                 string firstObjectiveBeatId = ResolveFirstObjectiveBeatId(stage);
                 if (string.IsNullOrEmpty(firstObjectiveBeatId))
                     continue;
 
-                string introPrerequisiteActionId = GetPrimaryOwnedActionId(actions, introBeatIds[introBeatIds.Count - 1], FlowActionKinds.CAMERA_FOCUS);
+                string introPrerequisiteActionId = GetPrimaryOwnedActionId(actions, lastEntrySetupBeatId, FlowActionKinds.CAMERA_FOCUS);
                 bool expectsArrivalTiming = FirstObjectiveUsesArrivalTiming(stage);
-                if (string.IsNullOrEmpty(introPrerequisiteActionId) ||
-                    !HasActionCompletedEnterWhen(beatById, firstObjectiveBeatId, introPrerequisiteActionId))
+                bool objectiveStartsAfterExpectedPrerequisite = expectsArrivalTiming && !string.IsNullOrEmpty(introPrerequisiteActionId)
+                    ? HasActionCompletedEnterWhen(beatById, firstObjectiveBeatId, introPrerequisiteActionId)
+                    : HasBeatCompletedEnterWhen(beatById, firstObjectiveBeatId, lastEntrySetupBeatId);
+                if (!objectiveStartsAfterExpectedPrerequisite)
                 {
                     Fail(result, expectsArrivalTiming
                         ? "stages[" + i + "]의 첫 objective beat는 마지막 entry focus camera action 완료 후에 시작되어야 합니다."
-                        : "stages[" + i + "]의 첫 objective beat는 마지막 entry focus camera action 완료 후에만 시작되어야 합니다.");
+                        : "stages[" + i + "]의 첫 objective beat는 마지막 entry setup beat 완료 후에만 시작되어야 합니다.");
                 }
             }
         }
@@ -246,6 +273,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidateStageInternalBeatSequencing(
             ScenarioModelStageDefinition[] stages,
             FlowBeatDefinition[] beats,
+            FlowActionDefinition[] actions,
             IntentAuditValidationResult result)
         {
             Dictionary<string, FlowBeatDefinition> beatById = BuildBeatLookup(beats);
@@ -266,14 +294,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 }
 
                 List<string> completionFocusBeatIds = BuildCompletionFocusBeatIds(stage);
-                if (completionFocusBeatIds.Count == 0)
-                    continue;
+                List<string> completionGuideBeatIds = BuildCompletionGuideBeatIds(stage);
 
                 string expectedFirstCompletionPrerequisite = objectiveBeatIds.Count > 0
                     ? objectiveBeatIds[objectiveBeatIds.Count - 1]
-                    : ResolveLastEntryFocusBeatId(stage);
+                    : ResolveLastEntrySetupBeatId(stage);
 
-                if (!string.IsNullOrEmpty(expectedFirstCompletionPrerequisite) &&
+                if (completionFocusBeatIds.Count > 0 &&
+                    !string.IsNullOrEmpty(expectedFirstCompletionPrerequisite) &&
                     !HasBeatCompletedEnterWhen(beatById, completionFocusBeatIds[0], expectedFirstCompletionPrerequisite))
                 {
                     Fail(result, "stages[" + i + "]의 첫 completion focus beat는 직전 stage beat 완료 후에만 시작되어야 합니다.");
@@ -284,6 +312,30 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     if (!HasBeatCompletedEnterWhen(beatById, completionFocusBeatIds[focusIndex], completionFocusBeatIds[focusIndex - 1]))
                     {
                         Fail(result, "stages[" + i + "]의 completion focus beat는 이전 completion focus beat 완료 후에만 시작되어야 합니다.");
+                    }
+                }
+
+                if (completionGuideBeatIds.Count == 0)
+                    continue;
+
+                string expectedFirstCompletionGuidePrerequisite = completionFocusBeatIds.Count > 0
+                    ? completionFocusBeatIds[completionFocusBeatIds.Count - 1]
+                    : expectedFirstCompletionPrerequisite;
+                if (!string.IsNullOrEmpty(expectedFirstCompletionGuidePrerequisite) &&
+                    !HasOneOfEnterWhen(
+                        beatById,
+                        completionGuideBeatIds[0],
+                        BuildActionCompletedTargetId(expectedFirstCompletionGuidePrerequisite, actions),
+                        expectedFirstCompletionGuidePrerequisite))
+                {
+                    Fail(result, "stages[" + i + "]의 첫 completion guide beat는 직전 completion setup 이후에만 시작되어야 합니다.");
+                }
+
+                for (int guideIndex = 1; guideIndex < completionGuideBeatIds.Count; guideIndex++)
+                {
+                    if (!HasBeatCompletedEnterWhen(beatById, completionGuideBeatIds[guideIndex], completionGuideBeatIds[guideIndex - 1]))
+                    {
+                        Fail(result, "stages[" + i + "]의 completion guide beat는 이전 guide beat 완료 후에만 시작되어야 합니다.");
                     }
                 }
             }
@@ -769,19 +821,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static void ValidateSpawnPositions(
             ScenarioModelObjectDefinition[] objects,
-            ScenarioModelStageDefinition[] stages,
             CompiledSpawnData[] spawns,
-            PlayableObjectCatalog catalog,
-            Dictionary<string, HashSet<string>> sharedSlotLookup,
+            LayoutSpecDocument layoutSpec,
             IntentAuditValidationResult result)
         {
             var spawnBySpawnKey = new Dictionary<string, CompiledSpawnData>(StringComparer.Ordinal);
-            Dictionary<string, SerializableVector3> expectedPositions = IntentAuthoringUtility.BuildDeterministicPositions(
-                objects,
-                stages,
-                catalog,
-                result.Errors,
-                sharedSlotLookup);
+            Dictionary<string, SerializableVector3> expectedPositions = LayoutSpecGeometryUtility.BuildPositionLookup(objects, layoutSpec, result.Errors);
             CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
             for (int i = 0; i < safeSpawns.Length; i++)
             {
@@ -802,9 +847,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 string spawnKey = IntentAuthoringUtility.BuildSpawnKey(objectId);
                 if (!spawnBySpawnKey.TryGetValue(spawnKey, out CompiledSpawnData spawn) || spawn == null)
-                    continue;
-
-                if (!IntentAuthoringUtility.HasPlacement(value.placement))
                     continue;
 
                 if (!expectedPositions.TryGetValue(objectId, out SerializableVector3 expectedPosition))
@@ -860,6 +902,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidatePhysicsAreaPositions(
             ScenarioModelObjectDefinition[] objects,
             CompiledPhysicsAreaDefinition[] physicsAreas,
+            LayoutSpecDocument layoutSpec,
             IntentAuditValidationResult result)
         {
             var physicsAreaBySpawnKey = new Dictionary<string, CompiledPhysicsAreaDefinition>(StringComparer.Ordinal);
@@ -884,14 +927,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                if (!IntentAuthoringUtility.HasPlacement(value != null ? value.placement : null))
-                    continue;
-
                 string spawnKey = IntentAuthoringUtility.BuildSpawnKey(objectId);
                 if (!physicsAreaBySpawnKey.TryGetValue(spawnKey, out CompiledPhysicsAreaDefinition definition) || definition == null)
                     continue;
 
-                if (definition.localPosition.x != value.placement.worldX || definition.localPosition.z != value.placement.worldZ)
+                if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
+                    placement == null ||
+                    !placement.hasWorldPosition)
+                {
+                    Fail(result, "layoutSpec.placements에 physics_area '" + objectId + "'의 world position이 없습니다.");
+                    continue;
+                }
+
+                if (definition.localPosition.x != placement.worldX || definition.localPosition.z != placement.worldZ)
                     Fail(result, "objects[" + i + "] physics_area placement가 compiled physicsAreas.localPosition에 올바르게 lowering되지 않았습니다.");
             }
         }
@@ -954,6 +1002,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (string.Equals(kind, PromptIntentEffectKinds.REVEAL_OBJECT, StringComparison.Ordinal) ||
                     string.Equals(kind, PromptIntentEffectKinds.ACTIVATE_OBJECT, StringComparison.Ordinal) ||
                     string.Equals(kind, PromptIntentEffectKinds.REVEAL_ENDCARD, StringComparison.Ordinal) ||
+                    string.Equals(kind, PromptIntentEffectKinds.END_GAME, StringComparison.Ordinal) ||
                     string.Equals(kind, PromptIntentEffectKinds.HIDE_GUIDE, StringComparison.Ordinal))
                 {
                     return true;
@@ -1036,6 +1085,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             if (string.Equals(kind, PromptIntentEffectKinds.REVEAL_ENDCARD, StringComparison.Ordinal) ||
+                string.Equals(kind, PromptIntentEffectKinds.END_GAME, StringComparison.Ordinal) ||
                 string.Equals(kind, PromptIntentEffectKinds.HIDE_GUIDE, StringComparison.Ordinal))
             {
                 return ActivationTargetKinds.SYSTEM_ACTION + ":" + IntentAuthoringUtility.BuildRuntimeSystemActionTargetId(kind, string.Empty);
@@ -1087,6 +1137,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (stage == null || string.IsNullOrWhiteSpace(stage.id))
                 return string.Empty;
 
+            string lastCompletionGuideBeatId = ResolveLastCompletionGuideBeatId(stage);
+            if (!string.IsNullOrEmpty(lastCompletionGuideBeatId))
+                return lastCompletionGuideBeatId;
+
             string stageId = stage.id.Trim();
             ScenarioModelEffectDefinition[] completionEffects = stage.completionEffects ?? new ScenarioModelEffectDefinition[0];
             for (int i = completionEffects.Length - 1; i >= 0; i--)
@@ -1105,11 +1159,32 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (objectives.Length > 0)
                 return stageId + "__objective_" + (objectives.Length - 1).ToString("00");
 
-            string lastEntryFocusBeatId = ResolveLastEntryFocusBeatId(stage);
-            if (!string.IsNullOrEmpty(lastEntryFocusBeatId))
-                return lastEntryFocusBeatId;
+            string lastEntrySetupBeatId = ResolveLastEntrySetupBeatId(stage);
+            if (!string.IsNullOrEmpty(lastEntrySetupBeatId))
+                return lastEntrySetupBeatId;
 
             return string.Empty;
+        }
+
+        private static string ResolveLastEntrySetupBeatId(ScenarioModelStageDefinition stage)
+        {
+            string lastEntryGuideBeatId = ResolveLastEntryGuideBeatId(stage);
+            if (!string.IsNullOrEmpty(lastEntryGuideBeatId))
+                return lastEntryGuideBeatId;
+
+            return ResolveLastEntryFocusBeatId(stage);
+        }
+
+        private static string ResolveLastEntryGuideBeatId(ScenarioModelStageDefinition stage)
+        {
+            List<string> guideBeatIds = BuildEntryGuideBeatIds(stage);
+            return guideBeatIds.Count == 0 ? string.Empty : guideBeatIds[guideBeatIds.Count - 1];
+        }
+
+        private static string ResolveLastCompletionGuideBeatId(ScenarioModelStageDefinition stage)
+        {
+            List<string> guideBeatIds = BuildCompletionGuideBeatIds(stage);
+            return guideBeatIds.Count == 0 ? string.Empty : guideBeatIds[guideBeatIds.Count - 1];
         }
 
         private static string BuildUnlockerId(string targetObjectId)
@@ -1333,6 +1408,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return beatIds;
         }
 
+        private static List<string> BuildCompletionGuideBeatIds(ScenarioModelStageDefinition stage)
+        {
+            var beatIds = new List<string>();
+            if (stage == null || string.IsNullOrWhiteSpace(stage.id))
+                return beatIds;
+
+            string stageId = stage.id.Trim();
+            ScenarioModelEffectDefinition[] completionEffects = stage.completionEffects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < completionEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = completionEffects[i];
+                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal))
+                    continue;
+
+                beatIds.Add(stageId + "__completion_guide_" + i.ToString("00"));
+            }
+
+            return beatIds;
+        }
+
         private static List<string> BuildEntryFocusBeatIds(ScenarioModelStageDefinition stage)
         {
             var beatIds = new List<string>();
@@ -1348,6 +1443,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 beatIds.Add(stageId + "__focus_" + i.ToString("00"));
+            }
+
+            return beatIds;
+        }
+
+        private static List<string> BuildEntryGuideBeatIds(ScenarioModelStageDefinition stage)
+        {
+            var beatIds = new List<string>();
+            if (stage == null || string.IsNullOrWhiteSpace(stage.id))
+                return beatIds;
+
+            string stageId = stage.id.Trim();
+            ScenarioModelEffectDefinition[] entryEffects = stage.entryEffects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < entryEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = entryEffects[i];
+                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal))
+                    continue;
+
+                beatIds.Add(stageId + "__entry_guide_" + i.ToString("00"));
             }
 
             return beatIds;
@@ -1371,6 +1486,25 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             return count;
+        }
+
+        private static string BuildActionCompletedTargetId(string beatId, FlowActionDefinition[] actions)
+        {
+            if (!IsFocusBeatId(beatId))
+                return string.Empty;
+
+            return GetPrimaryOwnedActionId(actions, beatId, FlowActionKinds.CAMERA_FOCUS);
+        }
+
+        private static bool HasOneOfEnterWhen(
+            Dictionary<string, FlowBeatDefinition> beatById,
+            string beatId,
+            string actionTargetId,
+            string beatTargetId)
+        {
+            bool matchesAction = !string.IsNullOrEmpty(actionTargetId) && HasActionCompletedEnterWhen(beatById, beatId, actionTargetId);
+            bool matchesBeat = !string.IsNullOrEmpty(beatTargetId) && HasBeatCompletedEnterWhen(beatById, beatId, beatTargetId);
+            return matchesAction || matchesBeat;
         }
 
         private static bool HasEntryArrivalSpawnCustomer(ScenarioModelEffectDefinition[] effects)

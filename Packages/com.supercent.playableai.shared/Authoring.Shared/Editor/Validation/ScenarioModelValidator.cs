@@ -304,13 +304,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 if (value.physicsAreaOptions == null || !ItemRefUtility.IsValid(value.physicsAreaOptions.item))
                     Fail(result, label + ".physicsAreaOptions.item이 필요합니다.");
-
-                if (value.placement != null && value.placement.physicsAreaLayout != null)
-                {
-                    ValidateWorldBounds(value.placement.physicsAreaLayout.realPhysicsZoneBounds, label + ".placement.physicsAreaLayout.realPhysicsZoneBounds", result);
-                    ValidateWorldBounds(value.placement.physicsAreaLayout.fakeSpriteZoneBounds, label + ".placement.physicsAreaLayout.fakeSpriteZoneBounds", result);
-                    ValidateOverlapAllowances(value.placement.physicsAreaLayout.overlapAllowances, label + ".placement.physicsAreaLayout.overlapAllowances", result);
-                }
                 return;
             }
 
@@ -338,12 +331,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, label + ".railOptions.spawnIntervalSeconds는 0보다 커야 합니다.");
                 if (value.railOptions.travelDurationSeconds <= 0f)
                     Fail(result, label + ".railOptions.travelDurationSeconds는 0보다 커야 합니다.");
-                if (value.placement != null && value.placement.railLayout != null)
-                {
-                    RailPathAnchorDefinition[] pathCells = value.placement.railLayout.pathCells ?? new RailPathAnchorDefinition[0];
-                    if (pathCells.Length == 0)
-                        Fail(result, label + ".placement.railLayout.pathCells가 필요합니다.");
-                }
             }
         }
 
@@ -442,8 +429,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!hasBlockingBeat && completionEffects.Length > 0)
                     Fail(result, "stages[" + i + "]는 completion trigger를 만들 beat가 없는데 onComplete effect를 가지고 있습니다.");
 
-                if (HasFocusCamera(entryEffects) && objectives.Length == 0 && completionEffects.Length == 0)
+                if (HasFocusCamera(entryEffects) &&
+                    objectives.Length == 0 &&
+                    completionEffects.Length == 0 &&
+                    !HasEffect(entryEffects, PromptIntentEffectKinds.SHOW_GUIDE_ARROW))
+                {
                     Fail(result, "stages[" + i + "]는 focus_camera만 있고 이후 progression을 만들 objective/effect가 없습니다.");
+                }
 
                 int unlockObjectiveCount = CountObjectives(objectives, PromptIntentObjectiveKinds.UNLOCK_OBJECT);
                 if (unlockObjectiveCount > 1)
