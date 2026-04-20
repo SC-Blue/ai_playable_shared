@@ -15,6 +15,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         public string Message;
         public PlayablePromptIntent Contract;
         public List<string> Errors = new List<string>();
+        public List<ValidationIssueRecord> Issues = new List<ValidationIssueRecord>();
     }
 
     public static class PromptIntentJsonValidator
@@ -648,10 +649,43 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static PromptIntentJsonValidationResult Fail(PromptIntentJsonValidationResult result, PlayableFailureCode code, string message)
         {
+            return Fail(result, code, new ValidationIssueRecord(
+                MapFailureCodeToRuleId(code),
+                ValidationSeverity.Blocker,
+                message,
+                "PromptIntentJson"));
+        }
+
+        private static PromptIntentJsonValidationResult Fail(PromptIntentJsonValidationResult result, PlayableFailureCode code, ValidationIssueRecord issue)
+        {
+            if (result == null || issue == null)
+                return result;
+
             if (result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = code;
-            result.Errors.Add(message);
+            result.Errors.Add(issue.message ?? string.Empty);
+            result.Issues ??= new List<ValidationIssueRecord>();
+            result.Issues.Add(issue);
             return result;
+        }
+
+        private static string MapFailureCodeToRuleId(PlayableFailureCode code)
+        {
+            switch (code)
+            {
+                case PlayableFailureCode.InvalidJson:
+                    return ValidationRuleId.INTENT_JSON_PARSE_FAILED;
+                case PlayableFailureCode.UnknownKey:
+                    return ValidationRuleId.INTENT_JSON_UNKNOWN_KEY;
+                case PlayableFailureCode.MissingRequiredField:
+                    return ValidationRuleId.INTENT_JSON_MISSING_REQUIRED_FIELD;
+                case PlayableFailureCode.InvalidValue:
+                    return ValidationRuleId.INTENT_JSON_INVALID_VALUE;
+                case PlayableFailureCode.DuplicateIdentifier:
+                    return ValidationRuleId.INTENT_JSON_DUPLICATE_IDENTIFIER;
+                default:
+                    return ValidationRuleId.INTENT_JSON_GENERIC;
+            }
         }
 
         private static PromptIntentJsonValidationResult CopyFailure(

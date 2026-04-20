@@ -198,6 +198,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public readonly List<PlayableObjectCatalogValidationIssue> Errors = new List<PlayableObjectCatalogValidationIssue>();
         public readonly List<PlayableObjectCatalogValidationIssue> Warnings = new List<PlayableObjectCatalogValidationIssue>();
+        public readonly List<ValidationIssueRecord> Issues = new List<ValidationIssueRecord>();
 
         public bool IsValid => Errors.Count == 0;
         public string Message => IsValid ? "유효합니다." : Errors[0].message;
@@ -304,14 +305,14 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             return new GameplayCatalogSectionDefinition[]
             {
-                CreateSection(GENERATORS_ARRAY_PATH, "생성기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _generators),
-                CreateSection(RAILS_ARRAY_PATH, "레일", FACILITY_CATEGORY, GameplayDesignMode.AssembledPath, _rails),
-                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _converters),
-                CreateSection(SELLERS_ARRAY_PATH, "판매기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _sellers),
-                CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", UNLOCKER_CATEGORY, GameplayDesignMode.SinglePrefab, _unlockers),
-                CreateSection(ITEMS_ARRAY_PATH, "아이템", ITEM_CATEGORY, GameplayDesignMode.SinglePrefab, _items),
-                CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", PLAYER_MODEL_CATEGORY, GameplayDesignMode.SinglePrefab, _playerModels),
-                CreateSection(CUSTOMERS_ARRAY_PATH, "손님", CUSTOMER_CATEGORY, GameplayDesignMode.SinglePrefab, _customers),
+                CreateSection(GENERATORS_ARRAY_PATH, "생성기", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleGenerator), GameplayDesignMode.SinglePrefab, _generators),
+                CreateSection(RAILS_ARRAY_PATH, "레일", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleRail), GameplayDesignMode.AssembledPath, _rails),
+                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleProcessor), GameplayDesignMode.SinglePrefab, _converters),
+                CreateSection(SELLERS_ARRAY_PATH, "판매기", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleSeller), GameplayDesignMode.SinglePrefab, _sellers),
+                CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleUnlockPad), GameplayDesignMode.SinglePrefab, _unlockers),
+                CreateSection(ITEMS_ARRAY_PATH, "아이템", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleItem), GameplayDesignMode.SinglePrefab, _items),
+                CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RolePlayer), GameplayDesignMode.SinglePrefab, _playerModels),
+                CreateSection(CUSTOMERS_ARRAY_PATH, "손님", CatalogGameplayTaxonomy.ResolveExpectedSectionCategory(CatalogGameplayTaxonomy.RoleCustomer), GameplayDesignMode.SinglePrefab, _customers),
             };
         }
 
@@ -1515,17 +1516,56 @@ namespace Supercent.PlayableAI.Common.Contracts
             string entryLabel = BuildEntryLabel(section, entryIndex, objectId);
 
             if (string.IsNullOrEmpty(objectId))
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "의 objectId는 비어 있을 수 없습니다.");
+            {
+                AddError(result, sectionPath, entryIndex, -1, new ValidationIssueRecord(
+                    ValidationRuleId.CATALOG_OBJECT_ID_MISSING,
+                    ValidationSeverity.Blocker,
+                    entryLabel + "의 objectId는 비어 있을 수 없습니다.",
+                    "CatalogContract")
+                    .WithRelated("sectionPath", sectionPath ?? string.Empty)
+                    .WithRelated("expectedCategory", expectedCategory ?? string.Empty)
+                    .WithFixHint("section '" + (sectionPath ?? string.Empty) + "' entry[" + entryIndex + "]에 objectId를 채워라."));
+            }
 
             if (string.IsNullOrEmpty(category))
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "의 category는 비어 있을 수 없습니다.");
+            {
+                AddError(result, sectionPath, entryIndex, -1, new ValidationIssueRecord(
+                    ValidationRuleId.CATALOG_SECTION_CATEGORY_MISMATCH,
+                    ValidationSeverity.Blocker,
+                    entryLabel + "의 category는 비어 있을 수 없습니다.",
+                    "CatalogContract")
+                    .WithRelated("objectId", objectId ?? string.Empty)
+                    .WithRelated("actualCategory", string.Empty)
+                    .WithRelated("expectedCategory", expectedCategory ?? string.Empty)
+                    .WithRelated("sectionPath", sectionPath ?? string.Empty)
+                    .WithFixHint("entry의 category 필드를 '" + expectedCategory + "'로 채워라."));
+            }
             else if (!string.Equals(category, expectedCategory, System.StringComparison.Ordinal))
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "의 category '" + entry.category + "'는 섹션 category '" + (section != null ? section.expectedCategory : string.Empty) + "'와 정확히 일치해야 합니다.");
+            {
+                string sectionExpected = section != null ? section.expectedCategory : string.Empty;
+                AddError(result, sectionPath, entryIndex, -1, new ValidationIssueRecord(
+                    ValidationRuleId.CATALOG_SECTION_CATEGORY_MISMATCH,
+                    ValidationSeverity.Blocker,
+                    entryLabel + "의 category '" + entry.category + "'는 섹션 category '" + sectionExpected + "'와 정확히 일치해야 합니다.",
+                    "CatalogContract")
+                    .WithRelated("objectId", objectId ?? string.Empty)
+                    .WithRelated("actualCategory", entry.category ?? string.Empty)
+                    .WithRelated("expectedCategory", sectionExpected ?? string.Empty)
+                    .WithRelated("sectionPath", sectionPath ?? string.Empty)
+                    .WithFixHint("Catalog entry category를 '" + sectionExpected + "'로 바꾸거나, 이 entry를 정확한 section으로 옮겨라."));
+            }
 
             DesignVariantEntry[] designs = entry.designs ?? new DesignVariantEntry[0];
             if (designs.Length == 0)
             {
-                AddError(result, sectionPath, entryIndex, -1, entryLabel + "에는 최소 1개의 design이 필요합니다.");
+                AddError(result, sectionPath, entryIndex, -1, new ValidationIssueRecord(
+                    ValidationRuleId.CATALOG_DESIGN_LIST_EMPTY,
+                    ValidationSeverity.Blocker,
+                    entryLabel + "에는 최소 1개의 design이 필요합니다.",
+                    "CatalogContract")
+                    .WithRelated("objectId", objectId ?? string.Empty)
+                    .WithRelated("sectionPath", sectionPath ?? string.Empty)
+                    .WithFixHint("entry의 designs[]에 최소 1개의 design을 추가하라."));
                 return;
             }
 
@@ -1554,7 +1594,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                 if (design.prefab == null)
                     AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 prefab이 필요합니다.");
 
-                if (entry.designMode == GameplayDesignMode.AssembledPath)
+                if (entry.designMode == GameplayDesignMode.AssembledPath &&
+                    CatalogGameplayShapeRules.RequiresRailPathShapes())
                 {
                     AssembledPathDesignAssets assets = design.assembledPathAssets ?? new AssembledPathDesignAssets();
                     if (design.prefab == null)
@@ -1664,22 +1705,38 @@ namespace Supercent.PlayableAI.Common.Contracts
                     ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".prefab", design.prefab, ref expectedSquareSizeCells, result);
 
                 if (design.tJunctionPrefab != null)
+                {
+                    if (CatalogGameplayShapeRules.RequiresConnected3TJunctionOnlyIfDeclared() && design.tJunctionTopImage == null)
+                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 declared tJunctionPrefab용 tJunctionTopImage가 필요합니다.");
                     ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".tJunctionPrefab", design.tJunctionPrefab, ref expectedSquareSizeCells, result);
+                }
 
-                if (string.Equals(resolvedVariationMode, EnvironmentCatalog.VARIATION_MODE_CONNECTED3, System.StringComparison.Ordinal))
+                if (CatalogGameplayShapeRules.IsConnected3Perimeter(placementMode, resolvedVariationMode))
                 {
                     if (design.straightPrefab == null)
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 straightPrefab이 필요합니다.");
                     else
+                    {
+                        if (design.straightTopImage == null)
+                            AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 straightTopImage가 필요합니다.");
                         ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".straightPrefab", design.straightPrefab, ref expectedSquareSizeCells, result);
+                    }
                     if (design.cornerPrefab == null)
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 cornerPrefab이 필요합니다.");
                     else
+                    {
+                        if (design.cornerTopImage == null)
+                            AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 cornerTopImage가 필요합니다.");
                         ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".cornerPrefab", design.cornerPrefab, ref expectedSquareSizeCells, result);
-                    if (design.crossPrefab == null)
+                    }
+                    if (CatalogGameplayShapeRules.RequiresConnected3Cross() && design.crossPrefab == null)
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 crossPrefab이 필요합니다.");
-                    else
+                    else if (design.crossPrefab != null)
+                    {
+                        if (design.crossTopImage == null)
+                            AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 crossTopImage가 필요합니다.");
                         ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".crossPrefab", design.crossPrefab, ref expectedSquareSizeCells, result);
+                    }
                 }
             }
 
@@ -1699,13 +1756,43 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         private static void AddError(PlayableObjectCatalogValidationResult result, string sectionPath, int entryIndex, int designIndex, string message)
         {
+            AddError(result, sectionPath, entryIndex, designIndex, new ValidationIssueRecord(
+                ValidationRuleId.CATALOG_GENERIC,
+                ValidationSeverity.Blocker,
+                message,
+                "CatalogContract"));
+        }
+
+        private static void AddError(PlayableObjectCatalogValidationResult result, string sectionPath, int entryIndex, int designIndex, ValidationIssueRecord issue)
+        {
+            if (result == null || issue == null)
+                return;
+
             result.Errors.Add(new PlayableObjectCatalogValidationIssue
             {
                 sectionPath = sectionPath ?? string.Empty,
                 entryIndex = entryIndex,
                 designIndex = designIndex,
-                message = message ?? string.Empty,
+                message = issue.message ?? string.Empty,
             });
+
+            if (string.IsNullOrEmpty(issue.targetPath))
+                issue.WithTargetPath(BuildIssueTargetPath(sectionPath, entryIndex, designIndex));
+
+            result.Issues.Add(issue);
+        }
+
+        private static string BuildIssueTargetPath(string sectionPath, int entryIndex, int designIndex)
+        {
+            string basePath = string.IsNullOrEmpty(sectionPath) ? string.Empty : sectionPath;
+            if (entryIndex < 0)
+                return basePath;
+
+            string entryPart = basePath + "[" + entryIndex + "]";
+            if (designIndex < 0)
+                return entryPart;
+
+            return entryPart + ".designs[" + designIndex + "]";
         }
 
         private static bool IsSupportedEnvironmentPlacementMode(string placementMode)

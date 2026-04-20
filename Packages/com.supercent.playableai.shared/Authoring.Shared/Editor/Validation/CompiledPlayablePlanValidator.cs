@@ -16,6 +16,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         public string Message;
         public List<string> Errors = new List<string>();
         public List<string> Warnings = new List<string>();
+        public List<ValidationIssueRecord> Issues = new List<ValidationIssueRecord>();
     }
 
     public static class CompiledPlayablePlanValidator
@@ -3359,10 +3360,24 @@ private static bool TryResolveRailLayoutBounds(
 
         private static void Fail(CompiledPlayablePlanValidationResult result, string message)
         {
+            Fail(result, new ValidationIssueRecord(
+                ValidationRuleId.COMPILED_PLAN_GENERIC,
+                ValidationSeverity.Blocker,
+                message,
+                "CompiledPlayablePlan"));
+        }
+
+        private static void Fail(CompiledPlayablePlanValidationResult result, ValidationIssueRecord issue)
+        {
+            if (result == null || issue == null)
+                return;
+
             if (result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.CompiledPlanValidationFailed;
 
-            result.Errors.Add(message);
+            result.Errors.Add(issue.message ?? string.Empty);
+            result.Issues ??= new List<ValidationIssueRecord>();
+            result.Issues.Add(issue);
         }
 
         private static void Warn(CompiledPlayablePlanValidationResult result, string message)
@@ -3370,7 +3385,21 @@ private static bool TryResolveRailLayoutBounds(
             if (result == null || string.IsNullOrWhiteSpace(message))
                 return;
 
-            result.Warnings.Add(message);
+            Warn(result, new ValidationIssueRecord(
+                ValidationRuleId.COMPILED_PLAN_WARNING_GENERIC,
+                ValidationSeverity.Warning,
+                message,
+                "CompiledPlayablePlan"));
+        }
+
+        private static void Warn(CompiledPlayablePlanValidationResult result, ValidationIssueRecord issue)
+        {
+            if (result == null || issue == null)
+                return;
+
+            result.Warnings.Add(issue.message ?? string.Empty);
+            result.Issues ??= new List<ValidationIssueRecord>();
+            result.Issues.Add(issue);
         }
 
         private static CompiledPlayablePlanValidationResult FinalizeFailure(CompiledPlayablePlanValidationResult result)

@@ -1,7 +1,8 @@
 {
   "packageName": "com.supercent.playableai.shared",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "sourceRepository": "https://github.com/SC-Blue/ai_playable_shared",
-  "sourceCommit": "72986ad632b066ae4cde2c537a53a258c8bd44a3",
-  "distributionMode": "vendored_release"
+  "sourceCommit": "PENDING_HARDCUT_COMMIT",
+  "distributionMode": "vendored_release",
+  "notes": "Hardcut migration: ValidationIssueRecord, ValidationRuleId, ValidationSeverity 신설. 5개 validator + PlayableObjectCatalog에 Issues 필드 추가. helper에 ValidationIssueRecord overload 추가. 'sourceCommit'는 이 변경이 ai_playable_shared 본 repo로 push된 후 실제 commit hash로 갱신해야 한다."
 }

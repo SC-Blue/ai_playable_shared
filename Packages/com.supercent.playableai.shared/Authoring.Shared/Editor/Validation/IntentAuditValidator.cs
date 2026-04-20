@@ -13,6 +13,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         public PlayableFailureCode FailureCode;
         public string Message;
         public List<string> Errors = new List<string>();
+        public List<ValidationIssueRecord> Issues = new List<ValidationIssueRecord>();
     }
 
     public static class IntentAuditValidator
@@ -1571,9 +1572,23 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static IntentAuditValidationResult Fail(IntentAuditValidationResult result, string message)
         {
+            return Fail(result, new ValidationIssueRecord(
+                ValidationRuleId.INTENT_AUDIT_GENERIC,
+                ValidationSeverity.Blocker,
+                message,
+                "IntentAudit"));
+        }
+
+        private static IntentAuditValidationResult Fail(IntentAuditValidationResult result, ValidationIssueRecord issue)
+        {
+            if (result == null || issue == null)
+                return result;
+
             if (result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.IntentAuditFailed;
-            result.Errors.Add(message);
+            result.Errors.Add(issue.message ?? string.Empty);
+            result.Issues ??= new List<ValidationIssueRecord>();
+            result.Issues.Add(issue);
             return result;
         }
     }
