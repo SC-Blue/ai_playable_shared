@@ -36,6 +36,7 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public const int SCHEMA_VERSION = 1;
         public const string FILE_NAME = "CONTENT_CATALOG.generated.json";
+        public const string DEFAULT_DESIGN_ID = "basic";
         public const string DESIGN_MODE_SINGLE_PREFAB = "single_prefab";
         public const string DESIGN_MODE_ASSEMBLED_PATH = "assembled_path";
         public const string DESIGN_MODE_ENVIRONMENT = "environment";

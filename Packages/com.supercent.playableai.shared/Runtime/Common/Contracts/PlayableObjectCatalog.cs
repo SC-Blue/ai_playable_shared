@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Supercent.PlayableAI.Common.Format;
 using Supercent.PlayableAI.Runtime.Gameplay;
 using UnityEngine;
 
@@ -1540,6 +1541,8 @@ namespace Supercent.PlayableAI.Common.Contracts
 
     public static class PlayableObjectCatalogContractValidator
     {
+        public const string DEFAULT_DESIGN_ID = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
+
         public static PlayableObjectCatalogValidationResult Validate(PlayableObjectCatalog catalog)
         {
             var result = new PlayableObjectCatalogValidationResult();
