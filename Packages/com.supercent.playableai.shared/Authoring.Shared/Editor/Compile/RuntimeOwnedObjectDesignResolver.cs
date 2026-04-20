@@ -55,7 +55,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     requiredObjectIds.Add("customer");
 
                 if (metadata.containsItemSellFacility)
-                    requiredObjectIds.Add("money/default");
+                    requiredObjectIds.Add("money");
             }
 
             IReadOnlyList<EditorBasedCatalog.Entry> editorEntries = catalog.EditorBased.GetEntries();
@@ -69,7 +69,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 if (metadata.containsMoneyHandler)
-                    requiredObjectIds.Add("money/default");
+                    requiredObjectIds.Add("money");
             }
 
             CollectAcceptedItems(facilityAcceptedItems, requiredObjectIds);

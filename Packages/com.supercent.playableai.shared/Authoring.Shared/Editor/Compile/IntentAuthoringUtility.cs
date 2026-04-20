@@ -8,6 +8,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 {
     public static class IntentAuthoringUtility
     {
+        private sealed class GameplayResolutionGuidance
+        {
+            public bool IsStableKey;
+            public string SuggestedObjectId = string.Empty;
+            public string SuggestedDesignId = string.Empty;
+            public string[] AvailableObjectIds = new string[0];
+            public string[] AvailableDesignIds = new string[0];
+        }
+
         private sealed class PackedPlacementEntry
         {
             public string ObjectId = string.Empty;
@@ -55,7 +64,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             public float MaxZ;
         }
 
-        public const string DEFAULT_DESIGN_ID = "default";
         public const float LAYOUT_SPACING = 1f;
         public const float UNLOCK_PAD_ROW_Z = -1f;
         private const int PLAYER_PLACEMENT_SEARCH_RADIUS_CELLS = 64;
@@ -215,23 +223,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 if (errors != null)
                 {
-                    string availableDesignIds = string.Empty;
-                    if (catalog.TryGetGameplayEntry(normalizedObjectId, out GameplayCatalogEntry entry) && entry != null)
-                    {
-                        availableDesignIds = string.Join(
-                            ", ",
-                            (entry.designs ?? new DesignVariantEntry[0])
-                                .Where(value => value != null && !string.IsNullOrWhiteSpace(Normalize(value.designId)))
-                                .Select(value => Normalize(value.designId))
-                                .Distinct(System.StringComparer.Ordinal)
-                                .OrderBy(value => value, System.StringComparer.Ordinal));
-                    }
-
-                    string missingDesignLabel = string.IsNullOrEmpty(requestedDesignId) ? "(empty)" : requestedDesignId;
-                    if (string.IsNullOrEmpty(availableDesignIds))
-                        errors.Add(label + "에서 objectId '" + normalizedObjectId + "'의 designId '" + missingDesignLabel + "'를 catalog design으로 해석하지 못했습니다.");
-                    else
-                        errors.Add(label + "에서 objectId '" + normalizedObjectId + "'의 designId '" + missingDesignLabel + "'를 catalog design으로 해석하지 못했습니다. 허용 designId: " + availableDesignIds);
+                    errors.Add(BuildGameplayDesignResolutionGuidance(
+                        catalog,
+                        normalizedObjectId,
+                        requestedDesignId,
+                        label));
                 }
 
                 return -1;
@@ -246,6 +242,190 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             List<string> errors)
         {
             return BuildDeterministicPositions(objects, null, catalog, errors, null);
+        }
+
+        private static string BuildGameplayDesignResolutionGuidance(
+            PlayableObjectCatalog catalog,
+            string normalizedObjectId,
+            string requestedDesignId,
+            string label)
+        {
+            string missingDesignLabel = string.IsNullOrEmpty(requestedDesignId) ? "(empty)" : requestedDesignId;
+            GameplayResolutionGuidance guidance = BuildGameplayResolutionGuidance(catalog, normalizedObjectId, requestedDesignId);
+            return label + "에서 objectId '" + normalizedObjectId + "'의 designId '" + missingDesignLabel +
+                   "'를 catalog design으로 해석하지 못했습니다." + BuildGameplayResolutionCandidateBlock(guidance);
+        }
+
+        private static string TryGetAvailableDesignIds(PlayableObjectCatalog catalog, string objectId)
+        {
+            return JoinCandidateValues(TryGetAvailableDesignIdValues(catalog, objectId));
+        }
+
+        private static GameplayResolutionGuidance BuildGameplayResolutionGuidance(
+            PlayableObjectCatalog catalog,
+            string normalizedObjectId,
+            string requestedDesignId)
+        {
+            var guidance = new GameplayResolutionGuidance();
+            guidance.AvailableDesignIds = TryGetAvailableDesignIdValues(catalog, normalizedObjectId);
+
+            if (ItemRefUtility.TryParseStableKey(normalizedObjectId, out ItemRef stableItem) && stableItem != null)
+            {
+                guidance.IsStableKey = true;
+                guidance.SuggestedObjectId = Normalize(stableItem.familyId);
+                guidance.SuggestedDesignId = Normalize(stableItem.variantId);
+                guidance.AvailableObjectIds = BuildGameplayObjectIdCandidates(catalog, guidance.SuggestedObjectId);
+                if (guidance.AvailableObjectIds.Length == 0 && !string.IsNullOrEmpty(guidance.SuggestedObjectId))
+                    guidance.AvailableObjectIds = new[] { guidance.SuggestedObjectId };
+
+                string guidanceObjectId = string.IsNullOrEmpty(guidance.SuggestedObjectId)
+                    ? normalizedObjectId
+                    : guidance.SuggestedObjectId;
+                guidance.AvailableDesignIds = TryGetAvailableDesignIdValues(catalog, guidanceObjectId);
+                if (string.IsNullOrEmpty(guidance.SuggestedDesignId) && guidance.AvailableDesignIds.Length > 0)
+                    guidance.SuggestedDesignId = guidance.AvailableDesignIds[0];
+                return guidance;
+            }
+
+            guidance.AvailableObjectIds = BuildGameplayObjectIdCandidates(catalog, normalizedObjectId);
+            if (guidance.AvailableDesignIds.Length > 0 && string.IsNullOrEmpty(guidance.SuggestedDesignId))
+            {
+                guidance.SuggestedDesignId = SelectSuggestedDesignId(requestedDesignId, guidance.AvailableDesignIds);
+            }
+
+            return guidance;
+        }
+
+        private static string BuildGameplayResolutionCandidateBlock(GameplayResolutionGuidance guidance)
+        {
+            if (guidance == null)
+                return " -> 수정 가이드: catalog의 objectId와 designId를 확인해서 수정하세요.";
+
+            var segments = new List<string>();
+            if (guidance.IsStableKey)
+                segments.Add("이 값은 item stable key입니다");
+
+            string recommendedChange = BuildRecommendedChange(guidance);
+            if (!string.IsNullOrEmpty(recommendedChange))
+                segments.Add("추천 수정: " + recommendedChange);
+
+            if (guidance.AvailableObjectIds != null && guidance.AvailableObjectIds.Length > 0)
+                segments.Add("사용 가능한 objectId: [" + JoinCandidateValues(guidance.AvailableObjectIds) + "]");
+
+            if (guidance.AvailableDesignIds != null && guidance.AvailableDesignIds.Length > 0)
+                segments.Add("사용 가능한 designId: [" + JoinCandidateValues(guidance.AvailableDesignIds) + "]");
+
+            if (segments.Count == 0)
+                return " -> 수정 가이드: catalog의 objectId와 designId를 확인해서 수정하세요.";
+
+            return " -> 수정 가이드: " + string.Join("; ", segments) + ".";
+        }
+
+        private static string BuildRecommendedChange(GameplayResolutionGuidance guidance)
+        {
+            if (guidance == null)
+                return string.Empty;
+
+            var components = new List<string>();
+            if (!string.IsNullOrEmpty(guidance.SuggestedObjectId))
+                components.Add("objectId '" + guidance.SuggestedObjectId + "'");
+            if (!string.IsNullOrEmpty(guidance.SuggestedDesignId))
+                components.Add("designId '" + guidance.SuggestedDesignId + "'");
+
+            if (components.Count > 0)
+                return string.Join(", ", components);
+
+            if (guidance.AvailableDesignIds != null && guidance.AvailableDesignIds.Length > 0)
+                return "designId '" + guidance.AvailableDesignIds[0] + "'";
+
+            if (guidance.AvailableObjectIds != null && guidance.AvailableObjectIds.Length > 0)
+                return "objectId '" + guidance.AvailableObjectIds[0] + "'";
+
+            return string.Empty;
+        }
+
+        private static string[] BuildGameplayObjectIdCandidates(PlayableObjectCatalog catalog, string requestedObjectId)
+        {
+            string normalizedRequestedObjectId = Normalize(requestedObjectId);
+            if (catalog == null || string.IsNullOrEmpty(normalizedRequestedObjectId))
+                return new string[0];
+
+            var exactMatches = new HashSet<string>(StringComparer.Ordinal);
+            var fuzzyMatches = new HashSet<string>(StringComparer.Ordinal);
+            IReadOnlyList<GameplayCatalogEntry> entries = catalog.GetGameplayEntries();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                GameplayCatalogEntry entry = entries[i];
+                string candidateObjectId = entry != null ? Normalize(entry.objectId) : string.Empty;
+                if (string.IsNullOrEmpty(candidateObjectId))
+                    continue;
+
+                if (string.Equals(candidateObjectId, normalizedRequestedObjectId, StringComparison.Ordinal))
+                {
+                    exactMatches.Add(candidateObjectId);
+                    continue;
+                }
+
+                if (candidateObjectId.IndexOf(normalizedRequestedObjectId, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    normalizedRequestedObjectId.IndexOf(candidateObjectId, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    fuzzyMatches.Add(candidateObjectId);
+                }
+            }
+
+            if (exactMatches.Count > 0)
+                return exactMatches.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+
+            return fuzzyMatches
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .Take(5)
+                .ToArray();
+        }
+
+        private static string[] TryGetAvailableDesignIdValues(PlayableObjectCatalog catalog, string objectId)
+        {
+            if (catalog == null || !catalog.TryGetGameplayEntry(objectId, out GameplayCatalogEntry entry) || entry == null)
+                return new string[0];
+
+            return (entry.designs ?? new DesignVariantEntry[0])
+                .Where(value => value != null && !string.IsNullOrWhiteSpace(Normalize(value.designId)))
+                .Select(value => Normalize(value.designId))
+                .Distinct(System.StringComparer.Ordinal)
+                .OrderBy(value => value, System.StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static string JoinCandidateValues(IEnumerable<string> values)
+        {
+            if (values == null)
+                return string.Empty;
+
+            return string.Join(", ", values.Where(value => !string.IsNullOrWhiteSpace(value)));
+        }
+
+        private static string SelectSuggestedDesignId(string requestedDesignId, string[] availableDesignIds)
+        {
+            string normalizedRequestedDesignId = Normalize(requestedDesignId);
+            if (availableDesignIds == null || availableDesignIds.Length == 0)
+                return string.Empty;
+
+            if (!string.IsNullOrEmpty(normalizedRequestedDesignId))
+            {
+                for (int i = 0; i < availableDesignIds.Length; i++)
+                {
+                    string availableDesignId = Normalize(availableDesignIds[i]);
+                    if (string.IsNullOrEmpty(availableDesignId))
+                        continue;
+
+                    if (availableDesignId.IndexOf(normalizedRequestedDesignId, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        normalizedRequestedDesignId.IndexOf(availableDesignId, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return availableDesignId;
+                    }
+                }
+            }
+
+            return availableDesignIds[0];
         }
 
         public static Dictionary<string, SerializableVector3> BuildDeterministicPositions(

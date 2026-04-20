@@ -36,7 +36,6 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public const int SCHEMA_VERSION = 1;
         public const string FILE_NAME = "CONTENT_CATALOG.generated.json";
-        public const string DEFAULT_DESIGN_ID = "default";
         public const string DESIGN_MODE_SINGLE_PREFAB = "single_prefab";
         public const string DESIGN_MODE_ASSEMBLED_PATH = "assembled_path";
         public const string DESIGN_MODE_ENVIRONMENT = "environment";
@@ -54,11 +53,8 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string normalizedObjectId = Normalize(objectId);
             string normalizedDesignId = Normalize(designId);
-            if (string.IsNullOrEmpty(normalizedObjectId))
+            if (string.IsNullOrEmpty(normalizedObjectId) || string.IsNullOrEmpty(normalizedDesignId))
                 return string.Empty;
-
-            if (string.IsNullOrEmpty(normalizedDesignId))
-                normalizedDesignId = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
 
             return normalizedObjectId + "/" + normalizedDesignId;
         }
@@ -147,7 +143,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string stableEntryId = string.Empty;
         public string contentId = string.Empty;
         public string objectId = string.Empty;
-        public string designId = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
+        public string designId = string.Empty;
         public string displayName = string.Empty;
         public string description = string.Empty;
         public string category = string.Empty;

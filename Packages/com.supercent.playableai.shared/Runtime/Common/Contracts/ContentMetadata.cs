@@ -9,7 +9,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string contentId = string.Empty;
         public string objectId = string.Empty;
-        public string designId = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
+        public string designId = string.Empty;
         public string displayName = string.Empty;
         [TextArea] public string description = string.Empty;
         public ContentCatalogCategory category = ContentCatalogCategory.unknown;
@@ -23,8 +23,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             designId = ContentCatalogTokenUtility.Normalize(designId);
             displayName = ContentCatalogTokenUtility.Normalize(displayName);
             description = ContentCatalogTokenUtility.Normalize(description);
-            if (string.IsNullOrEmpty(designId))
-                designId = GeneratedContentCatalogContracts.DEFAULT_DESIGN_ID;
         }
     }
 }

@@ -317,8 +317,6 @@ namespace PlayableAI.AuthoringCore
             entry ??= new DraftLayoutEnvironmentEntry();
             string objectId = Normalize(entry.objectId);
             string designId = Normalize(entry.designId);
-            if (string.IsNullOrEmpty(designId))
-                designId = PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID;
 
             float worldWidth = entry.worldWidth;
             float worldDepth = entry.worldDepth;
@@ -364,7 +362,7 @@ namespace PlayableAI.AuthoringCore
 
             if (!catalog.TryGetEnvironmentDesign(
                     objectId,
-                    string.IsNullOrEmpty(designId) ? PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID : designId,
+                    designId,
                     out EnvironmentDesignVariantEntry design,
                     out _,
                     out _,

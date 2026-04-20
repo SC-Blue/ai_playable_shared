@@ -2036,10 +2036,14 @@ private static void ValidateEnvironmentOccupiedCellConflicts(
             if (IsFloorEnvironmentEntry(entry, catalog))
                 return false;
 
-            string designId = !string.IsNullOrWhiteSpace(entry.designId) ? entry.designId.Trim() : PlayableObjectCatalogContractValidator.DEFAULT_DESIGN_ID;
+            string designId = !string.IsNullOrWhiteSpace(entry.designId) ? entry.designId.Trim() : string.Empty;
             if (!catalog.TryGetEnvironmentDesign(entry.objectId.Trim(), designId, out EnvironmentDesignVariantEntry design, out string placementMode, out string variationMode, out _))
             {
-                error = "layout_spec.environment[" + entryIndex + "]의 catalog environment design을 해석하지 못했습니다.";
+                error = BuildEnvironmentDesignResolutionError(
+                    catalog,
+                    entry.objectId.Trim(),
+                    designId,
+                    "layout_spec.environment[" + entryIndex + "]");
                 return false;
             }
 
@@ -2065,6 +2069,115 @@ private static void ValidateEnvironmentOccupiedCellConflicts(
                 OccupiedCells = occupiedCells,
             };
             return true;
+        }
+
+        private static string BuildEnvironmentDesignResolutionError(
+            PlayableObjectCatalog catalog,
+            string objectId,
+            string designId,
+            string label)
+        {
+            string normalizedObjectId = objectId != null ? objectId.Trim() : string.Empty;
+            string normalizedDesignId = designId != null ? designId.Trim() : string.Empty;
+            string missingDesignLabel = string.IsNullOrEmpty(normalizedDesignId) ? "(empty)" : normalizedDesignId;
+
+            var segments = new List<string>();
+            string[] availableObjectIds = BuildEnvironmentObjectIdCandidates(catalog, normalizedObjectId);
+            string[] availableDesignIds = TryGetAvailableEnvironmentDesignIds(catalog, normalizedObjectId);
+            if (availableObjectIds.Length > 0)
+                segments.Add("사용 가능한 objectId: [" + JoinCandidateValues(availableObjectIds) + "]");
+            if (availableDesignIds.Length > 0)
+                segments.Add("사용 가능한 designId: [" + JoinCandidateValues(availableDesignIds) + "]");
+
+            string guidance = segments.Count > 0
+                ? " -> 수정 가이드: " + string.Join("; ", segments) + "."
+                : " -> 수정 가이드: catalog의 objectId와 designId를 확인하세요.";
+            return label + "에서 objectId '" + normalizedObjectId + "'의 designId '" + missingDesignLabel +
+                   "'를 catalog environment design으로 해석하지 못했습니다." + guidance;
+        }
+
+        private static string[] BuildEnvironmentObjectIdCandidates(PlayableObjectCatalog catalog, string requestedObjectId)
+        {
+            if (catalog == null || string.IsNullOrWhiteSpace(requestedObjectId))
+                return Array.Empty<string>();
+
+            string normalizedRequestedObjectId = requestedObjectId.Trim();
+            var exactMatches = new HashSet<string>(StringComparer.Ordinal);
+            var fuzzyMatches = new HashSet<string>(StringComparer.Ordinal);
+            IReadOnlyList<EnvironmentCatalogEntry> entries = catalog.GetEnvironmentEntries();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                EnvironmentCatalogEntry entry = entries[i];
+                string candidateObjectId = entry != null && !string.IsNullOrWhiteSpace(entry.objectId)
+                    ? entry.objectId.Trim()
+                    : string.Empty;
+                if (string.IsNullOrEmpty(candidateObjectId))
+                    continue;
+
+                if (string.Equals(candidateObjectId, normalizedRequestedObjectId, StringComparison.Ordinal))
+                {
+                    exactMatches.Add(candidateObjectId);
+                    continue;
+                }
+
+                if (candidateObjectId.IndexOf(normalizedRequestedObjectId, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    normalizedRequestedObjectId.IndexOf(candidateObjectId, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    fuzzyMatches.Add(candidateObjectId);
+                }
+            }
+
+            if (exactMatches.Count > 0)
+                return new List<string>(exactMatches).ToArray();
+
+            var values = new List<string>(fuzzyMatches);
+            values.Sort(StringComparer.Ordinal);
+            if (values.Count > 5)
+                values.RemoveRange(5, values.Count - 5);
+            return values.ToArray();
+        }
+
+        private static string[] TryGetAvailableEnvironmentDesignIds(PlayableObjectCatalog catalog, string objectId)
+        {
+            if (catalog == null ||
+                string.IsNullOrWhiteSpace(objectId) ||
+                !catalog.TryGetEnvironmentEntry(objectId.Trim(), out EnvironmentCatalogEntry entry) ||
+                entry == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            EnvironmentDesignVariantEntry[] designs = entry.designs ?? Array.Empty<EnvironmentDesignVariantEntry>();
+            var values = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < designs.Length; i++)
+            {
+                string designId = designs[i] != null && !string.IsNullOrWhiteSpace(designs[i].designId)
+                    ? designs[i].designId.Trim()
+                    : string.Empty;
+                if (string.IsNullOrEmpty(designId) || !seen.Add(designId))
+                    continue;
+
+                values.Add(designId);
+            }
+
+            values.Sort(StringComparer.Ordinal);
+            return values.ToArray();
+        }
+
+        private static string JoinCandidateValues(IEnumerable<string> values)
+        {
+            if (values == null)
+                return string.Empty;
+
+            var filtered = new List<string>();
+            foreach (string value in values)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                    filtered.Add(value.Trim());
+            }
+
+            return string.Join(", ", filtered);
         }
 
         private static bool TryValidateEnvironmentDesignFootprintRules(
