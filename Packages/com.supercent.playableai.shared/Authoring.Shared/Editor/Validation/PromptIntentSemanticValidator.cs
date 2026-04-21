@@ -1120,7 +1120,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (PromptIntentCapabilityRegistry.RoleSupportsTargetEventKey(role, normalizedEventKey))
                 return;
 
-            Fail(result, label + "는 object '" + normalizedObjectId + "'(role='" + role + "')에서 " + usageLabel + " eventKey '" + normalizedEventKey + "'를 지원하지 않습니다.");
+            Fail(result, label + "는 object '" + normalizedObjectId + "'(role='" + role + "')에서 " + usageLabel + " eventKey '" + normalizedEventKey + "'를 지원하지 않습니다." + BuildTargetEventKeyGuidance(normalizedObjectId, role, usageLabel));
         }
 
         private static void ValidateCurrencyReference(
@@ -1260,6 +1260,24 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 1; i < safeRoles.Length; i++)
                 text += ", " + Normalize(safeRoles[i]);
             return text;
+        }
+
+        private static string BuildTargetEventKeyGuidance(string objectId, string role, string usageLabel)
+        {
+            string[] supportedEventKeys = PromptIntentCapabilityRegistry.GetSupportedFlowTargetEventKeys(role);
+            if (supportedEventKeys == null || supportedEventKeys.Length == 0)
+                return " -> 수정 가이드: 현재 계약에서 role '" + role + "'의 허용 eventKey를 확인하세요.";
+
+            var segments = new List<string>
+            {
+                "현재 objects[] 기준 object '" + objectId + "'의 role은 '" + role + "'입니다",
+                "제작 계약상 role '" + role + "'의 허용 eventKey: [" + string.Join(", ", supportedEventKeys) + "]"
+            };
+
+            if (supportedEventKeys.Length == 1)
+                segments.Add("추천 수정: " + usageLabel + ".eventKey를 '" + supportedEventKeys[0] + "'로 바꾸세요");
+
+            return " -> 수정 가이드: " + string.Join("; ", segments) + ".";
         }
 
         private static string Normalize(string value)

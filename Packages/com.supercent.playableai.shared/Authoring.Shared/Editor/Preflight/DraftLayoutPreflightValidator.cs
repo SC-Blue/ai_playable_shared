@@ -30,6 +30,10 @@ namespace PlayableAI.AuthoringCore
         public string Message = string.Empty;
         public string[] Blockers = Array.Empty<string>();
         public string[] Warnings = Array.Empty<string>();
+        public string validationPath = string.Empty;
+        public string[] completedStages = Array.Empty<string>();
+        public string terminalStageKind = string.Empty;
+        public string recommendedAuthority = string.Empty;
         public DraftLayoutPreflightDiagnostic[] diagnostics = Array.Empty<DraftLayoutPreflightDiagnostic>();
     }
 

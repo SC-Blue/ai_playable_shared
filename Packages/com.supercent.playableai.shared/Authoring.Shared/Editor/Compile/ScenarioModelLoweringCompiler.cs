@@ -2396,12 +2396,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static int ResolveDefaultCustomerDesignIndex(PlayableObjectCatalog catalog, ScenarioModelLoweringResult result)
         {
-            int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
-                catalog,
-                "customer",
-                string.Empty,
-                result.Errors,
-                "customer");
+            int designIndex = -1;
+            if (catalog != null && catalog.TryResolveGameplayDesignIndex("customer", "car", out int preferredDesignIndex))
+                designIndex = preferredDesignIndex;
+            else
+            {
+                designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
+                    catalog,
+                    "customer",
+                    string.Empty,
+                    result.Errors,
+                    "customer");
+            }
+
             if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
             return designIndex;
@@ -2442,6 +2449,20 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (result.FailureCode == PlayableFailureCode.None)
                     result.FailureCode = PlayableFailureCode.LoweringFailed;
                 return false;
+            }
+
+            if (string.Equals(normalizedObjectId, "customer", System.StringComparison.Ordinal) &&
+                catalog != null &&
+                catalog.TryResolveGameplayDesignIndex("customer", "car", out designIndex))
+            {
+                return true;
+            }
+
+            if (string.Equals(normalizedObjectId, "money", System.StringComparison.Ordinal) &&
+                catalog != null &&
+                catalog.TryResolveGameplayDesignIndex("money", "money_pile", out designIndex))
+            {
+                return true;
             }
 
             designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
