@@ -43,11 +43,75 @@ namespace Supercent.PlayableAI.Common.Format
         public const string VARIATION_MODE_SINGLE = "single";
     }
 
+    public static class CatalogCategoryIds
+    {
+        public const string FACILITY = "facility";
+        public const string ITEM = "item";
+        public const string CHARACTER = "character";
+        public const string ENVIRONMENT = "environment";
+        public const string UI = "ui";
+    }
+
+    public static class GameplayRoleIds
+    {
+        public const string PLAYER = "player";
+        public const string GENERATOR = "generator";
+        public const string PROCESSOR = "processor";
+        public const string SELLER = "seller";
+        public const string UNLOCK_PAD = "unlock_pad";
+        public const string PHYSICS_AREA = "physics_area";
+        public const string RAIL = "rail";
+        public const string CUSTOMER = "customer";
+        public const string ITEM = "item";
+    }
+
+    public static class EnvironmentRoleIds
+    {
+        public const string FLOOR = "floor";
+        public const string WALL = "wall";
+        public const string FENCE = "fence";
+        public const string ROAD = "road";
+    }
+
+    public static class PlacementModeIds
+    {
+        public const string FILL = "fill";
+        public const string PERIMETER = "perimeter";
+        public const string PATH = "path";
+    }
+
+    public static class VariationModeIds
+    {
+        public const string SINGLE = "single";
+        public const string CONNECTED3 = "connected3";
+    }
+
+    public static class DesignModeIds
+    {
+        public const string SINGLE_PREFAB = GeneratedContentCatalogContracts.DESIGN_MODE_SINGLE_PREFAB;
+        public const string ASSEMBLED_PATH = GeneratedContentCatalogContracts.DESIGN_MODE_ASSEMBLED_PATH;
+        public const string ENVIRONMENT = GeneratedContentCatalogContracts.DESIGN_MODE_ENVIRONMENT;
+    }
+
+    public static class CatalogIdentityRules
+    {
+        public const char STABLE_ENTRY_DELIMITER = '/';
+        public const string MONEY_OBJECT_ID = "money";
+        public const string MONEY_DESIGN_ID = "money_pile";
+        public const string CUSTOMER_OBJECT_ID = "customer";
+        public const string CUSTOMER_DESIGN_ID = "car";
+    }
+
     public static class ContentCatalogTokenUtility
     {
         public static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        public static string NormalizeCatalogId(string value)
+        {
+            return Normalize(value);
         }
 
         public static string BuildStableEntryId(string objectId, string designId)
@@ -57,7 +121,100 @@ namespace Supercent.PlayableAI.Common.Format
             if (string.IsNullOrEmpty(normalizedObjectId) || string.IsNullOrEmpty(normalizedDesignId))
                 return string.Empty;
 
-            return normalizedObjectId + "/" + normalizedDesignId;
+            return normalizedObjectId + CatalogIdentityRules.STABLE_ENTRY_DELIMITER + normalizedDesignId;
+        }
+
+        public static bool IsStableEntryId(string value)
+        {
+            string normalized = Normalize(value);
+            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER);
+            return delimiterIndex > 0 && delimiterIndex < normalized.Length - 1;
+        }
+
+        public static bool TrySplitStableEntryId(string stableEntryId, out string objectId, out string designId)
+        {
+            objectId = string.Empty;
+            designId = string.Empty;
+
+            string normalized = Normalize(stableEntryId);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+
+            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER);
+            if (delimiterIndex <= 0 || delimiterIndex >= normalized.Length - 1)
+                return false;
+
+            objectId = Normalize(normalized.Substring(0, delimiterIndex));
+            designId = Normalize(normalized.Substring(delimiterIndex + 1));
+            return !string.IsNullOrEmpty(objectId) && !string.IsNullOrEmpty(designId);
+        }
+
+        public static string BuildObjectDesignSelectionKey(string objectId, string designId)
+        {
+            return BuildStableEntryId(objectId, designId);
+        }
+
+        public static bool ValidateObjectId(string objectId, out string errorMessage)
+        {
+            string normalized = Normalize(objectId);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                errorMessage = "objectId가 비어 있습니다.";
+                return false;
+            }
+
+            if (normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER) >= 0)
+            {
+                errorMessage = "objectId '" + normalized + "'에는 '/'가 포함되면 안 됩니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        public static bool ValidateDesignId(string designId, out string errorMessage)
+        {
+            string normalized = Normalize(designId);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                errorMessage = "designId가 비어 있습니다.";
+                return false;
+            }
+
+            if (normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER) >= 0)
+            {
+                errorMessage = "designId '" + normalized + "'에는 '/'가 포함되면 안 됩니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        public static bool ValidateCatalogEntryIdentity(
+            string objectId,
+            string designId,
+            string stableEntryId,
+            out string errorMessage)
+        {
+            if (!ValidateObjectId(objectId, out errorMessage))
+                return false;
+
+            if (!ValidateDesignId(designId, out errorMessage))
+                return false;
+
+            string expectedStableEntryId = BuildStableEntryId(objectId, designId);
+            string normalizedStableEntryId = Normalize(stableEntryId);
+            if (!string.IsNullOrEmpty(normalizedStableEntryId) &&
+                !string.Equals(expectedStableEntryId, normalizedStableEntryId, StringComparison.Ordinal))
+            {
+                errorMessage = "stableEntryId '" + normalizedStableEntryId + "'가 canonical identity '" + expectedStableEntryId + "'와 일치하지 않습니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
         }
 
         public static string ToToken(ContentCatalogCategory value)

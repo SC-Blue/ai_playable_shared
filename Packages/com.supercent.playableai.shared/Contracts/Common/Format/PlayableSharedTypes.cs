@@ -126,6 +126,7 @@ namespace Supercent.PlayableAI.Common.Format
     public sealed class ObjectDesignSelectionDefinition
     {
         public string objectId;
+        public string designId;
         public int designIndex = -1;
     }
 

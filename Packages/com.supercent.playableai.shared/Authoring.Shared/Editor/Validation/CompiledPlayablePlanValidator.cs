@@ -88,6 +88,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             Dictionary<string, int> objectDesignLookup = BuildObjectDesignLookup(plan.objectDesigns);
+            ValidateObjectDesignSelections(plan.objectDesigns, catalog, result);
             Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns, plan.physicsAreas);
 
             ValidateCurrencies(plan.currencies, result);
@@ -1390,13 +1391,68 @@ private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns
     for (int i = 0; i < resolution.Errors.Count; i++)
         Fail(result, resolution.Errors[i]);
 
-            for (int i = 0; i < resolution.RequiredObjectIds.Count; i++)
+            for (int i = 0; i < resolution.RequiredObjectDesigns.Count; i++)
             {
-                string objectId = resolution.RequiredObjectIds[i];
-        if (!objectDesignLookup.ContainsKey(objectId))
-            Fail(result, "Compiled plan에는 runtime-owned objectId '" + objectId + "'에 대한 objectDesigns[] entry가 필요합니다.");
+                RuntimeOwnedObjectDesignSelection selection = resolution.RequiredObjectDesigns[i];
+                if (selection == null)
+                    continue;
+
+                string objectDesignKey = ContentCatalogTokenUtility.BuildObjectDesignSelectionKey(selection.objectId, selection.designId);
+                if (!objectDesignLookup.ContainsKey(objectDesignKey))
+                    Fail(result, "Compiled plan에는 runtime-owned object '" + objectDesignKey + "'에 대한 objectDesigns[] entry가 필요합니다.");
     }
 }
+
+        private static void ValidateObjectDesignSelections(
+            ObjectDesignSelectionDefinition[] selections,
+            PlayableObjectCatalog catalog,
+            CompiledPlayablePlanValidationResult result)
+        {
+            var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+            ObjectDesignSelectionDefinition[] safeSelections = selections ?? new ObjectDesignSelectionDefinition[0];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ObjectDesignSelectionDefinition selection = safeSelections[i];
+                string label = "objectDesigns[" + i + "]";
+                if (selection == null)
+                {
+                    Fail(result, label + "가 null입니다.");
+                    continue;
+                }
+
+                if (!ContentCatalogTokenUtility.ValidateObjectId(selection.objectId, out string objectIdError))
+                {
+                    Fail(result, label + ".objectId 오류: " + objectIdError);
+                    continue;
+                }
+
+                if (!ContentCatalogTokenUtility.ValidateDesignId(selection.designId, out string designIdError))
+                {
+                    Fail(result, label + ".designId 오류: " + designIdError);
+                    continue;
+                }
+
+                if (selection.designIndex < 0)
+                {
+                    Fail(result, label + ".designIndex는 0 이상이어야 합니다.");
+                    continue;
+                }
+
+                string objectDesignKey = ContentCatalogTokenUtility.BuildObjectDesignSelectionKey(selection.objectId, selection.designId);
+                if (!seenKeys.Add(objectDesignKey))
+                {
+                    Fail(result, "중복된 objectDesigns identity '" + objectDesignKey + "'입니다.");
+                    continue;
+                }
+
+                if (catalog != null &&
+                    catalog.TryResolveGameplayDesignIndex(selection.objectId.Trim(), selection.designId.Trim(), out int resolvedDesignIndex) &&
+                    resolvedDesignIndex != selection.designIndex)
+                {
+                    Fail(result, label + "의 designIndex '" + selection.designIndex + "'가 catalog resolved designIndex '" + resolvedDesignIndex + "'와 일치하지 않습니다.");
+                }
+            }
+        }
 
 private static HashSet<string> ValidatePhysicsAreas(
     CompiledPhysicsAreaDefinition[] physicsAreas,
@@ -3357,10 +3413,13 @@ private static float ComputeAxisGap(float firstMin, float firstMax, float second
             for (int i = 0; i < safeSelections.Length; i++)
             {
                 ObjectDesignSelectionDefinition selection = safeSelections[i];
-                if (selection == null || string.IsNullOrWhiteSpace(selection.objectId) || selection.designIndex < 0)
+                if (selection == null ||
+                    string.IsNullOrWhiteSpace(selection.objectId) ||
+                    string.IsNullOrWhiteSpace(selection.designId) ||
+                    selection.designIndex < 0)
                     continue;
 
-                lookup[selection.objectId.Trim()] = selection.designIndex;
+                lookup[ContentCatalogTokenUtility.BuildObjectDesignSelectionKey(selection.objectId.Trim(), selection.designId.Trim())] = selection.designIndex;
             }
 
             return lookup;

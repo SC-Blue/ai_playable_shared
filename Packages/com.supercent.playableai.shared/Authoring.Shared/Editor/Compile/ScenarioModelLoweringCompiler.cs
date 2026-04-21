@@ -2072,10 +2072,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 result.Errors.Add(resolution.Errors[i]);
 
             var selections = new List<ObjectDesignSelectionDefinition>();
-            for (int i = 0; i < resolution.RequiredObjectIds.Count; i++)
+            for (int i = 0; i < resolution.RequiredObjectDesigns.Count; i++)
             {
-                string objectId = resolution.RequiredObjectIds[i];
-                if (!TryResolveRuntimeOwnedDesignSelection(catalog, objectId, result, out int designIndex))
+                RuntimeOwnedObjectDesignSelection selection = resolution.RequiredObjectDesigns[i];
+                if (selection == null)
+                    continue;
+
+                if (!TryResolveRuntimeOwnedDesignSelection(catalog, selection.objectId, selection.designId, result, out int designIndex))
                     continue;
 
                 if (designIndex < 0)
@@ -2083,7 +2086,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
                 selections.Add(new ObjectDesignSelectionDefinition
                 {
-                    objectId = objectId,
+                    objectId = selection.objectId,
+                    designId = selection.designId,
                     designIndex = designIndex,
                 });
             }
@@ -2417,11 +2421,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static bool TryResolveRuntimeOwnedDesignSelection(
             PlayableObjectCatalog catalog,
             string runtimeOwnedObjectId,
+            string runtimeOwnedDesignId,
             ScenarioModelLoweringResult result,
             out int designIndex)
         {
             designIndex = -1;
             string normalizedObjectId = IntentAuthoringUtility.Normalize(runtimeOwnedObjectId);
+            string normalizedDesignId = IntentAuthoringUtility.Normalize(runtimeOwnedDesignId);
             if (string.IsNullOrEmpty(normalizedObjectId))
             {
                 result.Errors.Add("runtime-owned objectId가 비어 있습니다.");
@@ -2430,47 +2436,28 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return false;
             }
 
-            if (ItemRefUtility.TryParseStableKey(normalizedObjectId, out ItemRef item) && item != null)
+            if (!ContentCatalogTokenUtility.ValidateObjectId(normalizedObjectId, out string objectIdError))
             {
-                string gameplayObjectId = IntentAuthoringUtility.Normalize(item.familyId);
-                string requestedDesignId = IntentAuthoringUtility.Normalize(item.variantId);
-
-                if (catalog != null &&
-                    catalog.TryResolveGameplayDesignIndex(gameplayObjectId, requestedDesignId, out designIndex))
-                {
-                    return true;
-                }
-                designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
-                    catalog,
-                    gameplayObjectId,
-                    requestedDesignId,
-                    result.Errors,
-                    "runtime-owned object '" + normalizedObjectId + "'");
+                result.Errors.Add("runtime-owned object '" + normalizedObjectId + "' identity 오류: " + objectIdError);
                 if (result.FailureCode == PlayableFailureCode.None)
                     result.FailureCode = PlayableFailureCode.LoweringFailed;
                 return false;
             }
 
-            if (string.Equals(normalizedObjectId, "customer", System.StringComparison.Ordinal) &&
-                catalog != null &&
-                catalog.TryResolveGameplayDesignIndex("customer", "car", out designIndex))
+            if (!ContentCatalogTokenUtility.ValidateDesignId(normalizedDesignId, out string designIdError))
             {
-                return true;
-            }
-
-            if (string.Equals(normalizedObjectId, "money", System.StringComparison.Ordinal) &&
-                catalog != null &&
-                catalog.TryResolveGameplayDesignIndex("money", "money_pile", out designIndex))
-            {
-                return true;
+                result.Errors.Add("runtime-owned object '" + normalizedObjectId + "' design identity 오류: " + designIdError);
+                if (result.FailureCode == PlayableFailureCode.None)
+                    result.FailureCode = PlayableFailureCode.LoweringFailed;
+                return false;
             }
 
             designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
                 catalog,
                 normalizedObjectId,
-                string.Empty,
+                normalizedDesignId,
                 result.Errors,
-                "runtime-owned object '" + normalizedObjectId + "'");
+                "runtime-owned object '" + normalizedObjectId + "/" + normalizedDesignId + "'");
             if (designIndex >= 0)
                 return true;
 

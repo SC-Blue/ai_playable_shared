@@ -408,16 +408,10 @@ namespace PlayableAI.AuthoringCore
                 return "InvalidRailPathTopology";
             if (message.IndexOf("realPhysicsZoneBounds", StringComparison.Ordinal) >= 0 || message.IndexOf("fakeSpriteZoneBounds", StringComparison.Ordinal) >= 0)
                 return "MissingPhysicsAreaBounds";
-            if (message.IndexOf("road의", StringComparison.Ordinal) >= 0 && message.IndexOf("clearance", StringComparison.Ordinal) >= 0)
-                return "OuterRoadClearance";
-            if (message.IndexOf("road가 floor envelope와 겹칩니다", StringComparison.Ordinal) >= 0)
-                return "OuterRoadOverlap";
             if (message.IndexOf("environment 점유 셀과 충돌", StringComparison.Ordinal) >= 0)
                 return "EnvironmentOccupiedCellConflict";
             if (message.IndexOf("layout 경계를 벗어났습니다", StringComparison.Ordinal) >= 0)
                 return "LayoutBoundsContainment";
-            if (message.IndexOf("gameplay spawn footprint가 겹칩니다", StringComparison.Ordinal) >= 0)
-                return "GameplayFootprintOverlap";
             if (message.IndexOf("playerStart.objectId", StringComparison.Ordinal) >= 0)
                 return "MissingPlayerStart";
             if (message.IndexOf("placements에 중복 objectId", StringComparison.Ordinal) >= 0)
@@ -470,20 +464,10 @@ namespace PlayableAI.AuthoringCore
                 AddUnique(fixes, "rail pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다.");
             if (string.Equals(ruleCode, "MissingPhysicsAreaBounds", StringComparison.Ordinal))
                 AddUnique(fixes, "physics_area에는 placement.physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요.");
-            if (string.Equals(ruleCode, "AmbiguousSharedSlot", StringComparison.Ordinal))
-                AddUnique(fixes, "same-lane zero-gap pair가 상태 전이라면 두 placement에 같은 sharedSlotId를 선언하고, 일반 인접 배치라면 gap을 벌려주세요.");
-            if (string.Equals(ruleCode, "LaneGapInsufficient", StringComparison.Ordinal))
-                AddUnique(fixes, "declared lane의 연속 object pair에 minGapToNextCells를 명시하고 실제 Z 간격이 그 값 이상이 되도록 다시 배치해주세요.");
-            if (string.Equals(ruleCode, "RelationshipOrderViolation", StringComparison.Ordinal))
-                AddUnique(fixes, "laneOrder가 작은 object가 더 뒤/위쪽(worldZ가 더 큼)에 오도록 lane별 top-to-bottom 순서를 다시 맞춰주세요.");
-            if (string.Equals(ruleCode, "OuterRoadClearance", StringComparison.Ordinal) || string.Equals(ruleCode, "OuterRoadOverlap", StringComparison.Ordinal))
-                AddUnique(fixes, "road inner edge가 floor envelope와 최소 1 cell 이상 떨어지도록 road bounds를 바깥쪽으로 이동해주세요.");
             if (string.Equals(ruleCode, "EnvironmentOccupiedCellConflict", StringComparison.Ordinal))
                 AddUnique(fixes, "environment bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요.");
             if (string.Equals(ruleCode, "LayoutBoundsContainment", StringComparison.Ordinal))
                 AddUnique(fixes, "해당 object footprint가 floor/layout bounds 안으로 들어오도록 다시 배치해주세요.");
-            if (string.Equals(ruleCode, "GameplayFootprintOverlap", StringComparison.Ordinal))
-                AddUnique(fixes, "겹치는 gameplay footprint가 분리되도록 object 위치나 sharedSlot 관계를 다시 맞춰주세요.");
             if (fixes.Count == 0 && !string.IsNullOrWhiteSpace(message))
                 AddUnique(fixes, "현재 blocker message를 기준으로 가장 직접적인 원인부터 제거해주세요.");
 
@@ -497,14 +481,6 @@ namespace PlayableAI.AuthoringCore
                 string.Equals(ruleCode, "MissingQueuePoints", StringComparison.Ordinal) ||
                 string.Equals(ruleCode, "MissingSpawnPoint", StringComparison.Ordinal) ||
                 string.Equals(ruleCode, "MissingLeavePoint", StringComparison.Ordinal))
-            {
-                return "automatic_candidate";
-            }
-
-            if (message.IndexOf("laneId를 쓰면 laneOrder도", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("laneOrder를 쓰면 laneId도", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("sharedSlotId를 쓰면 laneId도", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("minGapToNextCells를 쓰면 laneId도", StringComparison.Ordinal) >= 0)
             {
                 return "automatic_candidate";
             }

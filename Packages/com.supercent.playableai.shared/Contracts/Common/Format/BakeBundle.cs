@@ -6,7 +6,6 @@ namespace Supercent.PlayableAI.Common.Format
     public sealed class BakeBundleCatalogIdentity
     {
         public string themeId = string.Empty;
-        public string manifestRelativePath = string.Empty;
         public string manifestContentHash = string.Empty;
     }
 
@@ -32,7 +31,7 @@ namespace Supercent.PlayableAI.Common.Format
     [Serializable]
     public sealed class BakeBundle
     {
-        public const int CURRENT_BUNDLE_VERSION = 2;
+        public const int CURRENT_BUNDLE_VERSION = 3;
 
         public int bundleVersion = CURRENT_BUNDLE_VERSION;
         public string sessionId = string.Empty;

@@ -1,19 +1,21 @@
+using Supercent.PlayableAI.Common.Format;
+
 namespace Supercent.PlayableAI.Common.Contracts
 {
     public static class CatalogGameplayTaxonomy
     {
-        public const string SourceCategoryFacility = "facility";
-        public const string SourceCategoryCharacter = "character";
-        public const string SourceCategoryItem = "item";
+        public const string SourceCategoryFacility = CatalogCategoryIds.FACILITY;
+        public const string SourceCategoryCharacter = CatalogCategoryIds.CHARACTER;
+        public const string SourceCategoryItem = CatalogCategoryIds.ITEM;
 
-        public const string RoleGenerator = "generator";
-        public const string RoleProcessor = "processor";
-        public const string RoleSeller = "seller";
-        public const string RoleUnlockPad = "unlock_pad";
-        public const string RoleRail = "rail";
-        public const string RoleItem = "item";
-        public const string RolePlayer = "player";
-        public const string RoleCustomer = "customer";
+        public const string RoleGenerator = GameplayRoleIds.GENERATOR;
+        public const string RoleProcessor = GameplayRoleIds.PROCESSOR;
+        public const string RoleSeller = GameplayRoleIds.SELLER;
+        public const string RoleUnlockPad = GameplayRoleIds.UNLOCK_PAD;
+        public const string RoleRail = GameplayRoleIds.RAIL;
+        public const string RoleItem = GameplayRoleIds.ITEM;
+        public const string RolePlayer = GameplayRoleIds.PLAYER;
+        public const string RoleCustomer = GameplayRoleIds.CUSTOMER;
 
         public static bool IsSupportedSourceGameplayCategory(string category)
         {
@@ -76,8 +78,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (!string.Equals(normalizedCategory, SourceCategoryFacility, System.StringComparison.Ordinal))
                 return false;
 
-            if (string.Equals(normalizedDesignMode, "assembled_path", System.StringComparison.Ordinal) ||
-                string.Equals(normalizedPlacementMode, "path", System.StringComparison.Ordinal) ||
+            if (string.Equals(normalizedDesignMode, DesignModeIds.ASSEMBLED_PATH, System.StringComparison.Ordinal) ||
+                string.Equals(normalizedPlacementMode, PlacementModeIds.PATH, System.StringComparison.Ordinal) ||
                 string.Equals(normalizedObjectId, RoleRail, System.StringComparison.Ordinal))
             {
                 role = RoleRail;

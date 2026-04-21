@@ -6,9 +6,15 @@ using UnityEngine;
 
 namespace Supercent.PlayableAI.Generation.Editor.Compile
 {
+    internal sealed class RuntimeOwnedObjectDesignSelection
+    {
+        public string objectId = string.Empty;
+        public string designId = string.Empty;
+    }
+
     internal sealed class RuntimeOwnedObjectDesignResolution
     {
-        public List<string> RequiredObjectIds = new List<string>();
+        public List<RuntimeOwnedObjectDesignSelection> RequiredObjectDesigns = new List<RuntimeOwnedObjectDesignSelection>();
         public List<string> Errors = new List<string>();
     }
 
@@ -22,7 +28,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableObjectCatalog catalog)
         {
             var result = new RuntimeOwnedObjectDesignResolution();
-            var requiredObjectIds = new HashSet<string>(System.StringComparer.Ordinal);
+            var requiredObjectDesignKeys = new HashSet<string>(System.StringComparer.Ordinal);
             CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
 
             if (catalog == null)
@@ -49,13 +55,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
-                CollectRequiredObjectIds(metadata.generatedItemStableKeys, requiredObjectIds);
+                CollectRequiredObjectDesigns(metadata.generatedItemStableKeys, requiredObjectDesignKeys, result.Errors);
 
                 if (metadata.containsCustomerSingleLine)
-                    requiredObjectIds.Add("customer");
+                    AddRequiredObjectDesign(
+                        CatalogIdentityRules.CUSTOMER_OBJECT_ID,
+                        CatalogIdentityRules.CUSTOMER_DESIGN_ID,
+                        requiredObjectDesignKeys);
 
                 if (metadata.containsItemSellFacility)
-                    requiredObjectIds.Add("money");
+                    AddRequiredObjectDesign(
+                        CatalogIdentityRules.MONEY_OBJECT_ID,
+                        CatalogIdentityRules.MONEY_DESIGN_ID,
+                        requiredObjectDesignKeys);
             }
 
             IReadOnlyList<EditorBasedCatalog.Entry> editorEntries = catalog.EditorBased.GetEntries();
@@ -69,34 +81,64 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 if (metadata.containsMoneyHandler)
-                    requiredObjectIds.Add("money");
+                {
+                    AddRequiredObjectDesign(
+                        CatalogIdentityRules.MONEY_OBJECT_ID,
+                        CatalogIdentityRules.MONEY_DESIGN_ID,
+                        requiredObjectDesignKeys);
+                }
             }
 
-            CollectAcceptedItems(facilityAcceptedItems, requiredObjectIds);
-            CollectOutputItems(facilityOutputItems, requiredObjectIds);
-            CollectPricedItems(itemPrices, requiredObjectIds);
+            CollectAcceptedItems(facilityAcceptedItems, requiredObjectDesignKeys);
+            CollectOutputItems(facilityOutputItems, requiredObjectDesignKeys);
+            CollectPricedItems(itemPrices, requiredObjectDesignKeys);
 
-            foreach (string objectId in requiredObjectIds)
-                result.RequiredObjectIds.Add(objectId);
+            var sortedKeys = new List<string>(requiredObjectDesignKeys);
+            sortedKeys.Sort(System.StringComparer.Ordinal);
+            for (int i = 0; i < sortedKeys.Count; i++)
+            {
+                if (!ContentCatalogTokenUtility.TrySplitStableEntryId(sortedKeys[i], out string objectId, out string designId))
+                    continue;
 
-            result.RequiredObjectIds.Sort(System.StringComparer.Ordinal);
+                result.RequiredObjectDesigns.Add(new RuntimeOwnedObjectDesignSelection
+                {
+                    objectId = objectId,
+                    designId = designId,
+                });
+            }
+
             return result;
         }
 
-        private static void CollectRequiredObjectIds(string[] objectIds, HashSet<string> requiredObjectIds)
+        private static void CollectRequiredObjectDesigns(string[] stableEntryIds, HashSet<string> requiredObjectDesignKeys, List<string> errors)
         {
-            string[] safeObjectIds = objectIds ?? new string[0];
-            for (int i = 0; i < safeObjectIds.Length; i++)
+            string[] safeStableEntryIds = stableEntryIds ?? new string[0];
+            for (int i = 0; i < safeStableEntryIds.Length; i++)
             {
-                string objectId = safeObjectIds[i] != null ? safeObjectIds[i].Trim() : string.Empty;
-                if (!string.IsNullOrEmpty(objectId))
-                    requiredObjectIds.Add(objectId);
+                string stableEntryId = safeStableEntryIds[i] != null ? safeStableEntryIds[i].Trim() : string.Empty;
+                if (string.IsNullOrEmpty(stableEntryId))
+                    continue;
+
+                if (!ContentCatalogTokenUtility.TrySplitStableEntryId(stableEntryId, out string objectId, out string designId))
+                {
+                    errors.Add("generatedItemStableKeys[" + i + "] '" + stableEntryId + "'는 canonical stableEntryId 형식이어야 합니다.");
+                    continue;
+                }
+
+                AddRequiredObjectDesign(objectId, designId, requiredObjectDesignKeys);
             }
+        }
+
+        private static void AddRequiredObjectDesign(string objectId, string designId, HashSet<string> requiredObjectDesignKeys)
+        {
+            string stableEntryId = ContentCatalogTokenUtility.BuildStableEntryId(objectId, designId);
+            if (!string.IsNullOrEmpty(stableEntryId))
+                requiredObjectDesignKeys.Add(stableEntryId);
         }
 
         private static void CollectAcceptedItems(
             FacilityAcceptedItemDefinition[] facilityAcceptedItems,
-            HashSet<string> requiredObjectIds)
+            HashSet<string> requiredObjectDesignKeys)
         {
             FacilityAcceptedItemDefinition[] safeDefinitions = facilityAcceptedItems ?? new FacilityAcceptedItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
@@ -105,13 +147,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (definition == null || !ItemRefUtility.IsValid(definition.item))
                     continue;
 
-                requiredObjectIds.Add(ItemRefUtility.ToStableKey(definition.item));
+                AddRequiredObjectDesign(definition.item.familyId, definition.item.variantId, requiredObjectDesignKeys);
             }
         }
 
         private static void CollectOutputItems(
             FacilityOutputItemDefinition[] facilityOutputItems,
-            HashSet<string> requiredObjectIds)
+            HashSet<string> requiredObjectDesignKeys)
         {
             FacilityOutputItemDefinition[] safeDefinitions = facilityOutputItems ?? new FacilityOutputItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
@@ -120,13 +162,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (definition == null || !ItemRefUtility.IsValid(definition.item))
                     continue;
 
-                requiredObjectIds.Add(ItemRefUtility.ToStableKey(definition.item));
+                AddRequiredObjectDesign(definition.item.familyId, definition.item.variantId, requiredObjectDesignKeys);
             }
         }
 
         private static void CollectPricedItems(
             ItemPriceDefinition[] itemPrices,
-            HashSet<string> requiredObjectIds)
+            HashSet<string> requiredObjectDesignKeys)
         {
             ItemPriceDefinition[] safeDefinitions = itemPrices ?? new ItemPriceDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
@@ -135,7 +177,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (definition == null || !ItemRefUtility.IsValid(definition.item))
                     continue;
 
-                requiredObjectIds.Add(ItemRefUtility.ToStableKey(definition.item));
+                AddRequiredObjectDesign(definition.item.familyId, definition.item.variantId, requiredObjectDesignKeys);
             }
         }
     }
