@@ -89,6 +89,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             Dictionary<string, int> objectDesignLookup = BuildObjectDesignLookup(plan.objectDesigns);
             ValidateObjectDesignSelections(plan.objectDesigns, catalog, result);
+            ValidateContentSelections(plan.contentSelections, catalog, result);
             Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns, plan.physicsAreas);
 
             ValidateCurrencies(plan.currencies, result);
@@ -1424,6 +1425,86 @@ private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns
                 {
                     Fail(result, label + "의 designIndex '" + selection.designIndex + "'가 catalog resolved designIndex '" + resolvedDesignIndex + "'와 일치하지 않습니다.");
                 }
+            }
+        }
+
+        private static void ValidateContentSelections(
+            ContentSelectionDefinition[] selections,
+            PlayableObjectCatalog catalog,
+            CompiledPlayablePlanValidationResult result)
+        {
+            var seenObjectIds = new HashSet<string>(StringComparer.Ordinal);
+            ContentSelectionDefinition[] safeSelections = selections ?? new ContentSelectionDefinition[0];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ContentSelectionDefinition selection = safeSelections[i];
+                string label = "contentSelections[" + i + "]";
+                if (selection == null)
+                {
+                    Fail(result, label + "가 null입니다.");
+                    continue;
+                }
+
+                if (!ContentCatalogTokenUtility.ValidateObjectId(selection.objectId, out string objectIdError))
+                {
+                    Fail(result, label + ".objectId 오류: " + objectIdError);
+                    continue;
+                }
+
+                if (!ContentCatalogTokenUtility.ValidateDesignId(selection.designId, out string designIdError))
+                {
+                    Fail(result, label + ".designId 오류: " + designIdError);
+                    continue;
+                }
+
+                if (selection.designIndex < 0)
+                {
+                    Fail(result, label + ".designIndex는 0 이상이어야 합니다.");
+                    continue;
+                }
+
+                string objectId = selection.objectId.Trim();
+                string designId = selection.designId.Trim();
+                if (!seenObjectIds.Add(objectId))
+                {
+                    Fail(result, "중복된 contentSelections objectId '" + objectId + "'입니다.");
+                    continue;
+                }
+
+                if (catalog != null && !catalog.IsSupportedContentSelectionObject(objectId))
+                {
+                    Fail(result, label + ".objectId '" + objectId + "'는 selectable content catalog에 없습니다.");
+                    continue;
+                }
+
+                if (ContentSelectionRules.IsUnsetDesignId(designId))
+                {
+                    Fail(result, label + ".designId는 실제 카탈로그 design이어야 합니다. '" + ContentSelectionRules.DESIGN_ID_NOT_SET + "'는 허용되지 않습니다.");
+                    continue;
+                }
+
+                if (catalog != null &&
+                    catalog.TryResolveContentSelectionDesignIndex(objectId, designId, out int resolvedDesignIndex) &&
+                    resolvedDesignIndex != selection.designIndex)
+                {
+                    Fail(result, label + "의 designIndex '" + selection.designIndex + "'가 catalog resolved designIndex '" + resolvedDesignIndex + "'와 일치하지 않습니다.");
+                }
+            }
+
+            if (catalog == null)
+                return;
+
+            for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                string objectId = ContentSelectionRules.REQUIRED_OBJECT_IDS[i];
+                if (!catalog.IsSupportedContentSelectionObject(objectId))
+                {
+                    Fail(result, "필수 UI content '" + objectId + "'가 selectable content catalog에 없습니다.");
+                    continue;
+                }
+
+                if (!seenObjectIds.Contains(objectId))
+                    Fail(result, "Compiled plan에는 필수 UI content '" + objectId + "'에 대한 contentSelections[] entry가 필요합니다.");
             }
         }
 

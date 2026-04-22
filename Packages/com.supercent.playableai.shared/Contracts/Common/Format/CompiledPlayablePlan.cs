@@ -10,6 +10,7 @@ namespace Supercent.PlayableAI.Common.Format
         // Authoring compile output uses the same beat/action flow model consumed by post-bake/runtime.
         public string themeId;
         public ObjectDesignSelectionDefinition[] objectDesigns = new ObjectDesignSelectionDefinition[0];
+        public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public CompiledSpawnData[] spawns = new CompiledSpawnData[0];
         public CompiledPhysicsAreaDefinition[] physicsAreas = new CompiledPhysicsAreaDefinition[0];
         public CompiledRailDefinition[] rails = new CompiledRailDefinition[0];

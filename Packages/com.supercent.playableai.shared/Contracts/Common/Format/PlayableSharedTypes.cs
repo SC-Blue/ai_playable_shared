@@ -1,4 +1,5 @@
 using System;
+using Supercent.PlayableAI.Common.Contracts;
 using UnityEngine;
 
 namespace Supercent.PlayableAI.Common.Format
@@ -127,6 +128,69 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public string objectId;
         public string designId;
+        public int designIndex = -1;
+    }
+
+    public static class ContentSelectionRules
+    {
+        public const string DESIGN_ID_NOT_SET = "NOT_SET";
+        public const string ARROW_OBJECT_ID = "arrow";
+        public const string CURRENCY_HUD_OBJECT_ID = "currency_hud";
+        public const string DRAG_TO_MOVE_OBJECT_ID = "drag_to_move";
+        public const string ENDCARD_CONTENT_OBJECT_ID = "endcard";
+        public const string JOYSTICK_OBJECT_ID = "joystick";
+
+        public static readonly string[] REQUIRED_OBJECT_IDS =
+        {
+            ARROW_OBJECT_ID,
+            CURRENCY_HUD_OBJECT_ID,
+            DRAG_TO_MOVE_OBJECT_ID,
+            ENDCARD_CONTENT_OBJECT_ID,
+            JOYSTICK_OBJECT_ID,
+        };
+
+        public static bool IsManagedObjectId(string objectId)
+        {
+            string normalized = Normalize(objectId);
+            for (int i = 0; i < REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                if (string.Equals(normalized, REQUIRED_OBJECT_IDS[i], StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsUnsetDesignId(string designId)
+        {
+            return string.Equals(Normalize(designId), DESIGN_ID_NOT_SET, StringComparison.Ordinal);
+        }
+
+        public static string GetRuntimeObjectId(string objectId)
+        {
+            string normalized = Normalize(objectId);
+            if (string.Equals(normalized, ENDCARD_CONTENT_OBJECT_ID, StringComparison.Ordinal))
+                return SystemActionIds.ENDCARD_UI_OBJECT_ID;
+
+            return normalized;
+        }
+
+        public static string GetRuntimeSpawnKey(string objectId)
+        {
+            return GetRuntimeObjectId(objectId);
+        }
+
+        private static string Normalize(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+    }
+
+    [Serializable]
+    public sealed class ContentSelectionDefinition
+    {
+        public string objectId;
+        public string designId = ContentSelectionRules.DESIGN_ID_NOT_SET;
         public int designIndex = -1;
     }
 

@@ -54,6 +54,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             var currencyById = BuildCurrencyLookup(intent.currencies, result);
             var saleValueByItemKey = BuildSaleValueLookup(intent.saleValues, result);
             ValidateCurrencies(intent.currencies, result);
+            ValidateContentSelections(intent.contentSelections, catalog, result);
             ValidateObjects(intent.objects, objectById, currencyById, catalog, result);
             if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.IntentValidationFailed;
@@ -61,6 +62,67 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateStages(intent.stages, objectById, currencyById, saleValueByItemKey, catalog, result);
             ValidateFacilityItemConsistency(intent.stages, result);
             return FinalizeResult(result);
+        }
+
+        private static void ValidateContentSelections(
+            ContentSelectionDefinition[] selections,
+            PlayableObjectCatalog catalog,
+            PromptIntentSemanticValidationResult result)
+        {
+            var seenObjectIds = new HashSet<string>(StringComparer.Ordinal);
+            ContentSelectionDefinition[] safeSelections = selections ?? new ContentSelectionDefinition[0];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ContentSelectionDefinition selection = safeSelections[i];
+                string label = "contentSelections[" + i + "]";
+                if (selection == null)
+                {
+                    Fail(result, label + "가 null입니다.");
+                    continue;
+                }
+
+                string objectId = Normalize(selection.objectId);
+                string designId = Normalize(selection.designId);
+                if (string.IsNullOrEmpty(objectId))
+                {
+                    Fail(result, label + ".objectId는 필수입니다.");
+                    continue;
+                }
+
+                if (!seenObjectIds.Add(objectId))
+                {
+                    Fail(result, "중복된 contentSelections objectId '" + objectId + "'입니다.");
+                    continue;
+                }
+
+                if (!catalog.IsSupportedContentSelectionObject(objectId))
+                {
+                    Fail(result, label + ".objectId '" + objectId + "'는 selectable content catalog에 없습니다.");
+                    continue;
+                }
+
+                if (ContentSelectionRules.IsUnsetDesignId(designId))
+                {
+                    Fail(result, label + ".designId는 실제 카탈로그 design을 선택해야 합니다. '" + ContentSelectionRules.DESIGN_ID_NOT_SET + "' 상태로 둘 수 없습니다.");
+                    continue;
+                }
+
+                if (!catalog.IsValidContentSelectionDesignId(objectId, designId))
+                    Fail(result, label + ".designId '" + designId + "'는 objectId '" + objectId + "'의 selectable content design이 아닙니다.");
+            }
+
+            for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                string objectId = ContentSelectionRules.REQUIRED_OBJECT_IDS[i];
+                if (!catalog.IsSupportedContentSelectionObject(objectId))
+                {
+                    Fail(result, "필수 UI content '" + objectId + "'가 selectable content catalog에 없습니다.");
+                    continue;
+                }
+
+                if (!seenObjectIds.Contains(objectId))
+                    Fail(result, "필수 UI content '" + objectId + "'에 대한 contentSelections entry가 필요합니다.");
+            }
         }
 
         private static Dictionary<string, PromptIntentObjectDefinition> BuildObjectLookup(

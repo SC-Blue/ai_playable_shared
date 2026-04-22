@@ -65,11 +65,47 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             ValidatePlayerOptions(model.playerOptions, result);
+            ValidateContentSelections(model.contentSelections, result);
             ValidateObjects(model.objects, result);
             ValidateStages(model, result);
             ValidateSellerRequestableItems(model, result);
             ValidateEconomyReachability(model, result);
             return FinalizeResult(result);
+        }
+
+        private static void ValidateContentSelections(ContentSelectionDefinition[] selections, ScenarioModelValidationResult result)
+        {
+            var seenObjectIds = new HashSet<string>(StringComparer.Ordinal);
+            ContentSelectionDefinition[] safeSelections = selections ?? new ContentSelectionDefinition[0];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ContentSelectionDefinition selection = safeSelections[i];
+                string label = "contentSelections[" + i + "]";
+                if (selection == null)
+                {
+                    Fail(result, label + "가 null입니다.");
+                    continue;
+                }
+
+                string objectId = selection.objectId != null ? selection.objectId.Trim() : string.Empty;
+                string designId = selection.designId != null ? selection.designId.Trim() : string.Empty;
+                if (string.IsNullOrEmpty(objectId))
+                    Fail(result, label + ".objectId는 비어 있을 수 없습니다.");
+                else if (!seenObjectIds.Add(objectId))
+                    Fail(result, "중복된 contentSelections objectId '" + objectId + "'입니다.");
+
+                if (string.IsNullOrEmpty(designId))
+                    Fail(result, label + ".designId는 비어 있을 수 없습니다.");
+                else if (ContentSelectionRules.IsUnsetDesignId(designId))
+                    Fail(result, label + ".designId는 '" + ContentSelectionRules.DESIGN_ID_NOT_SET + "'일 수 없습니다. 실제 카탈로그 design을 선택해야 합니다.");
+            }
+
+            for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                string requiredObjectId = ContentSelectionRules.REQUIRED_OBJECT_IDS[i];
+                if (!seenObjectIds.Contains(requiredObjectId))
+                    Fail(result, "필수 UI content '" + requiredObjectId + "'에 대한 contentSelections entry가 필요합니다.");
+            }
         }
 
         private static void ValidatePlayerOptions(PlayableScenarioPlayerOptions options, ScenarioModelValidationResult result)

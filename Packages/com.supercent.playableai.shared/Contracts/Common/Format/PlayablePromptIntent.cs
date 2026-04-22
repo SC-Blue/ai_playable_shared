@@ -217,6 +217,7 @@ namespace Supercent.PlayableAI.Common.Format
         public PromptIntentCurrencyDefinition[] currencies = new PromptIntentCurrencyDefinition[0];
         public PromptIntentSaleValueDefinition[] saleValues = new PromptIntentSaleValueDefinition[0];
         public PromptIntentObjectDefinition[] objects = new PromptIntentObjectDefinition[0];
+        public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public PromptIntentStageDefinition[] stages = new PromptIntentStageDefinition[0];
         public PromptIntentScenarioOptions scenarioOptions;
     }
@@ -324,6 +325,7 @@ namespace Supercent.PlayableAI.Common.Format
         public ScenarioModelCurrencyDefinition[] currencies = new ScenarioModelCurrencyDefinition[0];
         public ScenarioModelSaleValueDefinition[] saleValues = new ScenarioModelSaleValueDefinition[0];
         public ScenarioModelObjectDefinition[] objects = new ScenarioModelObjectDefinition[0];
+        public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public ScenarioModelStageDefinition[] stages = new ScenarioModelStageDefinition[0];
         public PlayableScenarioPlayerOptions playerOptions;
     }

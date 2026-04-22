@@ -257,6 +257,175 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
     }
 
+    /// <summary>배치 없이 design만 선택하는 content 카탈로그. ui/core/guide가 여기에 포함됩니다.</summary>
+    [System.Serializable]
+    public sealed class ContentSelectionCatalog
+    {
+        [System.Serializable]
+        public sealed class Entry
+        {
+            public string objectId;
+            public string category;
+            public DesignVariantEntry[] designs = new DesignVariantEntry[0];
+        }
+
+        [SerializeField] private Entry[] _entries = new Entry[0];
+
+        public IReadOnlyList<Entry> GetEntries()
+        {
+            if (_entries == null || _entries.Length == 0)
+                return new Entry[0];
+
+            var copy = new Entry[_entries.Length];
+            for (int i = 0; i < _entries.Length; i++)
+                copy[i] = _entries[i];
+            return copy;
+        }
+
+        public bool TryGetEntry(string objectId, out Entry entry)
+        {
+            entry = null;
+            if (string.IsNullOrWhiteSpace(objectId) || _entries == null)
+                return false;
+
+            string normalizedObjectId = objectId.Trim();
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                Entry candidate = _entries[i];
+                if (candidate == null ||
+                    string.IsNullOrWhiteSpace(candidate.objectId) ||
+                    !HasAnyValidDesign(candidate.designs))
+                    continue;
+
+                if (!string.Equals(candidate.objectId.Trim(), normalizedObjectId, System.StringComparison.Ordinal))
+                    continue;
+
+                entry = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool TryResolvePrefab(string objectId, int requestedDesignIndex, out GameObject prefab, out int resolvedDesignIndex)
+        {
+            prefab = null;
+            resolvedDesignIndex = -1;
+            if (!TryGetEntry(objectId, out Entry entry) || entry == null)
+                return false;
+
+            if (!TryResolveDesign(entry.designs, requestedDesignIndex, out DesignVariantEntry design, out resolvedDesignIndex))
+                return false;
+
+            prefab = design.prefab;
+            return prefab != null;
+        }
+
+        public bool TryResolveDesign(string objectId, int requestedDesignIndex, out DesignVariantEntry design, out int resolvedDesignIndex)
+        {
+            design = null;
+            resolvedDesignIndex = -1;
+            if (!TryGetEntry(objectId, out Entry entry) || entry == null)
+                return false;
+
+            return TryResolveDesign(entry.designs, requestedDesignIndex, out design, out resolvedDesignIndex);
+        }
+
+        public bool TryResolveDesignIndex(string objectId, string designId, out int resolvedDesignIndex)
+        {
+            resolvedDesignIndex = -1;
+            if (!TryGetEntry(objectId, out Entry entry) || entry == null)
+                return false;
+
+            return TryResolveDesignIndex(entry.designs, designId, out resolvedDesignIndex);
+        }
+
+        public bool IsValidDesignId(string objectId, string designId)
+        {
+            return TryResolveDesignIndex(objectId, designId, out _);
+        }
+
+        public bool IsValidDesignIndex(string objectId, int designIndex)
+        {
+            if (!TryGetEntry(objectId, out Entry entry) || entry == null)
+                return false;
+
+            return IsValidDesignIndex(entry.designs, designIndex);
+        }
+
+        public bool IsSupportedObject(string objectId)
+        {
+            return TryGetEntry(objectId, out _);
+        }
+
+        public void SetEntries(Entry[] entries)
+        {
+            _entries = entries ?? new Entry[0];
+        }
+
+        private static bool HasAnyValidDesign(DesignVariantEntry[] designs)
+        {
+            if (designs == null)
+                return false;
+
+            for (int i = 0; i < designs.Length; i++)
+            {
+                if (designs[i] != null && designs[i].prefab != null)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveDesign(DesignVariantEntry[] designs, int requestedDesignIndex, out DesignVariantEntry design, out int resolvedDesignIndex)
+        {
+            design = null;
+            resolvedDesignIndex = requestedDesignIndex;
+            if (!IsValidDesignIndex(designs, resolvedDesignIndex))
+                return false;
+
+            design = designs[resolvedDesignIndex];
+            return design != null && design.prefab != null;
+        }
+
+        private static bool TryResolveDesignIndex(DesignVariantEntry[] designs, string designId, out int resolvedDesignIndex)
+        {
+            resolvedDesignIndex = -1;
+            if (designs == null || string.IsNullOrWhiteSpace(designId))
+                return false;
+
+            string normalizedDesignId = Normalize(designId);
+            for (int i = 0; i < designs.Length; i++)
+            {
+                DesignVariantEntry candidate = designs[i];
+                if (candidate == null || candidate.prefab == null)
+                    continue;
+
+                if (!string.Equals(Normalize(candidate.designId), normalizedDesignId, System.StringComparison.Ordinal))
+                    continue;
+
+                resolvedDesignIndex = i;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsValidDesignIndex(DesignVariantEntry[] designs, int designIndex)
+        {
+            return designs != null &&
+                   designIndex >= 0 &&
+                   designIndex < designs.Length &&
+                   designs[designIndex] != null &&
+                   designs[designIndex].prefab != null;
+        }
+
+        private static string Normalize(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+    }
+
     /// <summary>시나리오 스펙이 참조하는 gameplay 오브젝트 (Facility, Unlocker, Item, PlayerModel, Customer).</summary>
     [System.Serializable]
     public sealed class GameplayCatalog
@@ -1064,7 +1233,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
     }
 
-    /// <summary>EditorBasedCatalog + GameplayCatalog + EnvironmentCatalog. 생성 시 EditorBased 먼저, 그 다음 gameplay placements와 environment를 처리합니다.</summary>
+    /// <summary>EditorBasedCatalog + ContentSelectionCatalog + GameplayCatalog + EnvironmentCatalog.</summary>
     [CreateAssetMenu(fileName = "playable_object_catalog", menuName = "PlayableAI/Settings/Object Catalog (오브젝트 카탈로그)")]
     public sealed class PlayableObjectCatalog : ScriptableObject
     {
@@ -1073,6 +1242,9 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         [Tooltip("에디터/시스템용 (Core, UI). 생성 시 먼저 인스턴스화합니다.")]
         [SerializeField] private EditorBasedCatalog _editorBased = new EditorBasedCatalog();
+
+        [Tooltip("배치 없이 design만 선택하는 content. ui/core/guide 등 agent가 고르는 비배치 오브젝트를 담습니다.")]
+        [SerializeField] private ContentSelectionCatalog _contentSelections = new ContentSelectionCatalog();
 
         [Tooltip("시나리오 스펙이 참조하는 gameplay 오브젝트. Facility/Unlocker/PlayerModel/Customer는 gameplay placements, runtime-owned Item/Customer는 objectDesign selection에 사용합니다.")]
         [SerializeField] private GameplayCatalog _gameplayCatalog = new GameplayCatalog();
@@ -1085,6 +1257,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public string PrefabsRootPath => _prefabsRootPath ?? string.Empty;
         public EditorBasedCatalog EditorBased => _editorBased ?? new EditorBasedCatalog();
+        public ContentSelectionCatalog ContentSelections => _contentSelections ?? new ContentSelectionCatalog();
         public GameplayCatalog Gameplay => _gameplayCatalog ?? new GameplayCatalog();
         public EnvironmentCatalog Environment => _environmentCatalog ?? new EnvironmentCatalog();
         public string ThemeId => _themeId ?? string.Empty;
@@ -1150,6 +1323,46 @@ namespace Supercent.PlayableAI.Common.Contracts
         public bool TryGetEditorPrefab(string objectId, out GameObject prefab)
         {
             return EditorBased.TryGetPrefab(objectId, out prefab);
+        }
+
+        public IReadOnlyList<ContentSelectionCatalog.Entry> GetContentSelectionEntries()
+        {
+            return ContentSelections.GetEntries();
+        }
+
+        public bool TryGetContentSelectionEntry(string objectId, out ContentSelectionCatalog.Entry entry)
+        {
+            return ContentSelections.TryGetEntry(objectId, out entry);
+        }
+
+        public bool TryResolveContentSelectionPrefab(string objectId, int requestedDesignIndex, out GameObject prefab, out int resolvedDesignIndex)
+        {
+            return ContentSelections.TryResolvePrefab(objectId, requestedDesignIndex, out prefab, out resolvedDesignIndex);
+        }
+
+        public bool TryResolveContentSelectionDesign(string objectId, int requestedDesignIndex, out DesignVariantEntry design, out int resolvedDesignIndex)
+        {
+            return ContentSelections.TryResolveDesign(objectId, requestedDesignIndex, out design, out resolvedDesignIndex);
+        }
+
+        public bool TryResolveContentSelectionDesignIndex(string objectId, string designId, out int resolvedDesignIndex)
+        {
+            return ContentSelections.TryResolveDesignIndex(objectId, designId, out resolvedDesignIndex);
+        }
+
+        public bool IsValidContentSelectionDesignIndex(string objectId, int designIndex)
+        {
+            return ContentSelections.IsValidDesignIndex(objectId, designIndex);
+        }
+
+        public bool IsValidContentSelectionDesignId(string objectId, string designId)
+        {
+            return ContentSelections.IsValidDesignId(objectId, designId);
+        }
+
+        public bool IsSupportedContentSelectionObject(string objectId)
+        {
+            return ContentSelections.IsSupportedObject(objectId);
         }
 
         public bool TryGetEnvironmentEntry(string objectId, out EnvironmentCatalogEntry entry)
@@ -1401,6 +1614,14 @@ namespace Supercent.PlayableAI.Common.Contracts
                 _editorBased = new EditorBasedCatalog();
 
             _editorBased.SetEntries(entries);
+        }
+
+        public void SetContentSelectionEntries(ContentSelectionCatalog.Entry[] entries)
+        {
+            if (_contentSelections == null)
+                _contentSelections = new ContentSelectionCatalog();
+
+            _contentSelections.SetEntries(entries);
         }
 
         public void SetGameplayRoleArrays(

@@ -45,6 +45,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 currencies = BuildModelCurrencies(intent.currencies, currencies, result),
                 saleValues = saleValues,
                 objects = objects,
+                contentSelections = CopyContentSelections(intent.contentSelections),
                 stages = stages,
                 playerOptions = BuildPlayerOptions(intent.scenarioOptions),
             };
@@ -368,6 +369,29 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 options.itemStacker.maxCount = scenarioOptions.itemStackMaxCount;
 
             return options;
+        }
+
+        private static ContentSelectionDefinition[] CopyContentSelections(ContentSelectionDefinition[] selections)
+        {
+            if (selections == null || selections.Length == 0)
+                return new ContentSelectionDefinition[0];
+
+            var copied = new ContentSelectionDefinition[selections.Length];
+            for (int i = 0; i < selections.Length; i++)
+            {
+                ContentSelectionDefinition selection = selections[i];
+                if (selection == null)
+                    continue;
+
+                copied[i] = new ContentSelectionDefinition
+                {
+                    objectId = Normalize(selection.objectId),
+                    designId = Normalize(selection.designId),
+                    designIndex = selection.designIndex,
+                };
+            }
+
+            return copied;
         }
 
         private static PlayableScenarioFacilityOptions BuildObjectFacilityOptions(

@@ -93,6 +93,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             CompiledPhysicsAreaDefinition[] physicsAreas = BuildPhysicsAreas(objects, positions, layoutSpec, result);
             CompiledRailDefinition[] rails = BuildRails(objects, spawnKeys, layoutSpec, result);
             ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, facilityAcceptedItems, facilityOutputItems, itemPrices, catalog, result);
+            ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
 
@@ -127,6 +128,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 flowSchemaVersion = CompiledPlayablePlan.FLOW_SCHEMA_VERSION,
                 themeId = IntentAuthoringUtility.Normalize(model.themeId),
                 objectDesigns = objectDesigns,
+                contentSelections = contentSelections,
                 spawns = spawns,
                 physicsAreas = physicsAreas,
                 rails = rails,
@@ -144,6 +146,51 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             result.IsValid = true;
             result.Message = "CompiledPlayablePlan lowering이 완료되었습니다.";
             return result;
+        }
+
+        private static ContentSelectionDefinition[] BuildContentSelections(
+            ContentSelectionDefinition[] selections,
+            PlayableObjectCatalog catalog,
+            ScenarioModelLoweringResult result)
+        {
+            ContentSelectionDefinition[] safeSelections = selections ?? new ContentSelectionDefinition[0];
+            if (safeSelections.Length == 0)
+                return new ContentSelectionDefinition[0];
+
+            var compiledSelections = new ContentSelectionDefinition[safeSelections.Length];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ContentSelectionDefinition selection = safeSelections[i];
+                if (selection == null)
+                    continue;
+
+                string objectId = IntentAuthoringUtility.Normalize(selection.objectId);
+                string designId = IntentAuthoringUtility.Normalize(selection.designId);
+                if (ContentSelectionRules.IsUnsetDesignId(designId))
+                {
+                    result.Errors.Add(
+                        "contentSelections[" + i + "]의 objectId '" + objectId +
+                        "'는 실제 카탈로그 design을 선택해야 합니다. '" + ContentSelectionRules.DESIGN_ID_NOT_SET + "'는 허용되지 않습니다.");
+                    continue;
+                }
+
+                if (!catalog.TryResolveContentSelectionDesignIndex(objectId, designId, out int resolvedDesignIndex))
+                {
+                    result.Errors.Add(
+                        "contentSelections[" + i + "]에서 objectId '" + objectId + "'의 designId '" + designId +
+                        "'를 content selection design으로 해석하지 못했습니다.");
+                    continue;
+                }
+
+                compiledSelections[i] = new ContentSelectionDefinition
+                {
+                    objectId = objectId,
+                    designId = designId,
+                    designIndex = resolvedDesignIndex,
+                };
+            }
+
+            return compiledSelections;
         }
 
         private static FlowBeatDefinition[] BuildCompiledFlowBeats(

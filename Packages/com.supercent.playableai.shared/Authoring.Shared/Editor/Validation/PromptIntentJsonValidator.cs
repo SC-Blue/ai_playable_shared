@@ -53,6 +53,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateCurrencies(result.Contract.currencies, result);
             ValidateSaleValues(result.Contract.saleValues, result);
             ValidateObjects(result.Contract.objects, result);
+            ValidateContentSelections(result.Contract.contentSelections, result);
             ValidateStages(result.Contract.stages, result);
             ValidateScenarioOptions(result.Contract.scenarioOptions, result);
 
@@ -151,6 +152,48 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateObjectScenarioOptions(value.scenarioOptions, role, "objects[" + i + "].scenarioOptions", result);
                 ValidatePhysicsAreaOptions(value.physicsAreaOptions, role, "objects[" + i + "].physicsAreaOptions", result);
                 ValidateRailOptions(value.railOptions, role, "objects[" + i + "].railOptions", result);
+            }
+        }
+
+        private static void ValidateContentSelections(
+            ContentSelectionDefinition[] values,
+            PromptIntentJsonValidationResult result)
+        {
+            var seenObjectIds = new HashSet<string>(StringComparer.Ordinal);
+            ContentSelectionDefinition[] safeValues = values ?? new ContentSelectionDefinition[0];
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                ContentSelectionDefinition value = safeValues[i];
+                string label = "contentSelections[" + i + "]";
+                if (value == null)
+                {
+                    Fail(result, PlayableFailureCode.InvalidValue, label + "가 null입니다.");
+                    continue;
+                }
+
+                string objectId = Normalize(value.objectId);
+                if (string.IsNullOrEmpty(objectId))
+                    Fail(result, PlayableFailureCode.MissingRequiredField, label + ".objectId는 필수입니다.");
+                else if (!seenObjectIds.Add(objectId))
+                    Fail(result, PlayableFailureCode.DuplicateIdentifier, "중복된 contentSelections objectId '" + objectId + "'입니다.");
+
+                string designId = Normalize(value.designId);
+                if (string.IsNullOrEmpty(designId))
+                    Fail(result, PlayableFailureCode.MissingRequiredField, label + ".designId는 필수입니다.");
+                else if (ContentSelectionRules.IsUnsetDesignId(designId))
+                    Fail(result, PlayableFailureCode.InvalidValue, label + ".designId는 '" + ContentSelectionRules.DESIGN_ID_NOT_SET + "'일 수 없습니다. 실제 카탈로그 design을 선택해야 합니다.");
+            }
+
+            for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                string requiredObjectId = ContentSelectionRules.REQUIRED_OBJECT_IDS[i];
+                if (!seenObjectIds.Contains(requiredObjectId))
+                {
+                    Fail(
+                        result,
+                        PlayableFailureCode.MissingRequiredField,
+                        "필수 UI content '" + requiredObjectId + "'에 대한 contentSelections entry가 필요합니다.");
+                }
             }
         }
 
@@ -730,6 +773,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             Currency,
             SaleValue,
             ScenarioObject,
+            ContentSelection,
             PhysicsAreaOptions,
             RailOptions,
             PhysicsAreaLayout,
@@ -754,6 +798,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             CurrencyArray,
             SaleValueArray,
             ObjectArray,
+            ContentSelectionArray,
             PhysicsAreaOptionsObject,
             RailOptionsObject,
             PhysicsAreaLayoutObject,
@@ -939,6 +984,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     case JsonValueContract.ObjectArray:
                         if (Peek() == '[')
                             return ValidateArray(JsonObjectSchema.ScenarioObject, label);
+                        return SkipValue();
+                    case JsonValueContract.ContentSelectionArray:
+                        if (Peek() == '[')
+                            return ValidateArray(JsonObjectSchema.ContentSelection, label);
                         return SkipValue();
                     case JsonValueContract.PhysicsAreaOptionsObject:
                         if (Peek() == '{')
@@ -1229,6 +1278,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                             case "objects":
                                 contract = JsonValueContract.ObjectArray;
                                 return true;
+                            case "contentSelections":
+                                contract = JsonValueContract.ContentSelectionArray;
+                                return true;
                             case "stages":
                                 contract = JsonValueContract.StageArray;
                                 return true;
@@ -1271,6 +1323,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                             default:
                                 return false;
                         }
+                    case JsonObjectSchema.ContentSelection:
+                        return key == "objectId" || key == "designId";
                     case JsonObjectSchema.PhysicsAreaLayout:
                         switch (key)
                         {

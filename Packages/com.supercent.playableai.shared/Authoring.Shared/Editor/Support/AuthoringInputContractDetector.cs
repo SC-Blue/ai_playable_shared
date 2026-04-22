@@ -27,6 +27,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Pipeline
             "currencies",
             "saleValues",
             "objects",
+            "contentSelections",
             "stages",
         };
 

@@ -7,6 +7,7 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public string themeId;
         public ObjectDesignSelectionDefinition[] objectDesigns = new ObjectDesignSelectionDefinition[0];
+        public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public PortableBakedSpawnData[] spawns = new PortableBakedSpawnData[0];
         public PortableBakedPhysicsAreaDefinition[] physicsAreas = new PortableBakedPhysicsAreaDefinition[0];
         public PortableBakedRailDefinition[] rails = new PortableBakedRailDefinition[0];
