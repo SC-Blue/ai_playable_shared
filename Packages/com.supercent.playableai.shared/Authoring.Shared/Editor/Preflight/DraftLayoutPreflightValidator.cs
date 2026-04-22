@@ -90,7 +90,8 @@ namespace PlayableAI.AuthoringCore
             DraftLayoutPreflightValidationResult result,
             List<DraftLayoutPreflightDiagnostic> diagnostics)
         {
-            result.diagnostics = diagnostics != null ? diagnostics.ToArray() : Array.Empty<DraftLayoutPreflightDiagnostic>();
+            DraftLayoutPreflightDiagnostic[] filteredDiagnostics = FilterOverlapDiagnostics(diagnostics);
+            result.diagnostics = filteredDiagnostics;
             result.Blockers = BuildDisplayMessages(result.diagnostics, "blocker");
             result.Warnings = BuildDisplayMessages(result.diagnostics, "warning");
             result.IsValid = result.Blockers.Length == 0;
@@ -360,7 +361,7 @@ namespace PlayableAI.AuthoringCore
             string normalizedMessage = Normalize(message);
             string ruleCode = InferRuleCode(normalizedMessage);
             string[] objectIds = ExtractObjectIds(normalizedMessage);
-            string[] suggestedFixes = BuildSuggestedFixes(ruleCode, normalizedMessage);
+            string[] suggestedFixes = BuildSuggestedFixes(ruleCode, normalizedMessage, objectIds);
             string fixability = ResolveFixability(ruleCode, normalizedMessage);
             return new DraftLayoutPreflightDiagnostic
             {
@@ -440,38 +441,99 @@ namespace PlayableAI.AuthoringCore
             return objectIds.ToArray();
         }
 
-        private static string[] BuildSuggestedFixes(string ruleCode, string message)
+        private static string[] BuildSuggestedFixes(string ruleCode, string message, string[] objectIds)
         {
             var fixes = new List<string>();
+            string[] safeObjectIds = objectIds ?? Array.Empty<string>();
+            string firstObjectId = safeObjectIds.Length > 0 ? Normalize(safeObjectIds[0]) : string.Empty;
 
             if (string.Equals(ruleCode, "MissingExitWaypoints", StringComparison.Ordinal))
-                AddUnique(fixes, "target facility의 퇴장 경로에 최소 1개의 exit waypoint를 추가해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.customerPaths[*].exitWaypoints에 최소 1개의 waypoint를 추가해주세요."
+                    : "draft_layout.customerPaths[targetId=" + firstObjectId + "].exitWaypoints에 최소 1개의 waypoint를 추가해주세요.");
             if (string.Equals(ruleCode, "MissingEntryWaypoints", StringComparison.Ordinal))
-                AddUnique(fixes, "target facility의 진입 경로에 최소 1개의 entry waypoint를 추가해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.customerPaths[*].entryWaypoints에 최소 1개의 waypoint를 추가해주세요."
+                    : "draft_layout.customerPaths[targetId=" + firstObjectId + "].entryWaypoints에 최소 1개의 waypoint를 추가해주세요.");
             if (string.Equals(ruleCode, "MissingQueuePoints", StringComparison.Ordinal))
-                AddUnique(fixes, "손님 대기열을 표현할 queue point를 최소 1개 이상 추가해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.customerPaths[*].queuePoints를 최소 1개 이상 추가해주세요."
+                    : "draft_layout.customerPaths[targetId=" + firstObjectId + "].queuePoints를 최소 1개 이상 추가해주세요.");
             if (string.Equals(ruleCode, "MissingSpawnPoint", StringComparison.Ordinal))
-                AddUnique(fixes, "customer path의 spawnPoint를 명시해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.customerPaths[*].spawnPoint를 명시해주세요."
+                    : "draft_layout.customerPaths[targetId=" + firstObjectId + "].spawnPoint를 명시해주세요.");
             if (string.Equals(ruleCode, "MissingLeavePoint", StringComparison.Ordinal))
-                AddUnique(fixes, "customer path의 leavePoint를 명시해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.customerPaths[*].leavePoint를 명시해주세요."
+                    : "draft_layout.customerPaths[targetId=" + firstObjectId + "].leavePoint를 명시해주세요.");
             if (string.Equals(ruleCode, "CustomerPathTargetCoverage", StringComparison.Ordinal))
-                AddUnique(fixes, "customer-facing facility마다 customer path를 정확히 1개씩 작성해주세요.");
+                AddUnique(fixes, safeObjectIds.Length == 0
+                    ? "customer-facing facility마다 draft_layout.customerPaths[targetId=<facilityId>]를 정확히 1개씩 작성해주세요."
+                    : "customer-facing facility마다 customer path를 정확히 1개씩 작성해주세요. 현재 누락/중복 확인 대상: " + string.Join(", ", safeObjectIds) + ".");
             if (string.Equals(ruleCode, "MissingRailPathCells", StringComparison.Ordinal))
-                AddUnique(fixes, "rail에는 draft_layout.railLayout.pathCells를 작성해주세요. 연결된 직선/코너 타일 경로 자체가 권위 데이터입니다.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.placements[*].railLayout.pathCells를 작성해주세요. 연결된 경로 자체가 권위 데이터입니다."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].railLayout.pathCells를 작성해주세요. 연결된 경로 자체가 권위 데이터입니다.");
             if (string.Equals(ruleCode, "MissingRailSinkPlacement", StringComparison.Ordinal))
-                AddUnique(fixes, "intent의 sinkEndpointTargetObjectId가 가리키는 object의 placement를 draft_layout에 함께 작성해주세요.");
+                AddUnique(fixes, "intent.railOptions.sinkEndpointTargetObjectId가 가리키는 object의 placement를 draft_layout.placements에 함께 작성해주세요.");
             if (string.Equals(ruleCode, "InvalidRailPathTopology", StringComparison.Ordinal))
-                AddUnique(fixes, "rail pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.placements[*].railLayout.pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].railLayout.pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다.");
             if (string.Equals(ruleCode, "MissingPhysicsAreaBounds", StringComparison.Ordinal))
-                AddUnique(fixes, "physics_area에는 placement.physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.placements[*].physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요.");
             if (string.Equals(ruleCode, "EnvironmentOccupiedCellConflict", StringComparison.Ordinal))
-                AddUnique(fixes, "environment bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "draft_layout.environment[*] bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요."
+                    : "draft_layout.environment[objectId=" + firstObjectId + "] bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요.");
             if (string.Equals(ruleCode, "LayoutBoundsContainment", StringComparison.Ordinal))
-                AddUnique(fixes, "해당 object footprint가 floor/layout bounds 안으로 들어오도록 다시 배치해주세요.");
+                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
+                    ? "해당 placement footprint가 draft_layout.floorBounds 안으로 들어오도록 다시 배치해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "] footprint가 floorBounds 안으로 들어오도록 다시 배치해주세요.");
+            if (string.Equals(ruleCode, "MissingPlayerStart", StringComparison.Ordinal))
+                AddUnique(fixes, "draft_layout.playerStart.objectId를 player role objectId로 채우고, worldX/worldZ를 함께 작성해주세요.");
+            if (string.Equals(ruleCode, "DuplicatePlacementObjectId", StringComparison.Ordinal))
+                AddUnique(fixes, "draft_layout.placements에서 중복 objectId를 제거해 각 objectId가 정확히 1번만 나오게 해주세요.");
+            if (string.Equals(ruleCode, "MissingPlacementCoverage", StringComparison.Ordinal))
+                AddUnique(fixes, "draft_layout.placements, draft_layout.playerStart, draft_layout.environment, draft_layout.customerPaths 중 최소 하나 이상을 채워주세요.");
             if (fixes.Count == 0 && !string.IsNullOrWhiteSpace(message))
                 AddUnique(fixes, "현재 blocker message를 기준으로 가장 직접적인 원인부터 제거해주세요.");
 
             return fixes.ToArray();
+        }
+
+        private static DraftLayoutPreflightDiagnostic[] FilterOverlapDiagnostics(List<DraftLayoutPreflightDiagnostic> diagnostics)
+        {
+            if (diagnostics == null || diagnostics.Count == 0)
+                return Array.Empty<DraftLayoutPreflightDiagnostic>();
+
+            var filtered = new List<DraftLayoutPreflightDiagnostic>(diagnostics.Count);
+            for (int i = 0; i < diagnostics.Count; i++)
+            {
+                DraftLayoutPreflightDiagnostic diagnostic = diagnostics[i];
+                if (IsOverlapDiagnostic(diagnostic))
+                    continue;
+
+                filtered.Add(diagnostic);
+            }
+
+            return filtered.ToArray();
+        }
+
+        private static bool IsOverlapDiagnostic(DraftLayoutPreflightDiagnostic diagnostic)
+        {
+            if (diagnostic == null)
+                return false;
+
+            string ruleCode = Normalize(diagnostic.ruleCode);
+            string message = Normalize(diagnostic.message);
+            return ruleCode.Contains("overlap", StringComparison.Ordinal) ||
+                message.Contains("overlap", StringComparison.Ordinal) ||
+                message.Contains("겹칩", StringComparison.Ordinal) ||
+                message.Contains("겹칩니다", StringComparison.Ordinal);
         }
 
         private static string ResolveFixability(string ruleCode, string message)
