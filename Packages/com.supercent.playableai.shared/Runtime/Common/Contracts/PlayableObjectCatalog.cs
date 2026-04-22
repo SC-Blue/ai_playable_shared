@@ -50,7 +50,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
+            PlayablePlacementFootprint footprint = prefab.GetComponent<PlayablePlacementFootprint>();
             if (footprint == null)
                 return false;
 
@@ -755,10 +755,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return false;
 
             prefab = design.prefab;
-            cornerPrefab = design.cornerPrefab != null
-                ? design.cornerPrefab
-                : (design.straightPrefab != null ? design.straightPrefab : design.prefab);
-            return true;
+            cornerPrefab = design.cornerPrefab;
+            return prefab != null && cornerPrefab != null;
         }
 
         public bool TryResolveEnvironmentPreviewImage(
@@ -1775,7 +1773,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                 else
                     ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".prefab", design.prefab, ref expectedSquareSizeCells, result);
 
-                if (design.tJunctionPrefab != null)
+                if (design.tJunctionPrefab != null &&
+                    !string.Equals(resolvedVariationMode, EnvironmentCatalog.VARIATION_MODE_CONNECTED3, System.StringComparison.Ordinal))
                     ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".tJunctionPrefab", design.tJunctionPrefab, ref expectedSquareSizeCells, result);
 
                 if (string.Equals(resolvedVariationMode, EnvironmentCatalog.VARIATION_MODE_CONNECTED3, System.StringComparison.Ordinal))
@@ -1788,6 +1787,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 cornerPrefab이 필요합니다.");
                     else
                         ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".cornerPrefab", design.cornerPrefab, ref expectedSquareSizeCells, result);
+                    if (design.tJunctionPrefab == null)
+                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 tJunctionPrefab이 필요합니다.");
+                    else
+                        ValidateEnvironmentPrefabFootprintRules(sectionPath, entryIndex, designIndex, designLabel + ".tJunctionPrefab", design.tJunctionPrefab, ref expectedSquareSizeCells, result);
                     if (design.crossPrefab == null)
                         AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 variationMode 'connected3'용 crossPrefab이 필요합니다.");
                     else
@@ -1953,7 +1956,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
+            PlayablePlacementFootprint footprint = prefab.GetComponent<PlayablePlacementFootprint>();
             if (footprint == null)
                 return false;
 
