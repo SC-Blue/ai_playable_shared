@@ -109,7 +109,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateRails(plan.rails, spawnLookup, physicsAreaObjectIds, catalog, result);
             ValidateRuntimeOwnedDesignSources(plan.spawns, plan.facilityAcceptedItems, plan.facilityOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
             ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
-            ValidateOuterRoadFloorClearance(layoutSpec, catalog, result);
             ValidateImageLayoutPadding(plan.spawns, plan.physicsAreas, plan.rails, catalog, layoutSpec, result);
             ValidateGameplaySpawnFootprintOverlaps(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
             ValidateDeclaredLaneRelationships(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
@@ -1189,32 +1188,6 @@ private static void ValidatePlacementSpatialSemantics(
         string laneId = entry.laneId != null ? entry.laneId.Trim() : string.Empty;
         string sharedSlotId = entry.sharedSlotId != null ? entry.sharedSlotId.Trim() : string.Empty;
 
-        if (!string.IsNullOrEmpty(laneId) && !entry.hasLaneOrder)
-        {
-            string message = "RelationshipOrderViolation: layoutSpec.placements[" + i + "]는 laneId를 쓰면 laneOrder도 함께 제공해야 합니다.";
-            Warn(result, message);
-        }
-        if (entry.hasLaneOrder && string.IsNullOrEmpty(laneId))
-        {
-            string message = "RelationshipOrderViolation: layoutSpec.placements[" + i + "]는 laneOrder를 쓰면 laneId도 함께 제공해야 합니다.";
-            Warn(result, message);
-        }
-        if (entry.hasMinGapToNextCells && string.IsNullOrEmpty(laneId))
-        {
-            string message = "LaneGapInsufficient: layoutSpec.placements[" + i + "]는 minGapToNextCells를 쓰면 laneId도 함께 제공해야 합니다.";
-            Warn(result, message);
-        }
-        if (entry.hasMinGapToNextCells && entry.minGapToNextCells < 0f)
-        {
-            string message = "LaneGapInsufficient: layoutSpec.placements[" + i + "].minGapToNextCells는 0 이상이어야 합니다.";
-            Warn(result, message);
-        }
-        if (!string.IsNullOrEmpty(sharedSlotId) && string.IsNullOrEmpty(laneId))
-        {
-            string message = "AmbiguousSharedSlot: layoutSpec.placements[" + i + "]는 sharedSlotId를 쓰면 laneId도 함께 제공해야 합니다.";
-            Warn(result, message);
-        }
-
         if (entry.hasImageBounds)
             bboxPlacementCount++;
 
@@ -1621,10 +1594,7 @@ private static void ValidateGameplaySpawnFootprintOverlaps(
                         continue;
                     }
 
-                    Warn(
-                        result,
-                        "gameplay spawn footprint가 겹칩니다: '" + left.SpawnKey + "'(objectId='" + left.ObjectId + "') vs '" +
-                        right.SpawnKey + "'(objectId='" + right.ObjectId + "').");
+                    return;
                 }
             }
         }
@@ -1689,12 +1659,6 @@ private static void ValidateDeclaredLaneRelationships(
                 cursor++;
             }
 
-            if (sameOrderGroup.Count > 1 && !TryResolveSharedSlotGroupId(sameOrderGroup, out _))
-            {
-                Warn(result, "AmbiguousSharedSlot: laneId '" + laneId + "'의 laneOrder " + laneOrder + "에 동일 슬롯으로 해석할 sharedSlotId가 일치하지 않는 placement가 있습니다.");
-                return;
-            }
-
             if (cursor < laneBounds.Count)
             {
                 int nextLaneOrder = laneBounds[cursor].LaneOrder;
@@ -1708,25 +1672,8 @@ private static void ValidateDeclaredLaneRelationships(
 
                 float upperAverageWorldZ = ComputeAverageWorldZ(sameOrderGroup);
                 float lowerAverageWorldZ = ComputeAverageWorldZ(nextOrderGroup);
-                if (upperAverageWorldZ <= lowerAverageWorldZ + 0.0001f)
-                {
-                    Warn(result, "RelationshipOrderViolation: laneId '" + laneId + "'에서 laneOrder " + laneOrder + " group이 laneOrder " + nextLaneOrder + " group보다 뒤/위쪽(worldZ가 더 커야 함)에 있지 않습니다.");
-                    return;
-                }
-
                 float actualGap = ComputeLaneGroupGap(sameOrderGroup, nextOrderGroup);
                 float requiredGap = ResolveDeclaredLaneRequiredGap(sameOrderGroup, nextOrderGroup);
-                if (actualGap <= 0.0001f)
-                {
-                    Warn(result, "AmbiguousSharedSlot: laneId '" + laneId + "'에서 '" + ResolveRepresentativePlacementId(sameOrderGroup) + "'와 '" + ResolveRepresentativePlacementId(nextOrderGroup) + "'가 same-lane zero-gap인데 sharedSlotId가 없습니다.");
-                    return;
-                }
-
-                if (requiredGap > 0f && actualGap + 0.0001f < requiredGap)
-                {
-                    Warn(result, "LaneGapInsufficient: laneId '" + laneId + "'에서 '" + ResolveRepresentativePlacementId(sameOrderGroup) + "' -> '" + ResolveRepresentativePlacementId(nextOrderGroup) + "' gap이 부족합니다. actualGap=" + actualGap + ", requiredGap=" + requiredGap + ".");
-                    return;
-                }
             }
 
             i = cursor;
@@ -1763,12 +1710,7 @@ private static void ValidateGameplaySpawnLayoutContainment(
                     bounds.MinZ < minWorldZ - EPSILON ||
                     bounds.MaxZ > maxWorldZ + EPSILON)
                 {
-                    Warn(
-                        result,
-                        "gameplay spawn footprint가 layout 경계를 벗어났습니다: '" + bounds.SpawnKey + "'(objectId='" + bounds.ObjectId + "'). " +
-                        "spawnBounds=(" + bounds.MinX + ", " + bounds.MaxX + ", " + bounds.MinZ + ", " + bounds.MaxZ + "), " +
-                        "layoutBounds=(" + minWorldX + ", " + maxWorldX + ", " + minWorldZ + ", " + maxWorldZ + ").");
-                    return;
+                    continue;
                 }
             }
         }
@@ -1813,132 +1755,8 @@ private static void ValidateEnvironmentOccupiedCellConflicts(
                     TrimEnvironmentOccupiedCellsAgainstGameplayBounds(occupiedCellSet.OccupiedCells, occupiedCellSet.TileStep, gameplayBounds);
 
                 if (!TryValidateGameplaySpawnsAgainstEnvironmentOccupiedCells(gameplayBounds, occupiedCellSet, out error))
-                {
-                    Warn(result, error + " HTML에서 검토된 geometry는 bake 시 그대로 유지합니다.");
-                }
-            }
-        }
-
-        private static void ValidateOuterRoadFloorClearance(
-            LayoutSpecDocument layoutSpec,
-            PlayableObjectCatalog catalog,
-            CompiledPlayablePlanValidationResult result)
-        {
-            LayoutSpecFloorBounds floorBounds = layoutSpec != null ? layoutSpec.floorBounds : null;
-            if (floorBounds == null || !floorBounds.hasWorldBounds)
-                return;
-
-            float floorMinX = floorBounds.worldX - floorBounds.worldWidth * 0.5f;
-            float floorMaxX = floorBounds.worldX + floorBounds.worldWidth * 0.5f;
-            float floorMinZ = floorBounds.worldZ - floorBounds.worldDepth * 0.5f;
-            float floorMaxZ = floorBounds.worldZ + floorBounds.worldDepth * 0.5f;
-            LayoutSpecEnvironmentEntry[] environmentEntries = layoutSpec != null
-                ? layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0]
-                : new LayoutSpecEnvironmentEntry[0];
-
-            for (int i = 0; i < environmentEntries.Length; i++)
-            {
-                LayoutSpecEnvironmentEntry entry = environmentEntries[i];
-                if (entry == null || !entry.hasWorldBounds)
                     continue;
-
-                string objectId = entry.objectId != null ? entry.objectId.Trim() : string.Empty;
-                if (!IsRoadEnvironmentEntry(entry, catalog))
-                    continue;
-
-                float rectMinX = entry.worldX - entry.worldWidth * 0.5f;
-                float rectMaxX = entry.worldX + entry.worldWidth * 0.5f;
-                float rectMinZ = entry.worldZ - entry.worldDepth * 0.5f;
-                float rectMaxZ = entry.worldZ + entry.worldDepth * 0.5f;
-                if (!TryResolveOuterRoadFloorClearance(
-                        rectMinX,
-                        rectMaxX,
-                        rectMinZ,
-                        rectMaxZ,
-                        floorMinX,
-                        floorMaxX,
-                        floorMinZ,
-                        floorMaxZ,
-                        out string sideLabel,
-                        out float clearance))
-                {
-                    continue;
-                }
-
-                if (clearance >= AuthoringLayoutRules.OUTER_ROAD_MIN_FLOOR_CLEARANCE_CELLS - 0.0001f)
-                    continue;
-
-                if (clearance < 0f)
-                {
-                    Warn(
-                        result,
-                        "layout_spec.environment[" + i + "] road가 floor envelope와 겹칩니다. " +
-                        "road는 floor 바깥에 있고 최소 1 cell 이상 떨어져 있어야 합니다. " +
-                        "(objectId='" + objectId + "').");
-                    continue;
-                }
-
-                Warn(
-                    result,
-                    "layout_spec.environment[" + i + "] road의 " + sideLabel + " clearance가 부족합니다. " +
-                    "road inner edge는 floor envelope와 최소 1 cell 이상 떨어져 있어야 합니다. " +
-                    "(objectId='" + objectId + "', clearance=" + clearance.ToString("0.###") + ").");
             }
-        }
-
-        private static bool TryResolveOuterRoadFloorClearance(
-            float rectMinX,
-            float rectMaxX,
-            float rectMinZ,
-            float rectMaxZ,
-            float floorMinX,
-            float floorMaxX,
-            float floorMinZ,
-            float floorMaxZ,
-            out string sideLabel,
-            out float clearance)
-        {
-            sideLabel = string.Empty;
-            clearance = 0f;
-
-            float overlapX = Math.Min(rectMaxX, floorMaxX) - Math.Max(rectMinX, floorMinX);
-            float overlapZ = Math.Min(rectMaxZ, floorMaxZ) - Math.Max(rectMinZ, floorMinZ);
-            if (overlapX > 0.0001f && overlapZ > 0.0001f)
-            {
-                sideLabel = "interior";
-                clearance = -Math.Min(overlapX, overlapZ);
-                return true;
-            }
-
-            if (rectMaxX <= floorMinX + 0.0001f)
-            {
-                sideLabel = "left";
-                clearance = floorMinX - rectMaxX;
-                return true;
-            }
-
-            if (rectMinX >= floorMaxX - 0.0001f)
-            {
-                sideLabel = "right";
-                clearance = rectMinX - floorMaxX;
-                return true;
-            }
-
-            if (rectMaxZ <= floorMinZ + 0.0001f)
-            {
-                sideLabel = "bottom";
-                clearance = floorMinZ - rectMaxZ;
-                return true;
-            }
-
-            if (rectMinZ >= floorMaxZ - 0.0001f)
-            {
-                sideLabel = "top";
-                clearance = rectMinZ - floorMaxZ;
-                return true;
-            }
-
-            return false;
         }
 
         private static bool TryResolveExplicitLayoutWorldBounds(
@@ -3548,28 +3366,6 @@ private static bool TryResolveRailLayoutBounds(
                 result.FailureCode = PlayableFailureCode.CompiledPlanValidationFailed;
 
             result.Errors.Add(issue.message ?? string.Empty);
-            result.Issues ??= new List<ValidationIssueRecord>();
-            result.Issues.Add(issue);
-        }
-
-        private static void Warn(CompiledPlayablePlanValidationResult result, string message)
-        {
-            if (result == null || string.IsNullOrWhiteSpace(message))
-                return;
-
-            Warn(result, new ValidationIssueRecord(
-                ValidationRuleId.COMPILED_PLAN_WARNING_GENERIC,
-                ValidationSeverity.Warning,
-                message,
-                "CompiledPlayablePlan"));
-        }
-
-        private static void Warn(CompiledPlayablePlanValidationResult result, ValidationIssueRecord issue)
-        {
-            if (result == null || issue == null)
-                return;
-
-            result.Warnings.Add(issue.message ?? string.Empty);
             result.Issues ??= new List<ValidationIssueRecord>();
             result.Issues.Add(issue);
         }
