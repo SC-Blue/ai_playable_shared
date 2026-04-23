@@ -50,7 +50,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponent<PlayablePlacementFootprint>();
+            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
             if (footprint == null)
                 return false;
 
@@ -2177,7 +2177,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponent<PlayablePlacementFootprint>();
+            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
             if (footprint == null)
                 return false;
 

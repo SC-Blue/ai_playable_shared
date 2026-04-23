@@ -7,7 +7,7 @@ namespace Supercent.PlayableAI.AuthoringCore
 {
     public static class AuthoringCoreSharedContracts
     {
-        public const int CATALOG_EXPORT_SCHEMA_VERSION = 7;
+        public const int CATALOG_EXPORT_SCHEMA_VERSION = 8;
         public const int CATALOG_MANIFEST_SCHEMA_VERSION = 1;
         public const int CATALOG_INDEX_SCHEMA_VERSION = 1;
         public const int PLAYABLE_RECIPE_SCHEMA_VERSION = 5;
@@ -304,6 +304,24 @@ namespace Supercent.PlayableAI.AuthoringCore
     }
 
     [Serializable]
+    public sealed class CatalogContentSelectionDesignExportData
+    {
+        public string designId = string.Empty;
+        public string description = string.Empty;
+        public string prefabAssetPath = string.Empty;
+        public string prefabAssetGuid = string.Empty;
+        public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
+    }
+
+    [Serializable]
+    public sealed class CatalogContentSelectionEntryExportData
+    {
+        public string objectId = string.Empty;
+        public string category = string.Empty;
+        public CatalogContentSelectionDesignExportData[] designs = new CatalogContentSelectionDesignExportData[0];
+    }
+
+    [Serializable]
     public sealed class PlayableCatalogExportData
     {
         public int schemaVersion = AuthoringCoreSharedContracts.CATALOG_EXPORT_SCHEMA_VERSION;
@@ -314,6 +332,7 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string environmentFloorPrefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata environmentFloorPrefabMetadata = new CatalogPrefabMetadata();
         public CatalogEditorEntryExportData[] editorBasedEntries = new CatalogEditorEntryExportData[0];
+        public CatalogContentSelectionEntryExportData[] contentSelectionEntries = new CatalogContentSelectionEntryExportData[0];
         public CatalogSinglePrefabGameplaySectionExportData[] singlePrefabGameplaySections = new CatalogSinglePrefabGameplaySectionExportData[0];
         public CatalogAssembledPathGameplaySectionExportData[] assembledPathGameplaySections = new CatalogAssembledPathGameplaySectionExportData[0];
         public CatalogEnvironmentSectionExportData[] environmentSections = new CatalogEnvironmentSectionExportData[0];
