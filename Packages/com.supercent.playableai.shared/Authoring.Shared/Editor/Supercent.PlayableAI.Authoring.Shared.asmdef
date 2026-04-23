@@ -4,9 +4,7 @@
     "Supercent.PlayableAI.Contracts",
     "Supercent.PlayableAI.Authoring.PlatformBridge.Editor",
     "Supercent.PlayableAI.Runtime",
-    "Supercent.PlayableAI.FacilityFoundation",
     "Supercent.PlayableAI.MoneyFoundation",
-    "Supercent.PlayableAI.NpcFoundation",
     "PlayableModules.Facility"
   ],
   "includePlatforms": [

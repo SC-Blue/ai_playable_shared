@@ -1,7 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Supercent.PlayableAI.Common.Format;
-using Supercent.PlayableAI.Runtime.Gameplay;
 using UnityEngine;
 
 namespace Supercent.PlayableAI.Common.Contracts
@@ -15,6 +15,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     internal static class CatalogAssetReferenceUtility
     {
         private const BindingFlags PUBLIC_INSTANCE = BindingFlags.Instance | BindingFlags.Public;
+        private const string PLAYABLE_PLACEMENT_FOOTPRINT_TYPE_NAME = "PlayablePlacementFootprint";
 
         public static string ResolveTextureAssetPath(Texture2D texture)
         {
@@ -50,15 +51,80 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
+            Component footprint = FindPlacementFootprint(prefab);
             if (footprint == null)
                 return false;
 
-            widthCells = footprint.WidthCells;
-            depthCells = footprint.DepthCells;
-            centerOffsetX = footprint.LocalCenterOffset.x;
-            centerOffsetZ = footprint.LocalCenterOffset.z;
+            if (!TryReadIntProperty(footprint, "WidthCells", out widthCells) ||
+                !TryReadIntProperty(footprint, "DepthCells", out depthCells) ||
+                !TryReadVector3Property(footprint, "LocalCenterOffset", out Vector3 localCenterOffset))
+            {
+                widthCells = 0;
+                depthCells = 0;
+                centerOffsetX = 0f;
+                centerOffsetZ = 0f;
+                return false;
+            }
+
+            centerOffsetX = localCenterOffset.x;
+            centerOffsetZ = localCenterOffset.z;
             return widthCells > 0 && depthCells > 0;
+        }
+
+        internal static Component FindPlacementFootprint(GameObject prefab)
+        {
+            Component[] components = prefab.GetComponentsInChildren<Component>(true);
+            for (int i = 0; i < components.Length; i++)
+            {
+                Component component = components[i];
+                if (component == null)
+                    continue;
+
+                Type componentType = component.GetType();
+                if (componentType == null)
+                    continue;
+
+                if (string.Equals(componentType.Name, PLAYABLE_PLACEMENT_FOOTPRINT_TYPE_NAME, System.StringComparison.Ordinal))
+                    return component;
+            }
+
+            return null;
+        }
+
+        internal static bool TryReadIntProperty(object target, string propertyName, out int value)
+        {
+            value = 0;
+            if (target == null || string.IsNullOrWhiteSpace(propertyName))
+                return false;
+
+            PropertyInfo property = target.GetType().GetProperty(propertyName, PUBLIC_INSTANCE);
+            if (property == null || property.PropertyType != typeof(int))
+                return false;
+
+            object rawValue = property.GetValue(target);
+            if (rawValue is not int intValue)
+                return false;
+
+            value = intValue;
+            return true;
+        }
+
+        internal static bool TryReadVector3Property(object target, string propertyName, out Vector3 value)
+        {
+            value = Vector3.zero;
+            if (target == null || string.IsNullOrWhiteSpace(propertyName))
+                return false;
+
+            PropertyInfo property = target.GetType().GetProperty(propertyName, PUBLIC_INSTANCE);
+            if (property == null || property.PropertyType != typeof(Vector3))
+                return false;
+
+            object rawValue = property.GetValue(target);
+            if (rawValue is not Vector3 vectorValue)
+                return false;
+
+            value = vectorValue;
+            return true;
         }
 
         private static string ResolveStringField(object target, string fieldName)
@@ -2127,12 +2193,18 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            PlayablePlacementFootprint footprint = prefab.GetComponentInChildren<PlayablePlacementFootprint>(true);
+            Component footprint = CatalogAssetReferenceUtility.FindPlacementFootprint(prefab);
             if (footprint == null)
                 return false;
 
-            widthCells = footprint.WidthCells;
-            depthCells = footprint.DepthCells;
+            if (!CatalogAssetReferenceUtility.TryReadIntProperty(footprint, "WidthCells", out widthCells) ||
+                !CatalogAssetReferenceUtility.TryReadIntProperty(footprint, "DepthCells", out depthCells))
+            {
+                widthCells = 0;
+                depthCells = 0;
+                return false;
+            }
+
             return widthCells > 0 && depthCells > 0;
         }
 
