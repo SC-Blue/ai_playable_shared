@@ -570,7 +570,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string laneId = string.Empty;
         public bool hasLaneOrder;
         public int laneOrder;
-        public string sharedSlotId = string.Empty;
         public bool hasMinGapToNextCells;
         public float minGapToNextCells;
         public bool hasActualGapToNextCells;
@@ -677,7 +676,6 @@ namespace Supercent.PlayableAI.AuthoringCore
     {
         public LayoutSpecPlacementBoundsEntry realPhysicsZoneBounds = new LayoutSpecPlacementBoundsEntry();
         public LayoutSpecPlacementBoundsEntry fakeSpriteZoneBounds = new LayoutSpecPlacementBoundsEntry();
-        public PlacementOverlapAllowanceDefinition[] overlapAllowances = new PlacementOverlapAllowanceDefinition[0];
     }
 
     [Serializable]
@@ -695,7 +693,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string laneId = string.Empty;
         public bool hasLaneOrder;
         public int laneOrder;
-        public string sharedSlotId = string.Empty;
         public bool hasMinGapToNextCells;
         public float minGapToNextCells;
         // Rejected on parse if present in external JSON.
@@ -808,212 +805,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string objectId = string.Empty;
     }
 
-    public static class LayoutSpecOverlapIntentRules
-    {
-        private const float EPSILON = 0.0001f;
-
-        private sealed class PlacementImageBounds
-        {
-            public string ObjectId = string.Empty;
-            public string SourceImageId = string.Empty;
-            public string SharedSlotId = string.Empty;
-            public bool UsesDeclaredSpatialSemantics;
-            public float MinX;
-            public float MaxX;
-            public float MinY;
-            public float MaxY;
-        }
-
-        public static Dictionary<string, HashSet<string>> BuildImageInferredOverlapReferenceLookup(LayoutSpecDocument layoutSpec)
-        {
-            var lookup = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            LayoutSpecSourceImageEntry[] sourceImages = layoutSpec != null
-                ? layoutSpec.sourceImages ?? new LayoutSpecSourceImageEntry[0]
-                : new LayoutSpecSourceImageEntry[0];
-            if (sourceImages.Length < 2)
-                return lookup;
-
-            LayoutSpecPlacementEntry[] placements = layoutSpec != null
-                ? layoutSpec.placements ?? new LayoutSpecPlacementEntry[0]
-                : new LayoutSpecPlacementEntry[0];
-            var imageBoundsEntries = new List<PlacementImageBounds>(placements.Length);
-            for (int i = 0; i < placements.Length; i++)
-            {
-                LayoutSpecPlacementEntry entry = placements[i];
-                string objectId = Normalize(entry != null ? entry.objectId : string.Empty);
-                if (string.IsNullOrEmpty(objectId) ||
-                    entry == null ||
-                    !entry.hasImageBounds ||
-                    entry.bboxWidthPx <= EPSILON ||
-                    entry.bboxHeightPx <= EPSILON)
-                {
-                    continue;
-                }
-
-                float halfWidth = entry.bboxWidthPx * 0.5f;
-                float halfHeight = entry.bboxHeightPx * 0.5f;
-                imageBoundsEntries.Add(new PlacementImageBounds
-                {
-                    ObjectId = objectId,
-                    SourceImageId = Normalize(entry.sourceImageId),
-                    SharedSlotId = Normalize(entry.sharedSlotId),
-                    UsesDeclaredSpatialSemantics =
-                        !string.IsNullOrEmpty(Normalize(entry.laneId)) ||
-                        entry.hasLaneOrder ||
-                        !string.IsNullOrEmpty(Normalize(entry.sharedSlotId)) ||
-                        entry.hasMinGapToNextCells,
-                    MinX = entry.centerPxX - halfWidth,
-                    MaxX = entry.centerPxX + halfWidth,
-                    MinY = entry.centerPxY - halfHeight,
-                    MaxY = entry.centerPxY + halfHeight,
-                });
-            }
-
-            for (int i = 0; i < imageBoundsEntries.Count; i++)
-            {
-                PlacementImageBounds left = imageBoundsEntries[i];
-                for (int j = i + 1; j < imageBoundsEntries.Count; j++)
-                {
-                    PlacementImageBounds right = imageBoundsEntries[j];
-                    if (string.IsNullOrEmpty(left.SourceImageId) ||
-                        string.IsNullOrEmpty(right.SourceImageId) ||
-                        string.Equals(left.SourceImageId, right.SourceImageId, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    bool sharesDeclaredSharedSlot =
-                        !string.IsNullOrEmpty(left.SharedSlotId) &&
-                        string.Equals(left.SharedSlotId, right.SharedSlotId, StringComparison.Ordinal);
-                    if ((left.UsesDeclaredSpatialSemantics || right.UsesDeclaredSpatialSemantics) &&
-                        !sharesDeclaredSharedSlot)
-                    {
-                        continue;
-                    }
-
-                    if (!AreImageBoundsOverlapping(left, right))
-                        continue;
-
-                    AddLookupTarget(lookup, left.ObjectId, right.ObjectId);
-                    AddLookupTarget(lookup, right.ObjectId, left.ObjectId);
-                }
-            }
-
-            return lookup;
-        }
-
-        public static Dictionary<string, HashSet<string>> BuildDeclaredSharedSlotReferenceLookup(LayoutSpecDocument layoutSpec)
-        {
-            var lookup = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            LayoutSpecPlacementEntry[] placements = layoutSpec != null
-                ? layoutSpec.placements ?? new LayoutSpecPlacementEntry[0]
-                : new LayoutSpecPlacementEntry[0];
-            if (placements.Length == 0)
-                return lookup;
-
-            var objectIdsBySharedSlotId = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            for (int i = 0; i < placements.Length; i++)
-            {
-                LayoutSpecPlacementEntry entry = placements[i];
-                string objectId = Normalize(entry != null ? entry.objectId : string.Empty);
-                string sharedSlotId = Normalize(entry != null ? entry.sharedSlotId : string.Empty);
-                if (string.IsNullOrEmpty(objectId) || string.IsNullOrEmpty(sharedSlotId))
-                    continue;
-
-                if (!objectIdsBySharedSlotId.TryGetValue(sharedSlotId, out List<string> objectIds))
-                {
-                    objectIds = new List<string>();
-                    objectIdsBySharedSlotId.Add(sharedSlotId, objectIds);
-                }
-
-                if (!objectIds.Contains(objectId))
-                    objectIds.Add(objectId);
-            }
-
-            foreach (KeyValuePair<string, List<string>> pair in objectIdsBySharedSlotId)
-            {
-                List<string> objectIds = pair.Value;
-                for (int i = 0; i < objectIds.Count; i++)
-                {
-                    string sourceObjectId = objectIds[i];
-                    for (int j = 0; j < objectIds.Count; j++)
-                    {
-                        if (i == j)
-                            continue;
-
-                        AddLookupTarget(lookup, sourceObjectId, objectIds[j]);
-                    }
-                }
-            }
-
-            return lookup;
-        }
-
-        public static Dictionary<string, HashSet<string>> BuildIntendedOverlapReferenceLookup(LayoutSpecDocument layoutSpec)
-        {
-            Dictionary<string, HashSet<string>> lookup = BuildImageInferredOverlapReferenceLookup(layoutSpec);
-            MergeLookup(lookup, BuildDeclaredSharedSlotReferenceLookup(layoutSpec));
-            return lookup;
-        }
-
-        private static bool AreImageBoundsOverlapping(PlacementImageBounds left, PlacementImageBounds right)
-        {
-            if (left == null || right == null)
-                return false;
-
-            return
-                left.MinX < right.MaxX - EPSILON &&
-                left.MaxX > right.MinX + EPSILON &&
-                left.MinY < right.MaxY - EPSILON &&
-                left.MaxY > right.MinY + EPSILON;
-        }
-
-        private static void AddLookupTarget(
-            Dictionary<string, HashSet<string>> lookup,
-            string sourceObjectId,
-            string targetObjectId)
-        {
-            string normalizedSourceObjectId = Normalize(sourceObjectId);
-            string normalizedTargetObjectId = Normalize(targetObjectId);
-            if (string.IsNullOrEmpty(normalizedSourceObjectId) ||
-                string.IsNullOrEmpty(normalizedTargetObjectId) ||
-                string.Equals(normalizedSourceObjectId, normalizedTargetObjectId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (!lookup.TryGetValue(normalizedSourceObjectId, out HashSet<string> targets))
-            {
-                targets = new HashSet<string>(StringComparer.Ordinal);
-                lookup.Add(normalizedSourceObjectId, targets);
-            }
-
-            targets.Add(normalizedTargetObjectId);
-        }
-
-        private static void MergeLookup(
-            Dictionary<string, HashSet<string>> destination,
-            Dictionary<string, HashSet<string>> source)
-        {
-            if (destination == null || source == null || source.Count == 0)
-                return;
-
-            foreach (KeyValuePair<string, HashSet<string>> pair in source)
-            {
-                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null)
-                    continue;
-
-                foreach (string targetObjectId in pair.Value)
-                    AddLookupTarget(destination, pair.Key, targetObjectId);
-            }
-        }
-
-        private static string Normalize(string value)
-        {
-            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
-        }
-    }
-
     public static class LayoutSpecGeometryUtility
     {
         public static Dictionary<string, SerializableVector3> BuildPositionLookup(
@@ -1112,7 +903,6 @@ namespace Supercent.PlayableAI.AuthoringCore
             {
                 realPhysicsZoneBounds = ToWorldBounds(layout != null ? layout.realPhysicsZoneBounds : null),
                 fakeSpriteZoneBounds = ToWorldBounds(layout != null ? layout.fakeSpriteZoneBounds : null),
-                overlapAllowances = CopyOverlapAllowances(layout != null ? layout.overlapAllowances : null),
             };
         }
 
@@ -1149,28 +939,6 @@ namespace Supercent.PlayableAI.AuthoringCore
                 worldWidth = bounds != null ? bounds.worldWidth : 0f,
                 worldDepth = bounds != null ? bounds.worldDepth : 0f,
             };
-        }
-
-        private static PlacementOverlapAllowanceDefinition[] CopyOverlapAllowances(PlacementOverlapAllowanceDefinition[] values)
-        {
-            PlacementOverlapAllowanceDefinition[] safeValues = values ?? Array.Empty<PlacementOverlapAllowanceDefinition>();
-            var copies = new PlacementOverlapAllowanceDefinition[safeValues.Length];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                PlacementOverlapAllowanceDefinition value = safeValues[i];
-                copies[i] = value == null
-                    ? new PlacementOverlapAllowanceDefinition()
-                    : new PlacementOverlapAllowanceDefinition
-                    {
-                        counterpartRole = value.counterpartRole ?? string.Empty,
-                        widthCells = value.widthCells,
-                        depthCells = value.depthCells,
-                        centerOffsetX = value.centerOffsetX,
-                        centerOffsetZ = value.centerOffsetZ,
-                    };
-            }
-
-            return copies;
         }
 
         private static string Normalize(string value)

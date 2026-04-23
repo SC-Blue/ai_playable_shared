@@ -29,7 +29,6 @@ namespace PlayableAI.AuthoringCore
                     laneId = Normalize(entry.laneId),
                     hasLaneOrder = entry.laneOrder.HasValue,
                     laneOrder = entry.laneOrder ?? 0,
-                    sharedSlotId = Normalize(entry.sharedSlotId),
                     hasMinGapToNextCells = entry.minGapToNextCells.HasValue,
                     minGapToNextCells = entry.minGapToNextCells ?? 0f,
                     hasWorldPosition = true,
@@ -245,7 +244,6 @@ namespace PlayableAI.AuthoringCore
             {
                 realPhysicsZoneBounds = TranslatePlacementBounds(source.realPhysicsZoneBounds),
                 fakeSpriteZoneBounds = TranslatePlacementBounds(source.fakeSpriteZoneBounds),
-                overlapAllowances = Array.Empty<PlacementOverlapAllowanceDefinition>(),
             };
         }
 

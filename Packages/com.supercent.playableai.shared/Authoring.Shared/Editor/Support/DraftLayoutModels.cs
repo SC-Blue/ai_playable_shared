@@ -40,7 +40,6 @@ namespace PlayableAI.AuthoringCore
     {
         public DraftLayoutPlacementBoundsEntry realPhysicsZoneBounds = new DraftLayoutPlacementBoundsEntry();
         public DraftLayoutPlacementBoundsEntry fakeSpriteZoneBounds = new DraftLayoutPlacementBoundsEntry();
-        public PlacementOverlapAllowanceDefinition[] overlapAllowances = Array.Empty<PlacementOverlapAllowanceDefinition>();
     }
 
     public sealed class DraftLayoutRailLayoutEntry
@@ -53,7 +52,6 @@ namespace PlayableAI.AuthoringCore
         public string objectId = string.Empty;
         public string laneId = string.Empty;
         public int? laneOrder;
-        public string sharedSlotId = string.Empty;
         public float? minGapToNextCells;
         public float worldX;
         public float worldZ;

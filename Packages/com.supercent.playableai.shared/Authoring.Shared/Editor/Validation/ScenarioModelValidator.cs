@@ -385,38 +385,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 Fail(result, label + ".worldDepth는 0보다 커야 합니다.");
         }
 
-        private static void ValidateOverlapAllowances(
-            PlacementOverlapAllowanceDefinition[] values,
-            string label,
-            ScenarioModelValidationResult result)
-        {
-            PlacementOverlapAllowanceDefinition[] safeValues = values ?? new PlacementOverlapAllowanceDefinition[0];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                PlacementOverlapAllowanceDefinition value = safeValues[i];
-                if (value == null)
-                {
-                    Fail(result, label + "[" + i + "]가 null입니다.");
-                    continue;
-                }
-
-                string counterpartRole = value.counterpartRole != null ? value.counterpartRole.Trim() : string.Empty;
-                if (string.IsNullOrEmpty(counterpartRole))
-                    Fail(result, label + "[" + i + "].counterpartRole이 필요합니다.");
-                else if (!PromptIntentObjectRoles.IsSupported(counterpartRole))
-                    Fail(result, label + "[" + i + "].counterpartRole '" + counterpartRole + "'은(는) 지원되지 않습니다.");
-
-                if (value.widthCells <= 0)
-                    Fail(result, label + "[" + i + "].widthCells는 1 이상이어야 합니다.");
-                if (value.depthCells <= 0)
-                    Fail(result, label + "[" + i + "].depthCells는 1 이상이어야 합니다.");
-                if (float.IsNaN(value.centerOffsetX) || float.IsInfinity(value.centerOffsetX))
-                    Fail(result, label + "[" + i + "].centerOffsetX는 유한한 숫자여야 합니다.");
-                if (float.IsNaN(value.centerOffsetZ) || float.IsInfinity(value.centerOffsetZ))
-                    Fail(result, label + "[" + i + "].centerOffsetZ는 유한한 숫자여야 합니다.");
-            }
-        }
-
         private static void ValidateStages(PlayableScenarioModel model, ScenarioModelValidationResult result)
         {
             ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];

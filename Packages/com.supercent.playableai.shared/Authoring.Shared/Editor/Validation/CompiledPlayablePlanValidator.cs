@@ -32,7 +32,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             public string LaneId = string.Empty;
             public bool HasLaneOrder;
             public int LaneOrder;
-            public string SharedSlotId = string.Empty;
             public bool HasMinGapToNextCells;
             public float MinGapToNextCells;
             public float CenterX;
@@ -43,13 +42,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             public float MaxX;
             public float MinZ;
             public float MaxZ;
-        }
-
-        private sealed class EnvironmentOccupiedCellSet
-        {
-            public int EntryIndex;
-            public float TileStep;
-            public HashSet<EnvironmentCellCoordinate> OccupiedCells = new HashSet<EnvironmentCellCoordinate>();
         }
 
         private struct EnvironmentCellCoordinate
@@ -111,10 +103,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateRuntimeOwnedDesignSources(plan.spawns, plan.facilityAcceptedItems, plan.facilityOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
             ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
             ValidateImageLayoutPadding(plan.spawns, plan.physicsAreas, plan.rails, catalog, layoutSpec, result);
-            ValidateGameplaySpawnFootprintOverlaps(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
             ValidateDeclaredLaneRelationships(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
-            ValidateGameplaySpawnLayoutContainment(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
-            ValidateEnvironmentOccupiedCellConflicts(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
 
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
@@ -1187,8 +1176,6 @@ private static void ValidatePlacementSpatialSemantics(
             continue;
 
         string laneId = entry.laneId != null ? entry.laneId.Trim() : string.Empty;
-        string sharedSlotId = entry.sharedSlotId != null ? entry.sharedSlotId.Trim() : string.Empty;
-
         if (entry.hasImageBounds)
             bboxPlacementCount++;
 
@@ -1632,54 +1619,6 @@ private static void ValidateRails(
     }
 }
 
-private static void ValidateGameplaySpawnFootprintOverlaps(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    CompiledPlayablePlanValidationResult result)
-{
-    if (!TryCollectGameplayFootprintBounds(spawns, physicsAreas, rails, unlocks, catalog, layoutSpec, out List<GameplaySpawnFootprintBounds> boundsList, out string error))
-    {
-        if (!string.IsNullOrEmpty(error))
-            Fail(result, error);
-        return;
-    }
-
-    if (boundsList.Count <= 1)
-        return;
-
-            for (int i = 0; i < boundsList.Count; i++)
-            {
-                GameplaySpawnFootprintBounds left = boundsList[i];
-                for (int j = i + 1; j < boundsList.Count; j++)
-                {
-                    GameplaySpawnFootprintBounds right = boundsList[j];
-                    if (IsDeclaredSharedSlotPair(left, right))
-                    {
-                        continue;
-                    }
-
-                    if (!AreWorldBoundsOverlapping(
-                            left.MinX,
-                            left.MaxX,
-                            left.MinZ,
-                            left.MaxZ,
-                            right.MinX,
-                            right.MaxX,
-                            right.MinZ,
-                            right.MaxZ))
-                    {
-                        continue;
-                    }
-
-                    return;
-                }
-            }
-        }
-
 private static void ValidateDeclaredLaneRelationships(
     CompiledSpawnData[] spawns,
     CompiledPhysicsAreaDefinition[] physicsAreas,
@@ -1761,84 +1700,6 @@ private static void ValidateDeclaredLaneRelationships(
         }
     }
 }
-
-private static void ValidateGameplaySpawnLayoutContainment(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    CompiledPlayablePlanValidationResult result)
-{
-    if (!TryResolveExplicitLayoutWorldBounds(layoutSpec, catalog, out float minWorldX, out float maxWorldX, out float minWorldZ, out float maxWorldZ))
-        return;
-
-    if (!TryCollectGameplayFootprintBounds(spawns, physicsAreas, rails, unlocks, catalog, layoutSpec, out List<GameplaySpawnFootprintBounds> boundsList, out string error))
-    {
-        if (!string.IsNullOrEmpty(error))
-            Fail(result, error);
-        return;
-    }
-
-    const float EPSILON = 0.0001f;
-    for (int i = 0; i < boundsList.Count; i++)
-    {
-        GameplaySpawnFootprintBounds bounds = boundsList[i];
-
-        if (bounds.MinX < minWorldX - EPSILON ||
-            bounds.MaxX > maxWorldX + EPSILON ||
-                    bounds.MinZ < minWorldZ - EPSILON ||
-                    bounds.MaxZ > maxWorldZ + EPSILON)
-                {
-                    continue;
-                }
-            }
-        }
-
-private static void ValidateEnvironmentOccupiedCellConflicts(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    CompiledPlayablePlanValidationResult result)
-{
-    LayoutSpecEnvironmentEntry[] entries = layoutSpec != null ? layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0] : new LayoutSpecEnvironmentEntry[0];
-    if (catalog == null || entries.Length == 0)
-        return;
-
-    if (!TryCollectGameplayFootprintBounds(spawns, physicsAreas, rails, unlocks, catalog, layoutSpec, out List<GameplaySpawnFootprintBounds> gameplayBounds, out _))
-        return;
-
-            for (int i = 0; i < entries.Length; i++)
-            {
-                LayoutSpecEnvironmentEntry entry = entries[i];
-                if (entry == null)
-                    continue;
-
-                if (!TryResolveEnvironmentOccupiedCellSet(catalog, entry, i, out EnvironmentOccupiedCellSet occupiedCellSet, out string error))
-                {
-                    if (!string.IsNullOrWhiteSpace(error))
-                    {
-                        Fail(result, error);
-                        return;
-                    }
-
-                    continue;
-                }
-
-                if (occupiedCellSet == null || occupiedCellSet.OccupiedCells == null || occupiedCellSet.OccupiedCells.Count == 0)
-                    continue;
-
-                if (IsPerimeterEnvironmentPlacement(catalog, entry))
-                    TrimEnvironmentOccupiedCellsAgainstGameplayBounds(occupiedCellSet.OccupiedCells, occupiedCellSet.TileStep, gameplayBounds);
-
-                if (!TryValidateGameplaySpawnsAgainstEnvironmentOccupiedCells(gameplayBounds, occupiedCellSet, out error))
-                    continue;
-            }
-        }
 
         private static bool TryResolveExplicitLayoutWorldBounds(
             LayoutSpecDocument layoutSpec,
@@ -1973,57 +1834,6 @@ private static void ValidateEnvironmentOccupiedCellConflicts(
                 return string.Empty;
 
             return entry.category != null ? entry.category.Trim() : string.Empty;
-        }
-
-        private static bool TryResolveEnvironmentOccupiedCellSet(
-            PlayableObjectCatalog catalog,
-            LayoutSpecEnvironmentEntry entry,
-            int entryIndex,
-            out EnvironmentOccupiedCellSet occupiedCellSet,
-            out string error)
-        {
-            occupiedCellSet = null;
-            error = string.Empty;
-            if (catalog == null || entry == null || string.IsNullOrWhiteSpace(entry.objectId))
-                return false;
-
-            // Floor is the walkable base and should not reserve occupancy against gameplay spawns.
-            if (IsFloorEnvironmentEntry(entry, catalog))
-                return false;
-
-            string designId = !string.IsNullOrWhiteSpace(entry.designId) ? entry.designId.Trim() : string.Empty;
-            if (!catalog.TryGetEnvironmentDesign(entry.objectId.Trim(), designId, out EnvironmentDesignVariantEntry design, out string placementMode, out string variationMode, out _))
-            {
-                error = BuildEnvironmentDesignResolutionError(
-                    catalog,
-                    entry.objectId.Trim(),
-                    designId,
-                    "layout_spec.environment[" + entryIndex + "]");
-                return false;
-            }
-
-            if (!TryValidateEnvironmentDesignFootprintRules(design, variationMode, out float tileStep, out error))
-            {
-                error = "layout_spec.environment[" + entryIndex + "] footprint 검증 실패: " + error;
-                return false;
-            }
-
-            if (!TryValidatePerimeterThicknessRule(placementMode, entry, tileStep, entryIndex, out error))
-                return false;
-
-            if (!TryResolveEnvironmentOccupiedCells(placementMode, entry, tileStep, out HashSet<EnvironmentCellCoordinate> occupiedCells))
-            {
-                error = "layout_spec.environment[" + entryIndex + "] 점유 셀을 계산하지 못했습니다.";
-                return false;
-            }
-
-            occupiedCellSet = new EnvironmentOccupiedCellSet
-            {
-                EntryIndex = entryIndex,
-                TileStep = tileStep,
-                OccupiedCells = occupiedCells,
-            };
-            return true;
         }
 
         private static string BuildEnvironmentDesignResolutionError(
@@ -2210,175 +2020,6 @@ private static void ValidateEnvironmentOccupiedCellConflicts(
 
             return catalog.TryResolveEnvironmentPlacementMode(entry.objectId.Trim(), out string placementMode) &&
                    string.Equals(placementMode, EnvironmentCatalog.PLACEMENT_MODE_PERIMETER, StringComparison.Ordinal);
-        }
-
-        private static void TrimEnvironmentOccupiedCellsAgainstGameplayBounds(
-            HashSet<EnvironmentCellCoordinate> occupiedCells,
-            float tileStep,
-            List<GameplaySpawnFootprintBounds> gameplayBounds)
-        {
-            if (occupiedCells == null || occupiedCells.Count == 0 || gameplayBounds == null || gameplayBounds.Count == 0)
-                return;
-
-            float safeTileStep = NormalizeEnvironmentTileStep(tileStep);
-            float halfTile = safeTileStep * 0.5f;
-            const float EPSILON = 0.0001f;
-            var overlappingCells = new List<EnvironmentCellCoordinate>();
-            foreach (EnvironmentCellCoordinate cell in occupiedCells)
-            {
-                Vector3 cellCenter = ResolveEnvironmentCellWorldPosition(cell);
-                float envMinX = cellCenter.x - halfTile;
-                float envMaxX = cellCenter.x + halfTile;
-                float envMinZ = cellCenter.z - halfTile;
-                float envMaxZ = cellCenter.z + halfTile;
-
-                for (int i = 0; i < gameplayBounds.Count; i++)
-                {
-                    GameplaySpawnFootprintBounds spawnBounds = gameplayBounds[i];
-                    bool overlaps =
-                        spawnBounds.MinX < envMaxX - EPSILON &&
-                        spawnBounds.MaxX > envMinX + EPSILON &&
-                        spawnBounds.MinZ < envMaxZ - EPSILON &&
-                        spawnBounds.MaxZ > envMinZ + EPSILON;
-                    if (!overlaps)
-                        continue;
-
-                    overlappingCells.Add(cell);
-                    break;
-                }
-            }
-
-            for (int i = 0; i < overlappingCells.Count; i++)
-                occupiedCells.Remove(overlappingCells[i]);
-        }
-
-        private static bool TryValidateGameplaySpawnsAgainstEnvironmentOccupiedCells(
-            List<GameplaySpawnFootprintBounds> gameplayBounds,
-            EnvironmentOccupiedCellSet occupiedCellSet,
-            out string error)
-        {
-            error = string.Empty;
-            if (gameplayBounds == null || occupiedCellSet == null || occupiedCellSet.OccupiedCells == null)
-                return true;
-
-            float tileStep = NormalizeEnvironmentTileStep(occupiedCellSet.TileStep);
-            float halfTile = tileStep * 0.5f;
-            const float EPSILON = 0.0001f;
-            foreach (GameplaySpawnFootprintBounds spawnBounds in gameplayBounds)
-            {
-                if (spawnBounds == null)
-                    continue;
-
-                foreach (EnvironmentCellCoordinate cell in occupiedCellSet.OccupiedCells)
-                {
-                    Vector3 cellCenter = ResolveEnvironmentCellWorldPosition(cell);
-                    float envMinX = cellCenter.x - halfTile;
-                    float envMaxX = cellCenter.x + halfTile;
-                    float envMinZ = cellCenter.z - halfTile;
-                    float envMaxZ = cellCenter.z + halfTile;
-                    bool overlaps =
-                        spawnBounds.MinX < envMaxX - EPSILON &&
-                        spawnBounds.MaxX > envMinX + EPSILON &&
-                        spawnBounds.MinZ < envMaxZ - EPSILON &&
-                        spawnBounds.MaxZ > envMinZ + EPSILON;
-                    if (!overlaps)
-                        continue;
-
-                    error =
-                        "gameplay spawn footprint가 environment 점유 셀과 충돌합니다: '" + spawnBounds.SpawnKey +
-                        "'(objectId='" + spawnBounds.ObjectId + "', environmentEntryIndex=" + occupiedCellSet.EntryIndex + ").";
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool TryResolveEnvironmentOccupiedCells(
-            string placementMode,
-            LayoutSpecEnvironmentEntry entry,
-            float tileStep,
-            out HashSet<EnvironmentCellCoordinate> occupiedCells)
-        {
-            occupiedCells = new HashSet<EnvironmentCellCoordinate>();
-            if (entry == null)
-                return false;
-
-            float safeTileStep = NormalizeEnvironmentTileStep(tileStep);
-            int coordinateStride = ResolveEnvironmentCoordinateStride(safeTileStep);
-            bool useFill = string.Equals(placementMode, EnvironmentCatalog.PLACEMENT_MODE_FILL, StringComparison.Ordinal);
-            bool enforceSingleLayer = entry.singleLayer;
-
-            if (entry.hasWorldBounds)
-            {
-                float worldWidth = entry.worldWidth > 0f ? entry.worldWidth : safeTileStep;
-                float worldDepth = entry.worldDepth > 0f ? entry.worldDepth : safeTileStep;
-                int widthTileCount = ResolveEnvironmentTileCount(worldWidth, safeTileStep);
-                int depthTileCount = ResolveEnvironmentTileCount(worldDepth, safeTileStep);
-                int footprintCells = System.Math.Max(1, (int)System.MathF.Round(safeTileStep / IntentAuthoringUtility.LAYOUT_SPACING));
-                int firstCoordinateX = ResolveEnvironmentFirstCoordinate(entry.worldX, worldWidth, widthTileCount, safeTileStep, coordinateStride, footprintCells);
-                int firstCoordinateZ = ResolveEnvironmentFirstCoordinate(entry.worldZ, worldDepth, depthTileCount, safeTileStep, coordinateStride, footprintCells);
-
-                if (useFill)
-                {
-                    if (enforceSingleLayer && widthTileCount > 1 && depthTileCount > 1)
-                    {
-                        if (widthTileCount >= depthTileCount)
-                        {
-                            int laneCoordinateZ = firstCoordinateZ + ((depthTileCount - 1) / 2) * coordinateStride;
-                            for (int x = 0; x < widthTileCount; x++)
-                                occupiedCells.Add(new EnvironmentCellCoordinate(firstCoordinateX + x * coordinateStride, laneCoordinateZ));
-                        }
-                        else
-                        {
-                            int laneCoordinateX = firstCoordinateX + ((widthTileCount - 1) / 2) * coordinateStride;
-                            for (int z = 0; z < depthTileCount; z++)
-                                occupiedCells.Add(new EnvironmentCellCoordinate(laneCoordinateX, firstCoordinateZ + z * coordinateStride));
-                        }
-
-                        return true;
-                    }
-
-                    for (int x = 0; x < widthTileCount; x++)
-                    {
-                        for (int z = 0; z < depthTileCount; z++)
-                            occupiedCells.Add(new EnvironmentCellCoordinate(firstCoordinateX + x * coordinateStride, firstCoordinateZ + z * coordinateStride));
-                    }
-
-                    return true;
-                }
-
-                int lastCoordinateX = firstCoordinateX + (widthTileCount - 1) * coordinateStride;
-                int lastCoordinateZ = firstCoordinateZ + (depthTileCount - 1) * coordinateStride;
-                if (widthTileCount == 1 || depthTileCount == 1)
-                {
-                    for (int x = 0; x < widthTileCount; x++)
-                    {
-                        for (int z = 0; z < depthTileCount; z++)
-                            occupiedCells.Add(new EnvironmentCellCoordinate(firstCoordinateX + x * coordinateStride, firstCoordinateZ + z * coordinateStride));
-                    }
-
-                    return true;
-                }
-
-                for (int x = 0; x < widthTileCount; x++)
-                {
-                    int coordinateX = firstCoordinateX + x * coordinateStride;
-                    occupiedCells.Add(new EnvironmentCellCoordinate(coordinateX, firstCoordinateZ));
-                    occupiedCells.Add(new EnvironmentCellCoordinate(coordinateX, lastCoordinateZ));
-                }
-
-                for (int z = 0; z < depthTileCount; z++)
-                {
-                    int coordinateZ = firstCoordinateZ + z * coordinateStride;
-                    occupiedCells.Add(new EnvironmentCellCoordinate(firstCoordinateX, coordinateZ));
-                    occupiedCells.Add(new EnvironmentCellCoordinate(lastCoordinateX, coordinateZ));
-                }
-
-                return true;
-            }
-
-            return false;
         }
 
         private static bool TryValidatePerimeterThicknessRule(
@@ -3041,7 +2682,6 @@ private static void ApplyPlacementSemantics(
     bounds.LaneId = placementEntry.laneId != null ? placementEntry.laneId.Trim() : string.Empty;
     bounds.HasLaneOrder = placementEntry.hasLaneOrder;
     bounds.LaneOrder = placementEntry.laneOrder;
-    bounds.SharedSlotId = placementEntry.sharedSlotId != null ? placementEntry.sharedSlotId.Trim() : string.Empty;
     bounds.HasMinGapToNextCells = placementEntry.hasMinGapToNextCells;
     bounds.MinGapToNextCells = placementEntry.minGapToNextCells;
 }
@@ -3052,33 +2692,6 @@ private static string ResolveSceneObjectIdFromSpawnKey(CompiledSpawnData spawn)
     if (spawnKey.StartsWith("spawn_", StringComparison.Ordinal))
         return spawnKey.Substring("spawn_".Length);
     return string.Empty;
-}
-
-private static bool TryResolveSharedSlotGroupId(
-    List<GameplaySpawnFootprintBounds> boundsGroup,
-    out string sharedSlotId)
-{
-    sharedSlotId = string.Empty;
-    List<GameplaySpawnFootprintBounds> safeBoundsGroup = boundsGroup ?? new List<GameplaySpawnFootprintBounds>();
-    for (int i = 0; i < safeBoundsGroup.Count; i++)
-    {
-        string candidate = safeBoundsGroup[i] != null && safeBoundsGroup[i].SharedSlotId != null
-            ? safeBoundsGroup[i].SharedSlotId.Trim()
-            : string.Empty;
-        if (string.IsNullOrEmpty(candidate))
-            return false;
-
-        if (string.IsNullOrEmpty(sharedSlotId))
-        {
-            sharedSlotId = candidate;
-            continue;
-        }
-
-        if (!string.Equals(sharedSlotId, candidate, StringComparison.Ordinal))
-            return false;
-    }
-
-    return !string.IsNullOrEmpty(sharedSlotId);
 }
 
 private static float ComputeAverageWorldZ(List<GameplaySpawnFootprintBounds> boundsGroup)
@@ -3172,26 +2785,12 @@ private static float ResolveRequiredLaneGapBetween(
     if (!left.HasLaneOrder || !right.HasLaneOrder || left.LaneOrder == right.LaneOrder)
         return 0f;
 
-    if (IsDeclaredSharedSlotPair(left, right))
-        return 0f;
-
     float requiredGap = 0f;
     if (left.LaneOrder < right.LaneOrder && left.HasMinGapToNextCells)
         requiredGap = Math.Max(requiredGap, left.MinGapToNextCells);
     if (right.LaneOrder < left.LaneOrder && right.HasMinGapToNextCells)
         requiredGap = Math.Max(requiredGap, right.MinGapToNextCells);
     return requiredGap;
-}
-
-private static bool IsDeclaredSharedSlotPair(
-    GameplaySpawnFootprintBounds left,
-    GameplaySpawnFootprintBounds right)
-{
-    string leftSharedSlotId = left != null && left.SharedSlotId != null ? left.SharedSlotId.Trim() : string.Empty;
-    string rightSharedSlotId = right != null && right.SharedSlotId != null ? right.SharedSlotId.Trim() : string.Empty;
-    return
-        !string.IsNullOrEmpty(leftSharedSlotId) &&
-        string.Equals(leftSharedSlotId, rightSharedSlotId, StringComparison.Ordinal);
 }
 
 private static string ResolveRepresentativePlacementId(List<GameplaySpawnFootprintBounds> boundsGroup)

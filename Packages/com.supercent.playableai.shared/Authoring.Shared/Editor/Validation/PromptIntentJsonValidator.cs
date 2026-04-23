@@ -780,7 +780,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             RailLayout,
             RailPathAnchor,
             WorldBounds,
-            OverlapAllowance,
             Stage,
             Condition,
             Objective,
@@ -805,7 +804,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             RailLayoutObject,
             RailPathAnchorArray,
             WorldBoundsObject,
-            OverlapAllowanceArray,
             StageArray,
             ConditionObject,
             ObjectiveArray,
@@ -1012,10 +1010,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     case JsonValueContract.WorldBoundsObject:
                         if (Peek() == '{')
                             return ValidateObject(JsonObjectSchema.WorldBounds, label);
-                        return SkipValue();
-                    case JsonValueContract.OverlapAllowanceArray:
-                        if (Peek() == '[')
-                            return ValidateArray(JsonObjectSchema.OverlapAllowance, label);
                         return SkipValue();
                     case JsonValueContract.StageArray:
                         if (Peek() == '[')
@@ -1332,9 +1326,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                             case "fakeSpriteZoneBounds":
                                 contract = JsonValueContract.WorldBoundsObject;
                                 return true;
-                            case "overlapAllowances":
-                                contract = JsonValueContract.OverlapAllowanceArray;
-                                return true;
                             default:
                                 return false;
                         }
@@ -1353,12 +1344,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                                key == "worldZ" ||
                                key == "worldWidth" ||
                                key == "worldDepth";
-                    case JsonObjectSchema.OverlapAllowance:
-                        return key == "counterpartRole" ||
-                               key == "widthCells" ||
-                               key == "depthCells" ||
-                               key == "centerOffsetX" ||
-                               key == "centerOffsetZ";
                     case JsonObjectSchema.Stage:
                         switch (key)
                         {

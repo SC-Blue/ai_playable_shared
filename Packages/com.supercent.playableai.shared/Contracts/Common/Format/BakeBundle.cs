@@ -82,7 +82,6 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public PortableDraftLayoutPlacementBoundsEntry realPhysicsZoneBounds = new PortableDraftLayoutPlacementBoundsEntry();
         public PortableDraftLayoutPlacementBoundsEntry fakeSpriteZoneBounds = new PortableDraftLayoutPlacementBoundsEntry();
-        public PlacementOverlapAllowanceDefinition[] overlapAllowances = Array.Empty<PlacementOverlapAllowanceDefinition>();
     }
 
     [Serializable]
@@ -97,7 +96,6 @@ namespace Supercent.PlayableAI.Common.Format
         public string objectId = string.Empty;
         public string laneId = string.Empty;
         public int? laneOrder;
-        public string sharedSlotId = string.Empty;
         public float? minGapToNextCells;
         public float worldX;
         public float worldZ;
@@ -220,7 +218,6 @@ namespace Supercent.PlayableAI.Common.Format
         public PortableLayoutSpecPlacementBoundsEntry realPhysicsZoneBounds = new PortableLayoutSpecPlacementBoundsEntry();
         public PortableLayoutSpecPlacementBoundsEntry fakeSpriteZoneBounds = new PortableLayoutSpecPlacementBoundsEntry();
         public int itemsPerBlock = 1;
-        public PlacementOverlapAllowanceDefinition[] overlapAllowances = Array.Empty<PlacementOverlapAllowanceDefinition>();
     }
 
     [Serializable]
@@ -238,7 +235,6 @@ namespace Supercent.PlayableAI.Common.Format
         public string laneId = string.Empty;
         public bool hasLaneOrder;
         public int laneOrder;
-        public string sharedSlotId = string.Empty;
         public bool hasMinGapToNextCells;
         public float minGapToNextCells;
         public int gridX;

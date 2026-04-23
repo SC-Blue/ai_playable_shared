@@ -26,8 +26,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             public string SinkEndpointTargetObjectId = string.Empty;
             public string SinkEndpointSide = string.Empty;
             public HashSet<string> UnlockTargetReferenceIds = new HashSet<string>(System.StringComparer.Ordinal);
-            public HashSet<string> SharedSlotReferenceIds = new HashSet<string>(System.StringComparer.Ordinal);
-            public GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] OverlapAllowanceDescriptors = new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
             public bool HasWorldPosition;
             public float WorldX;
             public float WorldZ;
@@ -52,8 +50,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             public string SinkEndpointTargetObjectId = string.Empty;
             public string SinkEndpointSide = string.Empty;
             public HashSet<string> UnlockTargetReferenceIds = new HashSet<string>(System.StringComparer.Ordinal);
-            public HashSet<string> SharedSlotReferenceIds = new HashSet<string>(System.StringComparer.Ordinal);
-            public GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] OverlapAllowanceDescriptors = new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
             public float CenterX;
             public float CenterZ;
             public bool HasResolvedYaw;
@@ -241,7 +237,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableObjectCatalog catalog,
             List<string> errors)
         {
-            return BuildDeterministicPositions(objects, null, catalog, errors, null);
+            return BuildDeterministicPositions(objects, null, catalog, errors);
         }
 
         private static string BuildGameplayDesignResolutionGuidance(
@@ -434,20 +430,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableObjectCatalog catalog,
             List<string> errors)
         {
-            return BuildDeterministicPositions(objects, stages, catalog, errors, null);
-        }
-
-        public static Dictionary<string, SerializableVector3> BuildDeterministicPositions(
-            ScenarioModelObjectDefinition[] objects,
-            ScenarioModelStageDefinition[] stages,
-            PlayableObjectCatalog catalog,
-            List<string> errors,
-            Dictionary<string, HashSet<string>> sharedSlotLookup)
-        {
             var positions = new Dictionary<string, SerializableVector3>(System.StringComparer.Ordinal);
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
             Dictionary<string, HashSet<string>> unlockTargetLookup = GameplayOverlapAllowanceRules.BuildUnlockTargetReferenceLookup(stages);
-            List<PackedPlacementEntry> packedPlacements = BuildPackedPlacements(safeObjects, unlockTargetLookup, sharedSlotLookup, catalog, errors);
+            List<PackedPlacementEntry> packedPlacements = BuildPackedPlacements(safeObjects, unlockTargetLookup, catalog, errors);
             HashSet<string> occupiedCells = BuildOccupiedCellSet(packedPlacements, errors);
 
             for (int i = 0; i < packedPlacements.Count; i++)
@@ -637,13 +623,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static List<PackedPlacementEntry> BuildPackedPlacements(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, HashSet<string>> unlockTargetLookup,
-            Dictionary<string, HashSet<string>> sharedSlotLookup,
             PlayableObjectCatalog catalog,
             List<string> errors)
         {
             _ = objects;
             _ = unlockTargetLookup;
-            _ = sharedSlotLookup;
             _ = catalog;
             _ = errors;
             return new List<PackedPlacementEntry>();
@@ -714,8 +698,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                                     continue;
                                 }
 
-                                if (IsPackedPlacementOverlapAllowed(existingOwner, entry, out string overlapError))
-                                    continue;
                             }
 
                             existingOwners.Add(entry);
@@ -980,21 +962,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableObjectCatalog catalog,
             List<string> errors)
         {
-            ValidatePlacementGrid(objects, null, catalog, errors, null);
-        }
-
-        public static void ValidatePlacementGrid(
-            PromptIntentObjectDefinition[] objects,
-            PromptIntentStageDefinition[] stages,
-            PlayableObjectCatalog catalog,
-            List<string> errors,
-            Dictionary<string, HashSet<string>> sharedSlotLookup = null)
-        {
             _ = objects;
-            _ = stages;
             _ = catalog;
             _ = errors;
-            _ = sharedSlotLookup;
         }
 
         private static bool ShouldSwapPlacementFootprintAxesForValidation(PromptIntentObjectDefinition value)
@@ -1140,174 +1110,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return new HashSet<string>(targets, System.StringComparer.Ordinal);
-        }
-
-        private static bool IsPackedPlacementOverlapAllowed(
-            PackedPlacementEntry left,
-            PackedPlacementEntry right,
-            out string overlapError)
-        {
-            GameplayOverlapAllowanceRules.Participant leftParticipant = BuildOverlapParticipant(
-                left != null ? left.ObjectId : string.Empty,
-                left != null ? left.ObjectId : string.Empty,
-                left != null ? left.Role : string.Empty,
-                left != null ? left.SourceEndpointTargetObjectId : string.Empty,
-                left != null ? left.SourceEndpointSide : string.Empty,
-                left != null ? left.SinkEndpointTargetObjectId : string.Empty,
-                left != null ? left.SinkEndpointSide : string.Empty,
-                left != null ? left.UnlockTargetReferenceIds : null,
-                left != null ? left.SharedSlotReferenceIds : null,
-                left != null ? left.OverlapAllowanceDescriptors : null,
-                left != null ? left.WorldX : 0f,
-                left != null ? left.WorldZ : 0f,
-                left != null && left.HasResolvedYaw,
-                left != null ? left.ResolvedYawDegrees : 0f,
-                left != null ? left.MinX : 0f,
-                left != null ? left.MaxX : 0f,
-                left != null ? left.MinZ : 0f,
-                left != null ? left.MaxZ : 0f);
-            GameplayOverlapAllowanceRules.Participant rightParticipant = BuildOverlapParticipant(
-                right != null ? right.ObjectId : string.Empty,
-                right != null ? right.ObjectId : string.Empty,
-                right != null ? right.Role : string.Empty,
-                right != null ? right.SourceEndpointTargetObjectId : string.Empty,
-                right != null ? right.SourceEndpointSide : string.Empty,
-                right != null ? right.SinkEndpointTargetObjectId : string.Empty,
-                right != null ? right.SinkEndpointSide : string.Empty,
-                right != null ? right.UnlockTargetReferenceIds : null,
-                right != null ? right.SharedSlotReferenceIds : null,
-                right != null ? right.OverlapAllowanceDescriptors : null,
-                right != null ? right.WorldX : 0f,
-                right != null ? right.WorldZ : 0f,
-                right != null && right.HasResolvedYaw,
-                right != null ? right.ResolvedYawDegrees : 0f,
-                right != null ? right.MinX : 0f,
-                right != null ? right.MaxX : 0f,
-                right != null ? right.MinZ : 0f,
-                right != null ? right.MaxZ : 0f);
-            return GameplayOverlapAllowanceRules.IsAllowedOverlap(leftParticipant, rightParticipant, out overlapError);
-        }
-
-        private static bool IsWorldPlacementOverlapAllowed(
-            WorldPlacementBounds left,
-            WorldPlacementBounds right,
-            out string overlapError)
-        {
-            GameplayOverlapAllowanceRules.Participant leftParticipant = BuildOverlapParticipant(
-                left != null ? left.ObjectId : string.Empty,
-                left != null ? left.ObjectId : string.Empty,
-                left != null ? left.Role : string.Empty,
-                left != null ? left.SourceEndpointTargetObjectId : string.Empty,
-                left != null ? left.SourceEndpointSide : string.Empty,
-                left != null ? left.SinkEndpointTargetObjectId : string.Empty,
-                left != null ? left.SinkEndpointSide : string.Empty,
-                left != null ? left.UnlockTargetReferenceIds : null,
-                left != null ? left.SharedSlotReferenceIds : null,
-                left != null ? left.OverlapAllowanceDescriptors : null,
-                left != null ? left.CenterX : 0f,
-                left != null ? left.CenterZ : 0f,
-                left != null && left.HasResolvedYaw,
-                left != null ? left.ResolvedYawDegrees : 0f,
-                left != null ? left.MinX : 0f,
-                left != null ? left.MaxX : 0f,
-                left != null ? left.MinZ : 0f,
-                left != null ? left.MaxZ : 0f);
-            GameplayOverlapAllowanceRules.Participant rightParticipant = BuildOverlapParticipant(
-                right != null ? right.ObjectId : string.Empty,
-                right != null ? right.ObjectId : string.Empty,
-                right != null ? right.Role : string.Empty,
-                right != null ? right.SourceEndpointTargetObjectId : string.Empty,
-                right != null ? right.SourceEndpointSide : string.Empty,
-                right != null ? right.SinkEndpointTargetObjectId : string.Empty,
-                right != null ? right.SinkEndpointSide : string.Empty,
-                right != null ? right.UnlockTargetReferenceIds : null,
-                right != null ? right.SharedSlotReferenceIds : null,
-                right != null ? right.OverlapAllowanceDescriptors : null,
-                right != null ? right.CenterX : 0f,
-                right != null ? right.CenterZ : 0f,
-                right != null && right.HasResolvedYaw,
-                right != null ? right.ResolvedYawDegrees : 0f,
-                right != null ? right.MinX : 0f,
-                right != null ? right.MaxX : 0f,
-                right != null ? right.MinZ : 0f,
-                right != null ? right.MaxZ : 0f);
-            return GameplayOverlapAllowanceRules.IsAllowedOverlap(leftParticipant, rightParticipant, out overlapError);
-        }
-
-        private static GameplayOverlapAllowanceRules.Participant BuildOverlapParticipant(
-            string referenceId,
-            string sceneObjectId,
-            string role,
-            string sourceEndpointTargetObjectId,
-            string sourceEndpointSide,
-            string sinkEndpointTargetObjectId,
-            string sinkEndpointSide,
-            HashSet<string> unlockTargetReferenceIds,
-            HashSet<string> sharedSlotReferenceIds,
-            GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] overlapAllowanceDescriptors,
-            float centerX,
-            float centerZ,
-            bool hasResolvedYaw,
-            float resolvedYawDegrees,
-            float minX,
-            float maxX,
-            float minZ,
-            float maxZ)
-        {
-            var participant = new GameplayOverlapAllowanceRules.Participant
-            {
-                ReferenceId = Normalize(referenceId),
-                SceneObjectId = Normalize(sceneObjectId),
-                Role = Normalize(role),
-                SourceEndpointTargetObjectId = Normalize(sourceEndpointTargetObjectId),
-                SourceEndpointSide = Normalize(sourceEndpointSide),
-                SinkEndpointTargetObjectId = Normalize(sinkEndpointTargetObjectId),
-                SinkEndpointSide = Normalize(sinkEndpointSide),
-                MinX = minX,
-                MaxX = maxX,
-                MinZ = minZ,
-                MaxZ = maxZ,
-            };
-
-            if (unlockTargetReferenceIds != null)
-                participant.UnlockTargetReferenceIds = new HashSet<string>(unlockTargetReferenceIds, System.StringComparer.Ordinal);
-            if (sharedSlotReferenceIds != null)
-                participant.SharedSlotReferenceIds = new HashSet<string>(sharedSlotReferenceIds, System.StringComparer.Ordinal);
-
-            participant.OverlapAllowanceRects = GameplayOverlapAllowanceRules.BuildWorldOverlapAllowanceRects(
-                overlapAllowanceDescriptors,
-                centerX,
-                centerZ,
-                hasResolvedYaw ? resolvedYawDegrees : 0f);
-
-            return participant;
-        }
-
-        private static GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] ResolvePlacementOverlapAllowanceDescriptors(
-            PlayableObjectCatalog catalog,
-            string role,
-            string designId,
-            PromptIntentObjectPlacementDefinition placement)
-        {
-            string normalizedRole = Normalize(role);
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.PHYSICS_AREA, System.StringComparison.Ordinal))
-            {
-                PhysicsAreaLayoutDefinition physicsAreaLayout = placement != null ? placement.physicsAreaLayout : null;
-                return GameplayOverlapAllowanceRules.BuildOverlapAllowanceDescriptors(
-                    physicsAreaLayout != null ? physicsAreaLayout.overlapAllowances : null,
-                    LAYOUT_SPACING);
-            }
-
-            if (catalog == null)
-                return new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
-
-            if (!TryResolveCatalogObjectId(catalog, role, out string gameplayObjectId, out _))
-                return new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
-
-            if (!catalog.TryResolveGameplayPlacementOverlapAllowanceDescriptors(gameplayObjectId, designId, out GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] descriptors, out _))
-                return new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
-
-            return descriptors ?? new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
         }
 
         private static void ResolvePackedPlacementCellRange(

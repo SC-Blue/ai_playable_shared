@@ -1491,56 +1491,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             return true;
         }
 
-        public bool TryResolveGameplayPlacementOverlapAllowanceDescriptors(
-            string objectId,
-            string designId,
-            out GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] descriptors,
-            out string error)
-        {
-            descriptors = new GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[0];
-            error = string.Empty;
-
-            string normalizedObjectId = Normalize(objectId);
-            string normalizedDesignId = Normalize(designId);
-            string requestedDesignId = normalizedDesignId;
-            if (!Gameplay.TryGetGameplayEntry(normalizedObjectId, out GameplayCatalogEntry entry) || entry == null)
-            {
-                error = BuildGameplayDesignResolutionError(normalizedObjectId, requestedDesignId);
-                return false;
-            }
-
-            if (!Gameplay.TryResolveGameplayDesignIndex(normalizedObjectId, requestedDesignId, out int resolvedDesignIndex))
-            {
-                error = BuildGameplayDesignResolutionError(normalizedObjectId, requestedDesignId);
-                return false;
-            }
-
-            DesignVariantEntry[] designs = entry.designs ?? new DesignVariantEntry[0];
-            if (resolvedDesignIndex < 0 || resolvedDesignIndex >= designs.Length)
-            {
-                error = "objectId '" + normalizedObjectId + "'의 designIndex '" + resolvedDesignIndex + "'가 유효하지 않습니다.";
-                return false;
-            }
-
-            DesignVariantEntry design = designs[resolvedDesignIndex];
-            if (design == null || design.prefab == null)
-            {
-                error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' prefab이 없습니다.";
-                return false;
-            }
-
-            return true;
-        }
-
-        public bool TryResolveGameplayPlacementOverlapAllowances(
-            string objectId,
-            string designId,
-            out GameplayOverlapAllowanceRules.OverlapAllowanceDescriptor[] descriptors,
-            out string error)
-        {
-            return TryResolveGameplayPlacementOverlapAllowanceDescriptors(objectId, designId, out descriptors, out error);
-        }
-
         public bool TryResolveGameplayPlacementFootprint(
             string objectId,
             string designId,

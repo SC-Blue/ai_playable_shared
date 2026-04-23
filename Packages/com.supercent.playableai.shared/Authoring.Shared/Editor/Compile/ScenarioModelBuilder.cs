@@ -505,7 +505,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 realPhysicsZoneBounds = CopyWorldBounds(value.realPhysicsZoneBounds),
                 fakeSpriteZoneBounds = CopyWorldBounds(value.fakeSpriteZoneBounds),
-                overlapAllowances = CopyOverlapAllowances(value.overlapAllowances),
             };
         }
 
@@ -552,31 +551,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 worldWidth = value.worldWidth,
                 worldDepth = value.worldDepth,
             };
-        }
-
-        private static PlacementOverlapAllowanceDefinition[] CopyOverlapAllowances(PlacementOverlapAllowanceDefinition[] values)
-        {
-            PlacementOverlapAllowanceDefinition[] safeValues = values ?? new PlacementOverlapAllowanceDefinition[0];
-            if (safeValues.Length == 0)
-                return new PlacementOverlapAllowanceDefinition[0];
-
-            var copies = new PlacementOverlapAllowanceDefinition[safeValues.Length];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                PlacementOverlapAllowanceDefinition value = safeValues[i];
-                copies[i] = value == null
-                    ? new PlacementOverlapAllowanceDefinition()
-                    : new PlacementOverlapAllowanceDefinition
-                    {
-                        counterpartRole = value.counterpartRole,
-                        widthCells = value.widthCells,
-                        depthCells = value.depthCells,
-                        centerOffsetX = value.centerOffsetX,
-                        centerOffsetZ = value.centerOffsetZ,
-                    };
-            }
-
-            return copies;
         }
 
         private static PlayableScenarioFacilityOptions CreateRoleDefaultFacilityOptions(string role)

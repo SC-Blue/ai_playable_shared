@@ -35,21 +35,10 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PlacementOverlapAllowanceDefinition
-    {
-        public string counterpartRole;
-        public int widthCells;
-        public int depthCells;
-        public float centerOffsetX;
-        public float centerOffsetZ;
-    }
-
-    [Serializable]
     public sealed class PhysicsAreaLayoutDefinition
     {
         public WorldBoundsDefinition realPhysicsZoneBounds = new WorldBoundsDefinition();
         public WorldBoundsDefinition fakeSpriteZoneBounds = new WorldBoundsDefinition();
-        public PlacementOverlapAllowanceDefinition[] overlapAllowances = new PlacementOverlapAllowanceDefinition[0];
     }
 
     [Serializable]
