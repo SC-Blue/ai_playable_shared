@@ -12,6 +12,12 @@ namespace Supercent.PlayableAI.Common.Contracts
         AssembledPath = 1,
     }
 
+    internal enum PlacementFootprintResolutionMode
+    {
+        CatalogMetadataOnly = 0,
+        RuntimePrefabThenMetadata = 1,
+    }
+
     internal static class CatalogAssetReferenceUtility
     {
         private const BindingFlags PUBLIC_INSTANCE = BindingFlags.Instance | BindingFlags.Public;
@@ -105,6 +111,19 @@ namespace Supercent.PlayableAI.Common.Contracts
             centerOffsetX = localCenterOffset.x;
             centerOffsetZ = localCenterOffset.z;
             return widthCells > 0 && depthCells > 0;
+        }
+
+        public static bool TryReadPlacementFootprintForRuntime(
+            GameObject prefab,
+            out int widthCells,
+            out int depthCells,
+            out float centerOffsetX,
+            out float centerOffsetZ)
+        {
+            if (TryReadPlacementFootprintFromPrefabComponent(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ))
+                return true;
+
+            return TryReadPlacementFootprintFromCatalogMetadata(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
         }
 
         internal static Component FindPlacementFootprint(GameObject prefab)
@@ -1569,7 +1588,15 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public bool TryResolveGameplayPlacementFootprint(string objectId, string designId, out int widthCells, out int depthCells, out string error)
         {
-            return TryResolveGameplayPlacementFootprint(objectId, designId, out widthCells, out depthCells, out _, out _, out error);
+            return TryResolveGameplayPlacementFootprint(
+                objectId,
+                designId,
+                PlacementFootprintResolutionMode.RuntimePrefabThenMetadata,
+                out widthCells,
+                out depthCells,
+                out _,
+                out _,
+                out error);
         }
 
         public bool TryResolveGameplayTopImageAssetPath(
@@ -1626,6 +1653,64 @@ namespace Supercent.PlayableAI.Common.Contracts
             out float centerOffsetZ,
             out string error)
         {
+            return TryResolveGameplayPlacementFootprint(
+                objectId,
+                designId,
+                PlacementFootprintResolutionMode.RuntimePrefabThenMetadata,
+                out widthCells,
+                out depthCells,
+                out centerOffsetX,
+                out centerOffsetZ,
+                out error);
+        }
+
+        public bool TryResolveGameplayPlacementFootprintFromCatalogMetadata(
+            string objectId,
+            string designId,
+            out int widthCells,
+            out int depthCells,
+            out string error)
+        {
+            return TryResolveGameplayPlacementFootprintFromCatalogMetadata(
+                objectId,
+                designId,
+                out widthCells,
+                out depthCells,
+                out _,
+                out _,
+                out error);
+        }
+
+        public bool TryResolveGameplayPlacementFootprintFromCatalogMetadata(
+            string objectId,
+            string designId,
+            out int widthCells,
+            out int depthCells,
+            out float centerOffsetX,
+            out float centerOffsetZ,
+            out string error)
+        {
+            return TryResolveGameplayPlacementFootprint(
+                objectId,
+                designId,
+                PlacementFootprintResolutionMode.CatalogMetadataOnly,
+                out widthCells,
+                out depthCells,
+                out centerOffsetX,
+                out centerOffsetZ,
+                out error);
+        }
+
+        private bool TryResolveGameplayPlacementFootprint(
+            string objectId,
+            string designId,
+            PlacementFootprintResolutionMode resolutionMode,
+            out int widthCells,
+            out int depthCells,
+            out float centerOffsetX,
+            out float centerOffsetZ,
+            out string error)
+        {
             widthCells = 0;
             depthCells = 0;
             centerOffsetX = 0f;
@@ -1661,7 +1746,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return false;
             }
 
-            if (TryReadPlacementFootprint(design.prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ))
+            if (TryReadPlacementFootprint(design.prefab, resolutionMode, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ))
                 return true;
 
             string normalizedCategory = Normalize(entry.category);
@@ -1675,7 +1760,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return true;
             }
 
-            error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' prefab metadata에 placement footprint가 없습니다.";
+            string footprintSource = resolutionMode == PlacementFootprintResolutionMode.CatalogMetadataOnly
+                ? "prefab metadata"
+                : "prefab component 또는 metadata";
+            error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' " + footprintSource + "에 placement footprint가 없습니다.";
             return false;
         }
 
@@ -1739,12 +1827,20 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         private static bool TryReadPlacementFootprint(
             GameObject prefab,
+            PlacementFootprintResolutionMode resolutionMode,
             out int widthCells,
             out int depthCells,
             out float centerOffsetX,
             out float centerOffsetZ)
         {
-            return CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
+            switch (resolutionMode)
+            {
+                case PlacementFootprintResolutionMode.RuntimePrefabThenMetadata:
+                    return CatalogAssetReferenceUtility.TryReadPlacementFootprintForRuntime(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
+                case PlacementFootprintResolutionMode.CatalogMetadataOnly:
+                default:
+                    return CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
+            }
         }
 
         private string BuildGameplayDesignResolutionError(string objectId, string designId)

@@ -138,7 +138,7 @@ namespace PlayableAI.AuthoringCore
             if (!TryResolveCatalogObjectIdForRole(catalog, Normalize(objectDefinition != null ? objectDefinition.role : string.Empty), out string catalogObjectId))
                 return playerStart;
 
-            if (!catalog.TryResolveGameplayPlacementFootprint(
+            if (!catalog.TryResolveGameplayPlacementFootprintFromCatalogMetadata(
                     catalogObjectId,
                     Normalize(objectDefinition != null ? objectDefinition.designId : string.Empty),
                     out int widthCells,

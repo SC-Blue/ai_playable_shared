@@ -947,7 +947,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return false;
             }
 
-            return catalog.TryResolveGameplayPlacementFootprint(
+            return catalog.TryResolveGameplayPlacementFootprintFromCatalogMetadata(
                 gameplayObjectId,
                 designId,
                 out widthCells,
