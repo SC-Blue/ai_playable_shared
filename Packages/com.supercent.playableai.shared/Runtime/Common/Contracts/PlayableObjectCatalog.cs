@@ -15,6 +15,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     internal static class CatalogAssetReferenceUtility
     {
         private const BindingFlags PUBLIC_INSTANCE = BindingFlags.Instance | BindingFlags.Public;
+        private const BindingFlags ANY_INSTANCE = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private const string PLAYABLE_PLACEMENT_FOOTPRINT_TYPE_NAME = "PlayablePlacementFootprint";
 
         public static string ResolveTextureAssetPath(Texture2D texture)
@@ -51,7 +52,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
+            if (!TryResolveCatalogPrefabMetadata(prefab, out CatalogPrefabMetadata metadata))
                 return false;
 
             if (metadata == null ||
@@ -124,6 +125,30 @@ namespace Supercent.PlayableAI.Common.Contracts
             }
 
             return null;
+        }
+
+        internal static bool TryResolveCatalogPrefabMetadata(GameObject prefab, out CatalogPrefabMetadata metadata)
+        {
+            metadata = new CatalogPrefabMetadata();
+            if (prefab == null)
+                return false;
+
+            Type prefabType = prefab.GetType();
+            FieldInfo metadataField = prefabType.GetField("metadata", ANY_INSTANCE);
+            if (metadataField != null && typeof(CatalogPrefabMetadata).IsAssignableFrom(metadataField.FieldType))
+            {
+                metadata = metadataField.GetValue(prefab) as CatalogPrefabMetadata ?? new CatalogPrefabMetadata();
+                return true;
+            }
+
+            PropertyInfo metadataProperty = prefabType.GetProperty("metadata", ANY_INSTANCE);
+            if (metadataProperty != null && metadataProperty.CanRead && typeof(CatalogPrefabMetadata).IsAssignableFrom(metadataProperty.PropertyType))
+            {
+                metadata = metadataProperty.GetValue(prefab) as CatalogPrefabMetadata ?? new CatalogPrefabMetadata();
+                return true;
+            }
+
+            return false;
         }
 
         internal static bool TryReadIntProperty(object target, string propertyName, out int value)
