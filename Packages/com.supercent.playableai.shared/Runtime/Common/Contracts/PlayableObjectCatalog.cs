@@ -37,7 +37,42 @@ namespace Supercent.PlayableAI.Common.Contracts
             return ResolveStringField(prefab, "assetGuid");
         }
 
-        public static bool TryReadPlacementFootprint(
+        public static bool TryReadPlacementFootprintFromCatalogMetadata(
+            GameObject prefab,
+            out int widthCells,
+            out int depthCells,
+            out float centerOffsetX,
+            out float centerOffsetZ)
+        {
+            widthCells = 0;
+            depthCells = 0;
+            centerOffsetX = 0f;
+            centerOffsetZ = 0f;
+            if (prefab == null)
+                return false;
+
+            if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
+                return false;
+
+            if (metadata == null ||
+                metadata.placementFootprintWidthCells <= 0 ||
+                metadata.placementFootprintDepthCells <= 0)
+            {
+                widthCells = 0;
+                depthCells = 0;
+                centerOffsetX = 0f;
+                centerOffsetZ = 0f;
+                return false;
+            }
+
+            widthCells = metadata.placementFootprintWidthCells;
+            depthCells = metadata.placementFootprintDepthCells;
+            centerOffsetX = metadata.placementFootprintCenterOffsetX;
+            centerOffsetZ = metadata.placementFootprintCenterOffsetZ;
+            return widthCells > 0 && depthCells > 0;
+        }
+
+        public static bool TryReadPlacementFootprintFromPrefabComponent(
             GameObject prefab,
             out int widthCells,
             out int depthCells,
@@ -1024,7 +1059,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             assetPath = CatalogAssetReferenceUtility.ResolveTextureAssetPath(previewImage);
             assetGuid = CatalogAssetReferenceUtility.ResolveTextureAssetGuid(previewImage);
             if (previewPrefab != null &&
-                CatalogAssetReferenceUtility.TryReadPlacementFootprint(previewPrefab, out tileWidthCells, out tileDepthCells, out _, out _))
+                CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(previewPrefab, out tileWidthCells, out tileDepthCells, out _, out _))
             {
                 tileWidthCells = tileWidthCells > 0 ? tileWidthCells : 1;
                 tileDepthCells = tileDepthCells > 0 ? tileDepthCells : 1;
@@ -1615,7 +1650,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return true;
             }
 
-            error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' prefab에 PlayablePlacementFootprint가 없습니다.";
+            error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' prefab metadata에 placement footprint가 없습니다.";
             return false;
         }
 
@@ -1684,7 +1719,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             out float centerOffsetX,
             out float centerOffsetZ)
         {
-            return CatalogAssetReferenceUtility.TryReadPlacementFootprint(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
+            return CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(prefab, out widthCells, out depthCells, out centerOffsetX, out centerOffsetZ);
         }
 
         private string BuildGameplayDesignResolutionError(string objectId, string designId)
@@ -2121,7 +2156,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     sectionPath,
                     entryIndex,
                     designIndex,
-                    prefabLabel + "에는 PlayablePlacementFootprint가 필요합니다.");
+                    prefabLabel + "에는 placement footprint metadata가 필요합니다.");
                 return;
             }
 
@@ -2178,7 +2213,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
             if (!TryReadPrefabFootprintForValidation(prefab, out int widthCells, out int depthCells))
             {
-                AddError(result, sectionPath, entryIndex, designIndex, prefabLabel + "에는 PlayablePlacementFootprint가 필요합니다.");
+                AddError(result, sectionPath, entryIndex, designIndex, prefabLabel + "에는 placement footprint metadata가 필요합니다.");
                 return;
             }
 
@@ -2193,19 +2228,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (prefab == null)
                 return false;
 
-            Component footprint = CatalogAssetReferenceUtility.FindPlacementFootprint(prefab);
-            if (footprint == null)
-                return false;
-
-            if (!CatalogAssetReferenceUtility.TryReadIntProperty(footprint, "WidthCells", out widthCells) ||
-                !CatalogAssetReferenceUtility.TryReadIntProperty(footprint, "DepthCells", out depthCells))
-            {
-                widthCells = 0;
-                depthCells = 0;
-                return false;
-            }
-
-            return widthCells > 0 && depthCells > 0;
+            return CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(prefab, out widthCells, out depthCells, out _, out _);
         }
 
         private static string Normalize(string value)
