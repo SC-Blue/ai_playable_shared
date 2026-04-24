@@ -181,17 +181,11 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string prefabAssetPath = string.Empty;
         public string prefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
-        public string topImageAssetPath = string.Empty;
-        public string topImageAssetGuid = string.Empty;
     }
 
     [Serializable]
     public sealed class CatalogAssembledPathAssetsExportData
     {
-        public string straightTopImageAssetPath = string.Empty;
-        public string straightTopImageAssetGuid = string.Empty;
-        public string cornerTopImageAssetPath = string.Empty;
-        public string cornerTopImageAssetGuid = string.Empty;
         public string straightPrefabAssetPath = string.Empty;
         public string straightPrefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata straightPrefabMetadata = new CatalogPrefabMetadata();
@@ -208,8 +202,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string prefabAssetPath = string.Empty;
         public string prefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
-        public string topImageAssetPath = string.Empty;
-        public string topImageAssetGuid = string.Empty;
         public CatalogAssembledPathAssetsExportData assembledPathAssets = new CatalogAssembledPathAssetsExportData();
     }
 
@@ -221,16 +213,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string prefabAssetPath = string.Empty;
         public string prefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
-        public string topImageAssetPath = string.Empty;
-        public string topImageAssetGuid = string.Empty;
-        public string straightTopImageAssetPath = string.Empty;
-        public string straightTopImageAssetGuid = string.Empty;
-        public string cornerTopImageAssetPath = string.Empty;
-        public string cornerTopImageAssetGuid = string.Empty;
-        public string tJunctionTopImageAssetPath = string.Empty;
-        public string tJunctionTopImageAssetGuid = string.Empty;
-        public string crossTopImageAssetPath = string.Empty;
-        public string crossTopImageAssetGuid = string.Empty;
         public string straightPrefabAssetPath = string.Empty;
         public string straightPrefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata straightPrefabMetadata = new CatalogPrefabMetadata();

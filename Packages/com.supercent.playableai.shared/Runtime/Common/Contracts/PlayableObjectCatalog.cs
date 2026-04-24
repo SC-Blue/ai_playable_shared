@@ -24,16 +24,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         private const BindingFlags ANY_INSTANCE = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private const string PLAYABLE_PLACEMENT_FOOTPRINT_TYPE_NAME = "PlayablePlacementFootprint";
 
-        public static string ResolveTextureAssetPath(Texture2D texture)
-        {
-            return ResolveStringField(texture, "assetPath");
-        }
-
-        public static string ResolveTextureAssetGuid(Texture2D texture)
-        {
-            return ResolveStringField(texture, "assetGuid");
-        }
-
         public static string ResolvePrefabAssetPath(GameObject prefab)
         {
             return ResolveStringField(prefab, "assetPath");
@@ -227,15 +217,9 @@ namespace Supercent.PlayableAI.Common.Contracts
     [System.Serializable]
     public sealed class AssembledPathDesignAssets
     {
-        public Texture2D straightTopImage;
-        public Texture2D cornerTopImage;
         public GameObject straightPrefab;
         public GameObject cornerPrefab;
 
-        public string straightTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(straightTopImage);
-        public string straightTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(straightTopImage);
-        public string cornerTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(cornerTopImage);
-        public string cornerTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(cornerTopImage);
         public string straightPrefabAssetPath => CatalogAssetReferenceUtility.ResolvePrefabAssetPath(straightPrefab);
         public string straightPrefabAssetGuid => CatalogAssetReferenceUtility.ResolvePrefabAssetGuid(straightPrefab);
         public string cornerPrefabAssetPath => CatalogAssetReferenceUtility.ResolvePrefabAssetPath(cornerPrefab);
@@ -247,12 +231,9 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string designId;
         public GameObject prefab;
-        public Texture2D topImage;
         public AssembledPathDesignAssets assembledPathAssets = new AssembledPathDesignAssets();
         [TextArea] public string description;
 
-        public string topImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(topImage);
-        public string topImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(topImage);
         public string prefabAssetPath => CatalogAssetReferenceUtility.ResolvePrefabAssetPath(prefab);
         public string prefabAssetGuid => CatalogAssetReferenceUtility.ResolvePrefabAssetGuid(prefab);
     }
@@ -280,27 +261,12 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string designId;
         public GameObject prefab;
-        public Texture2D topImage;
-        public Texture2D straightTopImage;
-        public Texture2D cornerTopImage;
-        public Texture2D tJunctionTopImage;
-        public Texture2D crossTopImage;
         public GameObject straightPrefab;
         public GameObject cornerPrefab;
         public GameObject tJunctionPrefab;
         public GameObject crossPrefab;
         [TextArea] public string description;
 
-        public string topImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(topImage);
-        public string topImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(topImage);
-        public string straightTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(straightTopImage);
-        public string straightTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(straightTopImage);
-        public string cornerTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(cornerTopImage);
-        public string cornerTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(cornerTopImage);
-        public string tJunctionTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(tJunctionTopImage);
-        public string tJunctionTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(tJunctionTopImage);
-        public string crossTopImageAssetPath => CatalogAssetReferenceUtility.ResolveTextureAssetPath(crossTopImage);
-        public string crossTopImageAssetGuid => CatalogAssetReferenceUtility.ResolveTextureAssetGuid(crossTopImage);
         public string prefabAssetPath => CatalogAssetReferenceUtility.ResolvePrefabAssetPath(prefab);
         public string prefabAssetGuid => CatalogAssetReferenceUtility.ResolvePrefabAssetGuid(prefab);
         public string straightPrefabAssetPath => CatalogAssetReferenceUtility.ResolvePrefabAssetPath(straightPrefab);
@@ -1080,49 +1046,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             return prefab != null && cornerPrefab != null;
         }
 
-        public bool TryResolveEnvironmentPreviewImage(
-            string objectId,
-            string designId,
-            string kind,
-            int widthCells,
-            int depthCells,
-            out string assetPath,
-            out string assetGuid,
-            out int tileWidthCells,
-            out int tileDepthCells,
-            out string error)
-        {
-            assetPath = string.Empty;
-            assetGuid = string.Empty;
-            tileWidthCells = 1;
-            tileDepthCells = 1;
-            error = string.Empty;
-
-            if (!TryGetEnvironmentDesign(objectId, designId, out EnvironmentDesignVariantEntry design, out _, out string variationMode, out _) || design == null)
-            {
-                error = "environment objectId '" + Normalize(objectId) + "'의 designId '" + Normalize(designId) + "'를 찾지 못했습니다.";
-                return false;
-            }
-
-            string variantKey = ResolveEnvironmentPreviewVariantKey(kind, widthCells, depthCells, variationMode);
-            ResolveEnvironmentPreviewVariantAssets(design, variantKey, out Texture2D previewImage, out GameObject previewPrefab);
-
-            assetPath = CatalogAssetReferenceUtility.ResolveTextureAssetPath(previewImage);
-            assetGuid = CatalogAssetReferenceUtility.ResolveTextureAssetGuid(previewImage);
-            if (previewPrefab != null &&
-                CatalogAssetReferenceUtility.TryReadPlacementFootprintFromCatalogMetadata(previewPrefab, out tileWidthCells, out tileDepthCells, out _, out _))
-            {
-                tileWidthCells = tileWidthCells > 0 ? tileWidthCells : 1;
-                tileDepthCells = tileDepthCells > 0 ? tileDepthCells : 1;
-            }
-
-            if (tileWidthCells <= 0)
-                tileWidthCells = 1;
-            if (tileDepthCells <= 0)
-                tileDepthCells = 1;
-            return true;
-        }
-
         public void SetFloorPrefab(GameObject prefab)
         {
             _floorPrefab = prefab;
@@ -1312,71 +1235,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             }
 
             return false;
-        }
-
-        private static string ResolveEnvironmentPreviewVariantKey(string kind, int widthCells, int depthCells, string variationMode)
-        {
-            string normalizedKind = Normalize(kind);
-            if (normalizedKind.Contains("tjunction", System.StringComparison.Ordinal) || normalizedKind.Contains("t_junction", System.StringComparison.Ordinal) || normalizedKind.Contains("t-junction", System.StringComparison.Ordinal))
-                return "tjunction";
-            if (normalizedKind.Contains("cross", System.StringComparison.Ordinal))
-                return "cross";
-            if (normalizedKind.Contains("corner", System.StringComparison.Ordinal) || normalizedKind.Contains("curve", System.StringComparison.Ordinal) || normalizedKind.Contains("turn", System.StringComparison.Ordinal))
-                return "corner";
-            if (normalizedKind.Contains("straight", System.StringComparison.Ordinal) || normalizedKind.Contains("band", System.StringComparison.Ordinal) || normalizedKind.Contains("path", System.StringComparison.Ordinal))
-                return "straight";
-
-            bool isLine = (widthCells > 1 && depthCells == 1) || (depthCells > 1 && widthCells == 1);
-            bool isSingleCell = widthCells == 1 && depthCells == 1;
-            if (string.Equals(Normalize(variationMode), VARIATION_MODE_CONNECTED3, System.StringComparison.Ordinal))
-            {
-                if (isLine)
-                    return "straight";
-                if (isSingleCell)
-                    return "corner";
-            }
-
-            return string.Empty;
-        }
-
-        private static void ResolveEnvironmentPreviewVariantAssets(
-            EnvironmentDesignVariantEntry design,
-            string variantKey,
-            out Texture2D previewImage,
-            out GameObject previewPrefab)
-        {
-            previewImage = design != null ? design.topImage : null;
-            previewPrefab = design != null ? design.prefab : null;
-            if (design == null || string.IsNullOrEmpty(variantKey))
-                return;
-
-            switch (variantKey)
-            {
-                case "straight":
-                    if (design.straightTopImage != null)
-                        previewImage = design.straightTopImage;
-                    if (design.straightPrefab != null)
-                        previewPrefab = design.straightPrefab;
-                    break;
-                case "corner":
-                    if (design.cornerTopImage != null)
-                        previewImage = design.cornerTopImage;
-                    if (design.cornerPrefab != null)
-                        previewPrefab = design.cornerPrefab;
-                    break;
-                case "tjunction":
-                    if (design.tJunctionTopImage != null)
-                        previewImage = design.tJunctionTopImage;
-                    if (design.tJunctionPrefab != null)
-                        previewPrefab = design.tJunctionPrefab;
-                    break;
-                case "cross":
-                    if (design.crossTopImage != null)
-                        previewImage = design.crossTopImage;
-                    if (design.crossPrefab != null)
-                        previewPrefab = design.crossPrefab;
-                    break;
-            }
         }
 
         private static string Normalize(string value)
@@ -1664,51 +1522,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 out _,
                 out _,
                 out error);
-        }
-
-        public bool TryResolveGameplayTopImageAssetPath(
-            string objectId,
-            string designId,
-            out string assetPath,
-            out string assetGuid,
-            out string error)
-        {
-            assetPath = string.Empty;
-            assetGuid = string.Empty;
-            error = string.Empty;
-
-            string normalizedObjectId = Normalize(objectId);
-            string normalizedDesignId = Normalize(designId);
-            string requestedDesignId = normalizedDesignId;
-            if (!Gameplay.TryGetGameplayEntry(normalizedObjectId, out GameplayCatalogEntry entry) || entry == null)
-            {
-                error = BuildGameplayDesignResolutionError(normalizedObjectId, requestedDesignId);
-                return false;
-            }
-
-            if (!Gameplay.TryResolveGameplayDesignIndex(normalizedObjectId, requestedDesignId, out int resolvedDesignIndex))
-            {
-                error = BuildGameplayDesignResolutionError(normalizedObjectId, requestedDesignId);
-                return false;
-            }
-
-            DesignVariantEntry[] designs = entry.designs ?? new DesignVariantEntry[0];
-            if (resolvedDesignIndex < 0 || resolvedDesignIndex >= designs.Length)
-            {
-                error = "objectId '" + normalizedObjectId + "'의 designIndex '" + resolvedDesignIndex + "'가 유효하지 않습니다.";
-                return false;
-            }
-
-            DesignVariantEntry design = designs[resolvedDesignIndex];
-            if (design == null)
-            {
-                error = "objectId '" + normalizedObjectId + "'의 designId '" + requestedDesignId + "' design이 없습니다.";
-                return false;
-            }
-
-            assetPath = CatalogAssetReferenceUtility.ResolveTextureAssetPath(design.topImage);
-            assetGuid = CatalogAssetReferenceUtility.ResolveTextureAssetGuid(design.topImage);
-            return true;
         }
 
         public bool TryResolveGameplayPlacementFootprint(

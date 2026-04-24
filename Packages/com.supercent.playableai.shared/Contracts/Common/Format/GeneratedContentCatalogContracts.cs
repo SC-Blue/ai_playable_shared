@@ -307,8 +307,6 @@ namespace Supercent.PlayableAI.Common.Format
     [Serializable]
     public sealed class GeneratedContentCatalogPathAssets
     {
-        public GeneratedContentCatalogAssetReference straightTopImage = new GeneratedContentCatalogAssetReference();
-        public GeneratedContentCatalogAssetReference cornerTopImage = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogAssetReference straightPrefab = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogAssetReference cornerPrefab = new GeneratedContentCatalogAssetReference();
     }
@@ -316,10 +314,6 @@ namespace Supercent.PlayableAI.Common.Format
     [Serializable]
     public sealed class GeneratedContentCatalogEnvironmentAssets
     {
-        public GeneratedContentCatalogAssetReference straightTopImage = new GeneratedContentCatalogAssetReference();
-        public GeneratedContentCatalogAssetReference cornerTopImage = new GeneratedContentCatalogAssetReference();
-        public GeneratedContentCatalogAssetReference tJunctionTopImage = new GeneratedContentCatalogAssetReference();
-        public GeneratedContentCatalogAssetReference crossTopImage = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogAssetReference straightPrefab = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogAssetReference cornerPrefab = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogAssetReference tJunctionPrefab = new GeneratedContentCatalogAssetReference();
@@ -354,7 +348,6 @@ namespace Supercent.PlayableAI.Common.Format
         public string prefabName = string.Empty;
         public string prefabAssetPath = string.Empty;
         public string prefabAssetGuid = string.Empty;
-        public GeneratedContentCatalogAssetReference topImage = new GeneratedContentCatalogAssetReference();
         public GeneratedContentCatalogPathAssets pathAssets = new GeneratedContentCatalogPathAssets();
         public GeneratedContentCatalogEnvironmentAssets environmentAssets = new GeneratedContentCatalogEnvironmentAssets();
         public int footprintWidthCells = 1;
