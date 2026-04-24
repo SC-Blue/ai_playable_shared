@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Supercent.PlayableAI.Common.Format
 {
-    public static class PlayableScenarioFacilityDefaults
+    public static class PlayableScenarioFeatureDefaults
     {
         public const int InputCountPerConversion = 1;
         public const float ConversionInterval = 0.15f;
@@ -26,14 +26,14 @@ namespace Supercent.PlayableAI.Common.Format
         public const int SellerPitchInitialItemCountRef = 10;
         public static readonly Vector3 SellerMoneyRotationOffset = Vector3.zero;
 
-        public static PlayableScenarioFacilityOptions CreateRoleOptions(string role)
+        public static PlayableScenarioFeatureOptions CreateRoleOptions(string role)
         {
             var options = CreateBaseOptions();
             ApplyRoleDefaults(role, ref options);
             return options;
         }
 
-        public static void ApplyRoleDefaults(string role, ref PlayableScenarioFacilityOptions options)
+        public static void ApplyRoleDefaults(string role, ref PlayableScenarioFeatureOptions options)
         {
             string normalizedRole = NormalizeRole(role);
             if (normalizedRole == PromptIntentObjectRoles.SELLER)
@@ -69,9 +69,9 @@ namespace Supercent.PlayableAI.Common.Format
             }
         }
 
-        private static PlayableScenarioFacilityOptions CreateBaseOptions()
+        private static PlayableScenarioFeatureOptions CreateBaseOptions()
         {
-            return new PlayableScenarioFacilityOptions
+            return new PlayableScenarioFeatureOptions
             {
                 conversionInterval = ConversionInterval,
                 inputCountPerConversion = InputCountPerConversion,
@@ -89,12 +89,12 @@ namespace Supercent.PlayableAI.Common.Format
                 costPerMoneyPile = 0,
                 customerReqMin = CustomerReqMin,
                 customerReqMax = CustomerReqMax,
-                itemStacker = new PlayableScenarioFacilityOptions.StackerTuning
+                itemStacker = new PlayableScenarioFeatureOptions.StackerTuning
                 {
                     maxCount = ItemStackMaxCount,
                     popIntervalSeconds = ItemStackPopIntervalSeconds,
                 },
-                moneyStacker = new PlayableScenarioFacilityOptions.StackerTuning
+                moneyStacker = new PlayableScenarioFeatureOptions.StackerTuning
                 {
                     maxCount = MoneyStackMaxCount,
                     popIntervalSeconds = MoneyStackPopIntervalSeconds,

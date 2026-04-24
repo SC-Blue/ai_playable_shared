@@ -469,8 +469,8 @@ namespace PlayableAI.AuthoringCore
                     : "draft_layout.customerPaths[targetId=" + firstObjectId + "].leavePoint를 명시해주세요.");
             if (string.Equals(ruleCode, "CustomerPathTargetCoverage", StringComparison.Ordinal))
                 AddUnique(fixes, safeObjectIds.Length == 0
-                    ? "customer-facing facility마다 draft_layout.customerPaths[targetId=<facilityId>]를 정확히 1개씩 작성해주세요."
-                    : "customer-facing facility마다 customer path를 정확히 1개씩 작성해주세요. 현재 누락/중복 확인 대상: " + string.Join(", ", safeObjectIds) + ".");
+                    ? "customer-facing feature마다 draft_layout.customerPaths[targetId=<targetId>]를 정확히 1개씩 작성해주세요."
+                    : "customer-facing feature마다 customer path를 정확히 1개씩 작성해주세요. 현재 누락/중복 확인 대상: " + string.Join(", ", safeObjectIds) + ".");
             if (string.Equals(ruleCode, "MissingRailPathCells", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
                     ? "draft_layout.placements[*].railLayout.pathCells를 작성해주세요. 연결된 경로 자체가 권위 데이터입니다."

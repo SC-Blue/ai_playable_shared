@@ -13,8 +13,8 @@ namespace Supercent.PlayableAI.Common.Format
         public PortableBakedRailDefinition[] rails = new PortableBakedRailDefinition[0];
         public CurrencyDefinition[] currencies = new CurrencyDefinition[0];
         public ItemPriceDefinition[] itemPrices = new ItemPriceDefinition[0];
-        public FacilityAcceptedItemDefinition[] facilityAcceptedItems = new FacilityAcceptedItemDefinition[0];
-        public FacilityOutputItemDefinition[] facilityOutputItems = new FacilityOutputItemDefinition[0];
+        public FeatureAcceptedItemDefinition[] featureAcceptedItems = new FeatureAcceptedItemDefinition[0];
+        public FeatureOutputItemDefinition[] featureOutputItems = new FeatureOutputItemDefinition[0];
         public UnlockDefinition[] unlocks = new UnlockDefinition[0];
     }
 

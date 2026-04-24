@@ -4,8 +4,7 @@
     "Supercent.PlayableAI.Contracts",
     "Supercent.PlayableAI.Authoring.PlatformBridge.Editor",
     "Supercent.PlayableAI.Runtime",
-    "Supercent.PlayableAI.MoneyFoundation",
-    "PlayableModules.Facility"
+    "Supercent.PlayableAI.MoneyFoundation"
   ],
   "includePlatforms": [
     "Editor"

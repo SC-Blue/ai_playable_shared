@@ -46,10 +46,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 return Fail(result, "intent audit를 위해 PlayableObjectCatalog가 필요합니다.");
 
             ValidateItemPrices(model.saleValues, plan.itemPrices, result);
-            ValidateFacilityAcceptedItems(model, plan.facilityAcceptedItems, result);
-            ValidateFacilityOutputItems(model, plan.facilityOutputItems, result);
+            ValidateFeatureAcceptedItems(model, plan.featureAcceptedItems, result);
+            ValidateFeatureOutputItems(model, plan.featureOutputItems, result);
             ValidatePlayerOptions(model.playerOptions, plan.playerOptions, result);
-            ValidateFacilityOptions(model.objects, plan.facilityOptions, result);
+            ValidateFeatureOptions(model.objects, plan.featureOptions, result);
             ValidateSpawnStartState(model.objects, plan.spawns, result);
             if (layoutSpec != null)
                 ValidateSpawnPositions(model.objects, plan.spawns, layoutSpec, result);
@@ -665,7 +665,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeEffects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = safeEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                     continue;
 
                 string targetId = effect.targetObjectId != null ? effect.targetObjectId.Trim() : string.Empty;
@@ -676,47 +676,47 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return values;
         }
 
-        private static void ValidateFacilityAcceptedItems(
+        private static void ValidateFeatureAcceptedItems(
             PlayableScenarioModel model,
-            FacilityAcceptedItemDefinition[] actualDefinitions,
+            FeatureAcceptedItemDefinition[] actualDefinitions,
             IntentAuditValidationResult result)
         {
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(model != null ? model.objects : null);
-            HashSet<string> expectedKeys = BuildFacilityAcceptedItemKeySet(IntentAuthoringUtility.BuildFacilityAcceptedItems(model, spawnKeys, result.Errors));
-            HashSet<string> actualKeys = BuildFacilityAcceptedItemKeySet(actualDefinitions);
+            HashSet<string> expectedKeys = BuildFeatureAcceptedItemKeySet(IntentAuthoringUtility.BuildFeatureAcceptedItems(model, spawnKeys, result.Errors));
+            HashSet<string> actualKeys = BuildFeatureAcceptedItemKeySet(actualDefinitions);
 
             foreach (string key in expectedKeys)
             {
                 if (!actualKeys.Contains(key))
-                    Fail(result, "facilityAcceptedItems가 scenario model objective와 같은 값으로 lowering되지 않았습니다: '" + key + "'.");
+                    Fail(result, "featureAcceptedItems가 scenario model objective와 같은 값으로 lowering되지 않았습니다: '" + key + "'.");
             }
 
             foreach (string key in actualKeys)
             {
                 if (!expectedKeys.Contains(key))
-                    Fail(result, "facilityAcceptedItems에 scenario model objective에 없는 entry '" + key + "'가 있습니다.");
+                    Fail(result, "featureAcceptedItems에 scenario model objective에 없는 entry '" + key + "'가 있습니다.");
             }
         }
 
-        private static void ValidateFacilityOutputItems(
+        private static void ValidateFeatureOutputItems(
             PlayableScenarioModel model,
-            FacilityOutputItemDefinition[] actualDefinitions,
+            FeatureOutputItemDefinition[] actualDefinitions,
             IntentAuditValidationResult result)
         {
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(model != null ? model.objects : null);
-            HashSet<string> expectedKeys = BuildFacilityOutputItemKeySet(IntentAuthoringUtility.BuildFacilityOutputItems(model, spawnKeys, result.Errors));
-            HashSet<string> actualKeys = BuildFacilityOutputItemKeySet(actualDefinitions);
+            HashSet<string> expectedKeys = BuildFeatureOutputItemKeySet(IntentAuthoringUtility.BuildFeatureOutputItems(model, spawnKeys, result.Errors));
+            HashSet<string> actualKeys = BuildFeatureOutputItemKeySet(actualDefinitions);
 
             foreach (string key in expectedKeys)
             {
                 if (!actualKeys.Contains(key))
-                    Fail(result, "facilityOutputItems가 scenario model objective와 같은 값으로 lowering되지 않았습니다: '" + key + "'.");
+                    Fail(result, "featureOutputItems가 scenario model objective와 같은 값으로 lowering되지 않았습니다: '" + key + "'.");
             }
 
             foreach (string key in actualKeys)
             {
                 if (!expectedKeys.Contains(key))
-                    Fail(result, "facilityOutputItems에 scenario model objective에 없는 entry '" + key + "'가 있습니다.");
+                    Fail(result, "featureOutputItems에 scenario model objective에 없는 entry '" + key + "'가 있습니다.");
             }
         }
 
@@ -762,27 +762,27 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void ValidateFacilityOptions(
+        private static void ValidateFeatureOptions(
             ScenarioModelObjectDefinition[] objects,
-            PlayableScenarioFacilityOptionDefinition[] actualDefinitions,
+            PlayableScenarioFeatureOptionDefinition[] actualDefinitions,
             IntentAuditValidationResult result)
         {
-            Dictionary<string, PlayableScenarioFacilityOptions> expectedByFacilityId = BuildFacilityOptionsLookup(objects);
-            Dictionary<string, PlayableScenarioFacilityOptions> actualByFacilityId = BuildFacilityOptionsLookup(actualDefinitions);
+            Dictionary<string, PlayableScenarioFeatureOptions> expectedByTargetId = BuildFeatureOptionsLookup(objects);
+            Dictionary<string, PlayableScenarioFeatureOptions> actualByTargetId = BuildFeatureOptionsLookup(actualDefinitions);
 
-            foreach (KeyValuePair<string, PlayableScenarioFacilityOptions> pair in expectedByFacilityId)
+            foreach (KeyValuePair<string, PlayableScenarioFeatureOptions> pair in expectedByTargetId)
             {
-                if (!actualByFacilityId.TryGetValue(pair.Key, out PlayableScenarioFacilityOptions actual) ||
-                    !FacilityOptionsEqual(pair.Value, actual))
+                if (!actualByTargetId.TryGetValue(pair.Key, out PlayableScenarioFeatureOptions actual) ||
+                    !FeatureOptionsEqual(pair.Value, actual))
                 {
-                    Fail(result, "facilityOptions가 scenario model과 같은 값으로 lowering되지 않았습니다: '" + pair.Key + "'.");
+                    Fail(result, "featureOptions가 scenario model과 같은 값으로 lowering되지 않았습니다: '" + pair.Key + "'.");
                 }
             }
 
-            foreach (KeyValuePair<string, PlayableScenarioFacilityOptions> pair in actualByFacilityId)
+            foreach (KeyValuePair<string, PlayableScenarioFeatureOptions> pair in actualByTargetId)
             {
-                if (!expectedByFacilityId.ContainsKey(pair.Key))
-                    Fail(result, "facilityOptions에 scenario model object에 없는 facilityId '" + pair.Key + "'가 있습니다.");
+                if (!expectedByTargetId.ContainsKey(pair.Key))
+                    Fail(result, "featureOptions에 scenario model object에 없는 targetId '" + pair.Key + "'가 있습니다.");
             }
         }
 
@@ -957,7 +957,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -983,7 +983,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    !string.Equals(effect.kind != null ? effect.kind.Trim() : string.Empty, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind != null ? effect.kind.Trim() : string.Empty))
                     continue;
                 string timing = effect.timing != null ? effect.timing.Trim() : string.Empty;
                 if (!string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
@@ -1000,11 +1000,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeEffects.Length; i++)
             {
                 string kind = safeEffects[i] != null ? safeEffects[i].kind : string.Empty;
-                if (string.Equals(kind, PromptIntentEffectKinds.REVEAL_OBJECT, StringComparison.Ordinal) ||
-                    string.Equals(kind, PromptIntentEffectKinds.ACTIVATE_OBJECT, StringComparison.Ordinal) ||
-                    string.Equals(kind, PromptIntentEffectKinds.REVEAL_ENDCARD, StringComparison.Ordinal) ||
-                    string.Equals(kind, PromptIntentEffectKinds.END_GAME, StringComparison.Ordinal) ||
-                    string.Equals(kind, PromptIntentEffectKinds.HIDE_GUIDE, StringComparison.Ordinal))
+                if (PromptIntentCapabilityRegistry.EffectBuildsActivationTarget(kind))
                 {
                     return true;
                 }
@@ -1020,7 +1016,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelObjectiveDefinition objective = safeObjectives[i];
                 if (objective != null &&
-                    string.Equals(objective.kind, PromptIntentObjectiveKinds.UNLOCK_OBJECT, StringComparison.Ordinal))
+                    PromptIntentContractRegistry.IsUnlockObjectiveKind(objective.kind))
                 {
                     return objective;
                 }
@@ -1056,8 +1052,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = safeEffects[i];
                 if (effect == null ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal) ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
+                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1076,8 +1072,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 return string.Empty;
 
             string kind = effect.kind ?? string.Empty;
-            if (string.Equals(kind, PromptIntentEffectKinds.REVEAL_OBJECT, StringComparison.Ordinal) ||
-                string.Equals(kind, PromptIntentEffectKinds.ACTIVATE_OBJECT, StringComparison.Ordinal))
+            if (PromptIntentCapabilityRegistry.EffectBuildsSceneActivationTarget(kind))
             {
                 string targetObjectId = effect.targetObjectId != null ? effect.targetObjectId.Trim() : string.Empty;
                 return string.IsNullOrEmpty(targetObjectId)
@@ -1085,9 +1080,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     : ActivationTargetKinds.SCENE_REF + ":" + BuildUnlockerId(targetObjectId);
             }
 
-            if (string.Equals(kind, PromptIntentEffectKinds.REVEAL_ENDCARD, StringComparison.Ordinal) ||
-                string.Equals(kind, PromptIntentEffectKinds.END_GAME, StringComparison.Ordinal) ||
-                string.Equals(kind, PromptIntentEffectKinds.HIDE_GUIDE, StringComparison.Ordinal))
+            if (PromptIntentCapabilityRegistry.EffectBuildsSystemActionTarget(kind) &&
+                PromptIntentCapabilityRegistry.TryGetEffectSystemActionAuthoringId(kind, out string _))
             {
                 return ActivationTargetKinds.SYSTEM_ACTION + ":" + IntentAuthoringUtility.BuildRuntimeSystemActionTargetId(kind, string.Empty);
             }
@@ -1148,7 +1142,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = completionEffects[i];
                 if (effect == null ||
-                    !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                    !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1211,10 +1205,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return lookup;
         }
 
-        private static Dictionary<string, PlayableScenarioFacilityOptions> BuildFacilityOptionsLookup(ScenarioModelObjectDefinition[] objects)
+        private static Dictionary<string, PlayableScenarioFeatureOptions> BuildFeatureOptionsLookup(ScenarioModelObjectDefinition[] objects)
         {
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
-            var lookup = new Dictionary<string, PlayableScenarioFacilityOptions>(StringComparer.Ordinal);
+            var lookup = new Dictionary<string, PlayableScenarioFeatureOptions>(StringComparer.Ordinal);
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
             for (int i = 0; i < safeObjects.Length; i++)
             {
@@ -1223,40 +1217,38 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 string role = IntentAuthoringUtility.Normalize(value.role);
-                if (!string.Equals(role, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal) &&
-                    !string.Equals(role, PromptIntentObjectRoles.PROCESSOR, StringComparison.Ordinal) &&
-                    !string.Equals(role, PromptIntentObjectRoles.GENERATOR, StringComparison.Ordinal))
-                {
+                string featureType = PromptIntentContractRegistry.ResolveFeatureTypeForRole(role);
+                if (!PromptIntentContractRegistry.ObjectRoleSupportsScenarioOptions(role) ||
+                    string.IsNullOrEmpty(featureType))
                     continue;
-                }
 
                 string objectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string facilityId))
+                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
-                lookup[facilityId] = value.facilityOptions;
+                lookup[targetId] = value.featureOptions;
             }
 
             return lookup;
         }
 
-        private static Dictionary<string, PlayableScenarioFacilityOptions> BuildFacilityOptionsLookup(PlayableScenarioFacilityOptionDefinition[] definitions)
+        private static Dictionary<string, PlayableScenarioFeatureOptions> BuildFeatureOptionsLookup(PlayableScenarioFeatureOptionDefinition[] definitions)
         {
-            var lookup = new Dictionary<string, PlayableScenarioFacilityOptions>(StringComparer.Ordinal);
-            PlayableScenarioFacilityOptionDefinition[] safeDefinitions = definitions ?? new PlayableScenarioFacilityOptionDefinition[0];
+            var lookup = new Dictionary<string, PlayableScenarioFeatureOptions>(StringComparer.Ordinal);
+            PlayableScenarioFeatureOptionDefinition[] safeDefinitions = definitions ?? new PlayableScenarioFeatureOptionDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                PlayableScenarioFacilityOptionDefinition definition = safeDefinitions[i];
-                if (definition == null || string.IsNullOrWhiteSpace(definition.facilityId))
+                PlayableScenarioFeatureOptionDefinition definition = safeDefinitions[i];
+                if (definition == null || string.IsNullOrWhiteSpace(definition.targetId))
                     continue;
 
-                lookup[definition.facilityId.Trim()] = definition.options;
+                lookup[definition.targetId.Trim()] = definition.options;
             }
 
             return lookup;
         }
 
-        private static bool FacilityOptionsEqual(PlayableScenarioFacilityOptions expected, PlayableScenarioFacilityOptions actual)
+        private static bool FeatureOptionsEqual(PlayableScenarioFeatureOptions expected, PlayableScenarioFeatureOptions actual)
         {
             return expected.conversionInterval == actual.conversionInterval &&
                    expected.inputCountPerConversion == actual.inputCountPerConversion &&
@@ -1274,43 +1266,43 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                    expected.moneyStacker.popIntervalSeconds == actual.moneyStacker.popIntervalSeconds;
         }
 
-        private static HashSet<string> BuildFacilityAcceptedItemKeySet(FacilityAcceptedItemDefinition[] definitions)
+        private static HashSet<string> BuildFeatureAcceptedItemKeySet(FeatureAcceptedItemDefinition[] definitions)
         {
             var keys = new HashSet<string>(StringComparer.Ordinal);
-            FacilityAcceptedItemDefinition[] safeDefinitions = definitions ?? new FacilityAcceptedItemDefinition[0];
+            FeatureAcceptedItemDefinition[] safeDefinitions = definitions ?? new FeatureAcceptedItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityAcceptedItemDefinition definition = safeDefinitions[i];
+                FeatureAcceptedItemDefinition definition = safeDefinitions[i];
                 string itemKey = ItemRefUtility.ToStableKey(definition != null ? definition.item : null);
                 if (definition == null ||
-                    string.IsNullOrWhiteSpace(definition.facilityId) ||
+                    string.IsNullOrWhiteSpace(definition.targetId) ||
                     string.IsNullOrWhiteSpace(itemKey))
                 {
                     continue;
                 }
 
-                keys.Add(definition.facilityId.Trim() + "::" + itemKey + "::" + definition.laneIndex);
+                keys.Add(definition.targetId.Trim() + "::" + itemKey + "::" + definition.laneIndex);
             }
 
             return keys;
         }
 
-        private static HashSet<string> BuildFacilityOutputItemKeySet(FacilityOutputItemDefinition[] definitions)
+        private static HashSet<string> BuildFeatureOutputItemKeySet(FeatureOutputItemDefinition[] definitions)
         {
             var keys = new HashSet<string>(StringComparer.Ordinal);
-            FacilityOutputItemDefinition[] safeDefinitions = definitions ?? new FacilityOutputItemDefinition[0];
+            FeatureOutputItemDefinition[] safeDefinitions = definitions ?? new FeatureOutputItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityOutputItemDefinition definition = safeDefinitions[i];
+                FeatureOutputItemDefinition definition = safeDefinitions[i];
                 string itemKey = ItemRefUtility.ToStableKey(definition != null ? definition.item : null);
                 if (definition == null ||
-                    string.IsNullOrWhiteSpace(definition.facilityId) ||
+                    string.IsNullOrWhiteSpace(definition.targetId) ||
                     string.IsNullOrWhiteSpace(itemKey))
                 {
                     continue;
                 }
 
-                keys.Add(definition.facilityId.Trim() + "::" + itemKey);
+                keys.Add(definition.targetId.Trim() + "::" + itemKey);
             }
 
             return keys;
@@ -1400,7 +1392,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < completionEffects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = completionEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 beatIds.Add(stageId + "__completion_focus_" + i.ToString("00"));
@@ -1440,7 +1432,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < entryEffects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = entryEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 beatIds.Add(stageId + "__focus_" + i.ToString("00"));
@@ -1539,7 +1531,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = safeEffects[i];
                 if (effect == null ||
-                    !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                 {
                     continue;
                 }

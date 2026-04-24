@@ -1,0 +1,36 @@
+{
+  "featureId": "builtin.converter",
+  "featureType": "converter",
+  "isBuiltin": true,
+  "displayName": "변환 기능",
+  "summary": "아이템 가공 feature",
+  "catalogExposure": { "exposeInCatalog": true, "exposeToServer": true, "exposeToAuthoring": true },
+  "objectRoles": [
+    { "role": "processor", "summary": "가공/포장 시설", "catalogBacked": true, "supportsDesignId": true, "supportsScenarioOptions": true, "supportsRailSinkTarget": true }
+  ],
+  "scenarioOptionSchema": {
+    "fields": [
+      { "fieldId": "inputCountPerConversion", "summary": "변환당 입력 개수", "valueType": "int", "required": false },
+      { "fieldId": "conversionIntervalSeconds", "summary": "변환 간격", "valueType": "float", "required": false },
+      { "fieldId": "inputItemMoveIntervalSeconds", "summary": "입력 이동 간격", "valueType": "float", "required": false }
+    ]
+  },
+  "targetSurfaces": [
+    { "role": "processor", "summary": "processor surface", "supportedEventKeys": [ "root", "drop_item", "get_item" ] }
+  ],
+  "gameplaySignals": [
+    { "signalId": "item_converted", "summary": "가공 완료 신호", "supportsTargetId": true, "requiresTargetId": true, "supportsItem": true, "requiresItem": true, "supportsCurrencyId": false, "requiresCurrencyId": false, "requiredTargetEventKey": "" }
+  ],
+  "conditionKinds": [
+    { "kind": "item_converted", "summary": "가공 완료 신호", "supportsStageId": false, "requiresStageId": false, "supportsTargetObjectId": true, "requiresTargetObjectId": true, "supportsItem": true, "requiresItem": true, "supportsCurrencyId": false, "requiresCurrencyId": false, "supportsAmountValue": false, "requiresPositiveAmountValue": false, "supportedTargetRoles": [ "processor" ], "allowAnyTargetRole": false, "gameplaySignalId": "item_converted", "stepConditionType": "gameplay_signal", "reactiveConditionType": "gameplay_signal" }
+  ],
+  "objectiveKinds": [
+    { "kind": "convert_item", "summary": "item converted signal beat", "requiresTargetObjectId": true, "requiresItem": false, "requiresInputItem": true, "requiresCurrencyId": false, "requiresAmountValue": false, "requiresSeconds": false, "canAbsorbArrow": false, "supportedTargetRoles": [ "processor" ], "allowAnyTargetRole": false, "completionStepConditionType": "gameplay_signal", "completionGameplaySignalId": "item_converted", "targetEventKey": "", "requiresAbsorbedArrow": true, "requiredArrowEventKey": "drop_item" }
+  ],
+  "effectKinds": [],
+  "compiledGameplayRoleMappings": [
+    { "gameplayObjectId": "converter", "role": "processor", "summary": "compiled converter spawn -> processor role" }
+  ],
+  "inputOutputSemantics": { "generatedItems": [], "outputItems": [], "acceptedTargetRoles": [], "supportsCustomerFeature": false, "containsCustomerSingleLine": false, "containsSellerFeature": false, "containsMoneyHandler": false },
+  "layoutRequirements": { "catalogBacked": true, "supportsDesignId": true, "designMode": "single_prefab", "placementMode": "", "pathShape": [] }
+}

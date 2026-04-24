@@ -328,6 +328,7 @@ namespace Supercent.PlayableAI.AuthoringCore
         public string sourceCatalogAssetPath = string.Empty;
         public string themeId = string.Empty;
         public string prefabsRootPath = string.Empty;
+        public FeatureDescriptor[] activeFeatureDescriptors = new FeatureDescriptor[0];
         public string environmentFloorPrefabAssetPath = string.Empty;
         public string environmentFloorPrefabAssetGuid = string.Empty;
         public CatalogPrefabMetadata environmentFloorPrefabMetadata = new CatalogPrefabMetadata();

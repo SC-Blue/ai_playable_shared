@@ -169,7 +169,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         id = Normalize(value.id),
                         role = Normalize(value.role),
                         designId = Normalize(value.designId),
-                        facilityOptions = BuildObjectFacilityOptions(value.scenarioOptions, value.role),
+                        featureOptions = BuildObjectFeatureOptions(value.scenarioOptions, value.role),
                         sellerRequestableItems = BuildSellerRequestableItems(value.scenarioOptions, currencyById, result),
                         physicsAreaOptions = CopyPhysicsAreaOptions(value.physicsAreaOptions),
                         railOptions = BuildRailOptions(value.railOptions),
@@ -394,12 +394,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return copied;
         }
 
-        private static PlayableScenarioFacilityOptions BuildObjectFacilityOptions(
+        private static PlayableScenarioFeatureOptions BuildObjectFeatureOptions(
             PromptIntentObjectScenarioOptions scenarioOptions,
             string role)
         {
-            PlayableScenarioFacilityOptions options = FacilityScenarioOptionRules.CreateRoleDefaultFacilityOptions(role);
-            ClearUnsupportedFacilityScenarioOptions(role, ref options);
+            PlayableScenarioFeatureOptions options = FeatureScenarioOptionRules.CreateRoleDefaultFeatureOptions(role);
+            ClearUnsupportedFeatureScenarioOptions(role, ref options);
             if (scenarioOptions == null)
                 return options;
 
@@ -421,26 +421,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return options;
         }
 
-        private static void ClearUnsupportedFacilityScenarioOptions(
+        private static void ClearUnsupportedFeatureScenarioOptions(
             string role,
-            ref PlayableScenarioFacilityOptions options)
+            ref PlayableScenarioFeatureOptions options)
         {
-            if (!FacilityScenarioOptionRules.SupportsCustomerRequestCount(role))
+            if (!FeatureScenarioOptionRules.SupportsCustomerRequestCount(role))
             {
                 options.customerReqMin = 0;
                 options.customerReqMax = 0;
             }
 
-            if (!FacilityScenarioOptionRules.SupportsInputCountPerConversion(role))
+            if (!FeatureScenarioOptionRules.SupportsInputCountPerConversion(role))
                 options.inputCountPerConversion = 0;
 
-            if (!FacilityScenarioOptionRules.SupportsConversionIntervalSeconds(role))
+            if (!FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(role))
                 options.conversionInterval = 0f;
 
-            if (!FacilityScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
+            if (!FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
                 options.inputItemMoveInterval = 0f;
 
-            if (!FacilityScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
+            if (!FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
                 options.spawnInterval = 0f;
         }
 
@@ -553,9 +553,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             };
         }
 
-        private static PlayableScenarioFacilityOptions CreateRoleDefaultFacilityOptions(string role)
+        private static PlayableScenarioFeatureOptions CreateRoleDefaultFeatureOptions(string role)
         {
-            return FacilityScenarioOptionRules.CreateRoleDefaultFacilityOptions(role);
+            return FeatureScenarioOptionRules.CreateRoleDefaultFeatureOptions(role);
         }
 
         private static void ApplyArrowAbsorption(
@@ -758,7 +758,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 return new PlayableScenarioPlayerOptions
                 {
-                    itemStacker = new PlayableScenarioFacilityOptions.StackerTuning
+                    itemStacker = new PlayableScenarioFeatureOptions.StackerTuning
                     {
                         maxCount = PlayerItemStackMaxCount,
                         popIntervalSeconds = PlayerItemStackPopIntervalSeconds,

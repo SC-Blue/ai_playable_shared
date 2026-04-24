@@ -202,17 +202,17 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class FacilityAcceptedItemDefinition
+    public sealed class FeatureAcceptedItemDefinition
     {
-        public string facilityId;
+        public string targetId;
         public ItemRef item = new ItemRef();
         public int laneIndex;
     }
 
     [Serializable]
-    public sealed class FacilityOutputItemDefinition
+    public sealed class FeatureOutputItemDefinition
     {
-        public string facilityId;
+        public string targetId;
         public ItemRef item = new ItemRef();
     }
 

@@ -1,0 +1,42 @@
+{
+  "featureId": "builtin.seller",
+  "featureType": "seller",
+  "isBuiltin": true,
+  "displayName": "판매 기능",
+  "summary": "판매 feature",
+  "catalogExposure": { "exposeInCatalog": true, "exposeToServer": true, "exposeToAuthoring": true },
+  "objectRoles": [
+    { "role": "seller", "summary": "판매 카운터", "catalogBacked": true, "supportsDesignId": true, "supportsScenarioOptions": true, "supportsRailSinkTarget": true }
+  ],
+  "scenarioOptionSchema": {
+    "fields": [
+      { "fieldId": "customerRequestCount", "summary": "손님 주문 수 범위", "valueType": "int", "required": false },
+      { "fieldId": "requestableItems", "summary": "주문 가능 품목", "valueType": "item_ref", "required": false }
+    ]
+  },
+  "targetSurfaces": [
+    { "role": "seller", "summary": "seller surface", "supportedEventKeys": [ "root", "drop_item", "sell_item", "collect_money" ] }
+  ],
+  "gameplaySignals": [
+    { "signalId": "sale_completed", "summary": "판매 완료 신호", "supportsTargetId": true, "requiresTargetId": true, "supportsItem": true, "requiresItem": false, "supportsCurrencyId": true, "requiresCurrencyId": false, "requiredTargetEventKey": "" },
+    { "signalId": "customer_served", "summary": "손님 응대 완료 신호", "supportsTargetId": true, "requiresTargetId": true, "supportsItem": false, "requiresItem": false, "supportsCurrencyId": false, "requiresCurrencyId": false, "requiredTargetEventKey": "" },
+    { "signalId": "money_collected", "summary": "돈 수집 완료 신호", "supportsTargetId": true, "requiresTargetId": false, "supportsItem": false, "requiresItem": false, "supportsCurrencyId": true, "requiresCurrencyId": true, "requiredTargetEventKey": "" }
+  ],
+  "conditionKinds": [
+    { "kind": "sale_completed", "summary": "판매 완료 신호", "supportsStageId": false, "requiresStageId": false, "supportsTargetObjectId": true, "requiresTargetObjectId": true, "supportsItem": true, "requiresItem": false, "supportsCurrencyId": false, "requiresCurrencyId": false, "supportsAmountValue": false, "requiresPositiveAmountValue": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": false, "gameplaySignalId": "sale_completed", "stepConditionType": "gameplay_signal", "reactiveConditionType": "gameplay_signal" },
+    { "kind": "customer_served", "summary": "손님 응대 완료 신호", "supportsStageId": false, "requiresStageId": false, "supportsTargetObjectId": true, "requiresTargetObjectId": true, "supportsItem": false, "requiresItem": false, "supportsCurrencyId": false, "requiresCurrencyId": false, "supportsAmountValue": false, "requiresPositiveAmountValue": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": false, "gameplaySignalId": "customer_served", "stepConditionType": "gameplay_signal", "reactiveConditionType": "gameplay_signal" },
+    { "kind": "money_collected", "summary": "돈 수집 완료", "supportsStageId": false, "requiresStageId": false, "supportsTargetObjectId": false, "requiresTargetObjectId": false, "supportsItem": false, "requiresItem": false, "supportsCurrencyId": true, "requiresCurrencyId": true, "supportsAmountValue": false, "requiresPositiveAmountValue": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": true, "gameplaySignalId": "money_collected", "stepConditionType": "gameplay_signal", "reactiveConditionType": "gameplay_signal" }
+  ],
+  "objectiveKinds": [
+    { "kind": "sell_item", "summary": "sale completed signal beat", "requiresTargetObjectId": true, "requiresItem": true, "requiresInputItem": false, "requiresCurrencyId": false, "requiresAmountValue": false, "requiresSeconds": false, "canAbsorbArrow": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": false, "completionStepConditionType": "gameplay_signal", "completionGameplaySignalId": "sale_completed", "targetEventKey": "", "requiresAbsorbedArrow": false, "requiredArrowEventKey": "" },
+    { "kind": "collect_currency", "summary": "money collected signal beat", "requiresTargetObjectId": true, "requiresItem": false, "requiresInputItem": false, "requiresCurrencyId": true, "requiresAmountValue": false, "requiresSeconds": false, "canAbsorbArrow": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": true, "completionStepConditionType": "gameplay_signal", "completionGameplaySignalId": "money_collected", "targetEventKey": "", "requiresAbsorbedArrow": false, "requiredArrowEventKey": "" }
+  ],
+  "effectKinds": [
+    { "kind": "spawn_customer", "summary": "customer spawn effect", "semanticTags": [ "customer_spawn" ], "requiresTargetObjectId": true, "supportsTiming": true, "requiresEventKey": false, "supportsEventKey": false, "isNonBlockingSystemAction": false, "supportedTargetRoles": [ "seller" ], "allowAnyTargetRole": false, "systemActionId": "", "runtimeEventKey": "", "buildsSceneActivationTarget": false, "buildsSystemActionTarget": false }
+  ],
+  "compiledGameplayRoleMappings": [
+    { "gameplayObjectId": "seller", "role": "seller", "summary": "compiled seller spawn -> seller role" }
+  ],
+  "inputOutputSemantics": { "generatedItems": [], "outputItems": [], "acceptedTargetRoles": [], "supportsCustomerFeature": true, "containsCustomerSingleLine": true, "containsSellerFeature": true, "containsMoneyHandler": true },
+  "layoutRequirements": { "catalogBacked": true, "supportsDesignId": true, "designMode": "single_prefab", "placementMode": "", "pathShape": [] }
+}

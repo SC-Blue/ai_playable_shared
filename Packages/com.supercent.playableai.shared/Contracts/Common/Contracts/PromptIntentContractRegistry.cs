@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.Common.Contracts
@@ -203,27 +204,37 @@ namespace Supercent.PlayableAI.Common.Contracts
         };
         // </generated-contract-registry-data>
 
+        public static void SetActiveFeatureDescriptors(FeatureDescriptor[] descriptors)
+        {
+            PromptIntentFeatureDescriptorBridge.SetActiveFeatureDescriptors(descriptors);
+        }
+
+        public static void ClearActiveFeatureDescriptors()
+        {
+            PromptIntentFeatureDescriptorBridge.ClearActiveFeatureDescriptors();
+        }
+
         public static PromptIntentContractRegistrySnapshot CreateSnapshot()
         {
             return new PromptIntentContractRegistrySnapshot
             {
                 schemaVersion = SCHEMA_VERSION,
-                objectRoles = CloneObjectRoleDescriptors(OBJECT_ROLES),
-                scenarioOptions = CloneScenarioOptionDescriptors(SCENARIO_OPTIONS),
-                conditionKinds = CloneConditionKindDescriptors(CONDITION_KINDS),
-                objectiveKinds = CloneObjectiveKindDescriptors(OBJECTIVE_KINDS),
-                effectKinds = CloneEffectKindDescriptors(EFFECT_KINDS),
+                objectRoles = CloneObjectRoleDescriptors(GetObjectRolesInternal()),
+                scenarioOptions = CloneScenarioOptionDescriptors(GetScenarioOptionsInternal()),
+                conditionKinds = CloneConditionKindDescriptors(GetConditionKindsInternal()),
+                objectiveKinds = CloneObjectiveKindDescriptors(GetObjectiveKindsInternal()),
+                effectKinds = CloneEffectKindDescriptors(GetEffectKindsInternal()),
                 effectTimingKinds = CloneValueDescriptors(EFFECT_TIMING_KINDS),
-                flowTargetEventKeys = CloneValueDescriptors(FLOW_TARGET_EVENT_KEYS),
+                flowTargetEventKeys = CloneValueDescriptors(GetFlowTargetEventKeysInternal()),
                 currencyStartVisualModes = CloneValueDescriptors(CURRENCY_START_VISUAL_MODES),
                 railEndpointSides = CloneValueDescriptors(RAIL_ENDPOINT_SIDES),
-                compiledGameplayRoles = CloneCompiledGameplayRoleDescriptors(COMPILED_GAMEPLAY_ROLES),
+                compiledGameplayRoles = CloneCompiledGameplayRoleDescriptors(GetCompiledGameplayRolesInternal()),
             };
         }
 
         public static string[] GetObjectRoleValues()
         {
-            return ExtractValues(OBJECT_ROLES);
+            return ExtractValues(GetObjectRolesInternal());
         }
 
         public static bool IsSupportedObjectRole(string role)
@@ -249,6 +260,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null && descriptor.supportsScenarioOptions;
         }
 
+        public static string ResolveFeatureTypeForRole(string role)
+        {
+            return PromptIntentFeatureDescriptorBridge.ResolveFeatureTypeForRole(role);
+        }
+
         public static bool ObjectRoleSupportsRailSinkTarget(string role)
         {
             PromptIntentObjectRoleDescriptor descriptor = FindObjectRole(role);
@@ -257,7 +273,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentScenarioOptionDescriptor[] GetScenarioOptions()
         {
-            return CloneScenarioOptionDescriptors(SCENARIO_OPTIONS);
+            return CloneScenarioOptionDescriptors(GetScenarioOptionsInternal());
         }
 
         public static string[] GetSupportedScenarioOptionNames(string role)
@@ -267,9 +283,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return new string[0];
 
             var values = new List<string>();
-            for (int i = 0; i < SCENARIO_OPTIONS.Length; i++)
+            PromptIntentScenarioOptionDescriptor[] options = GetScenarioOptionsInternal();
+            for (int i = 0; i < options.Length; i++)
             {
-                PromptIntentScenarioOptionDescriptor descriptor = SCENARIO_OPTIONS[i];
+                PromptIntentScenarioOptionDescriptor descriptor = options[i];
                 if (descriptor != null && ContainsValue(descriptor.supportedRoles, normalizedRole))
                     values.Add(descriptor.value);
             }
@@ -299,19 +316,19 @@ namespace Supercent.PlayableAI.Common.Contracts
             return JoinNames(names) + "만 지원합니다.";
         }
 
-        public static PlayableScenarioFacilityOptions CreateRoleDefaultFacilityOptions(string role)
+        public static PlayableScenarioFeatureOptions CreateRoleDefaultFeatureOptions(string role)
         {
-            return PlayableScenarioFacilityDefaults.CreateRoleOptions(role);
+            return PlayableScenarioFeatureDefaults.CreateRoleOptions(role);
         }
 
-        public static void ApplyRoleDefaultFacilityOptions(string role, ref PlayableScenarioFacilityOptions options)
+        public static void ApplyRoleDefaultFeatureOptions(string role, ref PlayableScenarioFeatureOptions options)
         {
-            PlayableScenarioFacilityDefaults.ApplyRoleDefaults(role, ref options);
+            PlayableScenarioFeatureDefaults.ApplyRoleDefaults(role, ref options);
         }
 
         public static string[] GetConditionKindValues()
         {
-            return ExtractValues(CONDITION_KINDS);
+            return ExtractValues(GetConditionKindsInternal());
         }
 
         public static bool IsSupportedConditionKind(string kind)
@@ -381,7 +398,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static string[] GetObjectiveKindValues()
         {
-            return ExtractValues(OBJECTIVE_KINDS);
+            return ExtractValues(GetObjectiveKindsInternal());
         }
 
         public static bool IsSupportedObjectiveKind(string kind)
@@ -467,9 +484,14 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null && descriptor.requiresSeconds;
         }
 
+        public static bool IsUnlockObjectiveKind(string kind)
+        {
+            return string.Equals(Normalize(kind), PromptIntentObjectiveKinds.UNLOCK_OBJECT, StringComparison.Ordinal);
+        }
+
         public static string[] GetEffectKindValues()
         {
-            return ExtractValues(EFFECT_KINDS);
+            return ExtractValues(GetEffectKindsInternal());
         }
 
         public static bool IsSupportedEffectKind(string kind)
@@ -519,12 +541,12 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static string[] GetFlowTargetEventKeys()
         {
-            return ExtractValues(FLOW_TARGET_EVENT_KEYS);
+            return ExtractValues(GetFlowTargetEventKeysInternal());
         }
 
         public static bool IsSupportedFlowTargetEventKey(string eventKey)
         {
-            return FindValueDescriptor(FLOW_TARGET_EVENT_KEYS, eventKey) != null;
+            return FindValueDescriptor(GetFlowTargetEventKeysInternal(), eventKey) != null;
         }
 
         public static string[] GetCurrencyStartVisualModes()
@@ -549,7 +571,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentCompiledGameplayRoleDescriptor[] GetCompiledGameplayRoles()
         {
-            return CloneCompiledGameplayRoleDescriptors(COMPILED_GAMEPLAY_ROLES);
+            return CloneCompiledGameplayRoleDescriptors(GetCompiledGameplayRolesInternal());
         }
 
         public static string ResolveCompiledGameplayRole(string gameplayObjectId)
@@ -558,13 +580,30 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null ? descriptor.role : string.Empty;
         }
 
+        public static string ResolveCatalogGameplayObjectIdForRole(string role)
+        {
+            string normalizedRole = Normalize(role);
+            if (string.IsNullOrEmpty(normalizedRole))
+                return string.Empty;
+
+            PromptIntentCompiledGameplayRoleDescriptor[] descriptors = GetCompiledGameplayRolesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
+            {
+                if (descriptors[i].role == normalizedRole)
+                    return descriptors[i].gameplayObjectId;
+            }
+
+            return string.Empty;
+        }
+
         private static PromptIntentObjectRoleDescriptor FindObjectRole(string role)
         {
             string normalized = Normalize(role);
-            for (int i = 0; i < OBJECT_ROLES.Length; i++)
+            PromptIntentObjectRoleDescriptor[] descriptors = GetObjectRolesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (OBJECT_ROLES[i].value == normalized)
-                    return OBJECT_ROLES[i];
+                if (descriptors[i].value == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -573,10 +612,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentScenarioOptionDescriptor FindScenarioOption(string optionName)
         {
             string normalized = Normalize(optionName);
-            for (int i = 0; i < SCENARIO_OPTIONS.Length; i++)
+            PromptIntentScenarioOptionDescriptor[] descriptors = GetScenarioOptionsInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (SCENARIO_OPTIONS[i].value == normalized)
-                    return SCENARIO_OPTIONS[i];
+                if (descriptors[i].value == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -585,10 +625,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentConditionKindDescriptor FindConditionKind(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < CONDITION_KINDS.Length; i++)
+            PromptIntentConditionKindDescriptor[] descriptors = GetConditionKindsInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (CONDITION_KINDS[i].value == normalized)
-                    return CONDITION_KINDS[i];
+                if (descriptors[i].value == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -597,10 +638,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentObjectiveKindDescriptor FindObjectiveKind(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < OBJECTIVE_KINDS.Length; i++)
+            PromptIntentObjectiveKindDescriptor[] descriptors = GetObjectiveKindsInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (OBJECTIVE_KINDS[i].value == normalized)
-                    return OBJECTIVE_KINDS[i];
+                if (descriptors[i].value == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -609,10 +651,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentEffectKindDescriptor FindEffectKind(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < EFFECT_KINDS.Length; i++)
+            PromptIntentEffectKindDescriptor[] descriptors = GetEffectKindsInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (EFFECT_KINDS[i].value == normalized)
-                    return EFFECT_KINDS[i];
+                if (descriptors[i].value == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -621,13 +664,49 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentCompiledGameplayRoleDescriptor FindCompiledGameplayRole(string gameplayObjectId)
         {
             string normalized = Normalize(gameplayObjectId);
-            for (int i = 0; i < COMPILED_GAMEPLAY_ROLES.Length; i++)
+            PromptIntentCompiledGameplayRoleDescriptor[] descriptors = GetCompiledGameplayRolesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (COMPILED_GAMEPLAY_ROLES[i].gameplayObjectId == normalized)
-                    return COMPILED_GAMEPLAY_ROLES[i];
+                if (descriptors[i].gameplayObjectId == normalized)
+                    return descriptors[i];
             }
 
             return null;
+        }
+
+        private static PromptIntentObjectRoleDescriptor[] GetObjectRolesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeObjectRoles(OBJECT_ROLES);
+        }
+
+        private static PromptIntentScenarioOptionDescriptor[] GetScenarioOptionsInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeScenarioOptions(SCENARIO_OPTIONS);
+        }
+
+        private static PromptIntentConditionKindDescriptor[] GetConditionKindsInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeConditionKinds(CONDITION_KINDS);
+        }
+
+        private static PromptIntentObjectiveKindDescriptor[] GetObjectiveKindsInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeObjectiveKinds(OBJECTIVE_KINDS);
+        }
+
+        private static PromptIntentEffectKindDescriptor[] GetEffectKindsInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeEffectKinds(EFFECT_KINDS);
+        }
+
+        private static PromptIntentValueDescriptor[] GetFlowTargetEventKeysInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeFlowTargetEventKeys(FLOW_TARGET_EVENT_KEYS);
+        }
+
+        private static PromptIntentCompiledGameplayRoleDescriptor[] GetCompiledGameplayRolesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeCompiledGameplayRoles(COMPILED_GAMEPLAY_ROLES);
         }
 
         private static PromptIntentValueDescriptor FindValueDescriptor(PromptIntentValueDescriptor[] values, string input)

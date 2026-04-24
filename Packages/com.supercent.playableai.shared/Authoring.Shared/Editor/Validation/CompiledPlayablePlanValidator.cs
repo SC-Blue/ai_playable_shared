@@ -79,31 +79,42 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 return FinalizeFailure(result);
             }
 
-            Dictionary<string, int> objectDesignLookup = BuildObjectDesignLookup(plan.objectDesigns);
-            ValidateObjectDesignSelections(plan.objectDesigns, catalog, result);
-            ValidateContentSelections(plan.contentSelections, catalog, result);
-            Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns, plan.physicsAreas);
+            PromptIntentContractRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            PromptIntentCapabilityRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            try
+            {
+                Dictionary<string, int> objectDesignLookup = BuildObjectDesignLookup(plan.objectDesigns);
+                ValidateCatalogFeatureAvailability(plan, catalog, result);
+                ValidateObjectDesignSelections(plan.objectDesigns, catalog, result);
+                ValidateContentSelections(plan.contentSelections, catalog, result);
+                Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns, plan.physicsAreas);
 
-            ValidateCurrencies(plan.currencies, result);
-            Dictionary<string, int> currencyUnits = BuildCurrencyUnitLookup(plan.currencies);
-            int primaryCurrencyUnitValue = ResolvePrimaryCurrencyUnitValue(plan.currencies);
-            ValidateUnlocks(plan.unlocks, spawnLookup, currencyUnits, result);
-            ValidateItemPrices(plan.itemPrices, catalog, primaryCurrencyUnitValue, result);
-            ValidateFacilityAcceptedItems(plan.facilityAcceptedItems, spawnLookup, catalog, result);
-            ValidateFacilityOutputItems(plan.spawns, plan.facilityOutputItems, spawnLookup, catalog, result);
-            ValidatePlayerOptions(plan.playerOptions, result);
-            ValidateFacilityOptions(plan.facilityOptions, spawnLookup, result);
-            ValidateCompiledFlowBeats(plan.beats, plan.actions, plan.facilityAcceptedItems, spawnLookup, catalog, currencyUnits, result);
-            HashSet<string> declaredSourceImageIds = ValidateSourceImages(layoutSpec, result);
-            ValidateCustomerPaths(layoutSpec, spawnLookup, catalog, result);
-            ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
-            ValidatePlacementSpatialSemantics(layoutSpec, result);
-            HashSet<string> physicsAreaObjectIds = ValidatePhysicsAreas(plan.physicsAreas, catalog, result);
-            ValidateRails(plan.rails, spawnLookup, physicsAreaObjectIds, catalog, result);
-            ValidateRuntimeOwnedDesignSources(plan.spawns, plan.facilityAcceptedItems, plan.facilityOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
-            ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
-            ValidateImageLayoutPadding(plan.spawns, plan.physicsAreas, plan.rails, catalog, layoutSpec, result);
-            ValidateDeclaredLaneRelationships(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
+                ValidateCurrencies(plan.currencies, result);
+                Dictionary<string, int> currencyUnits = BuildCurrencyUnitLookup(plan.currencies);
+                int primaryCurrencyUnitValue = ResolvePrimaryCurrencyUnitValue(plan.currencies);
+                ValidateUnlocks(plan.unlocks, spawnLookup, currencyUnits, result);
+                ValidateItemPrices(plan.itemPrices, catalog, primaryCurrencyUnitValue, result);
+                ValidateFeatureAcceptedItems(plan.featureAcceptedItems, spawnLookup, catalog, result);
+                ValidateFeatureOutputItems(plan.spawns, plan.featureOutputItems, spawnLookup, catalog, result);
+                ValidatePlayerOptions(plan.playerOptions, result);
+                ValidateFeatureOptions(plan.featureOptions, spawnLookup, result);
+                ValidateCompiledFlowBeats(plan.beats, plan.actions, plan.featureAcceptedItems, spawnLookup, catalog, currencyUnits, result);
+                HashSet<string> declaredSourceImageIds = ValidateSourceImages(layoutSpec, result);
+                ValidateCustomerPaths(layoutSpec, spawnLookup, catalog, result);
+                ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
+                ValidatePlacementSpatialSemantics(layoutSpec, result);
+                HashSet<string> physicsAreaObjectIds = ValidatePhysicsAreas(plan.physicsAreas, catalog, result);
+                ValidateRails(plan.rails, spawnLookup, physicsAreaObjectIds, catalog, result);
+                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
+                ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
+                ValidateImageLayoutPadding(plan.spawns, plan.physicsAreas, plan.rails, catalog, layoutSpec, result);
+                ValidateDeclaredLaneRelationships(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
+            }
+            finally
+            {
+                PromptIntentCapabilityRegistry.ClearActiveFeatureDescriptors();
+                PromptIntentContractRegistry.ClearActiveFeatureDescriptors();
+            }
 
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
@@ -113,10 +124,42 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return result;
         }
 
+        private static void ValidateCatalogFeatureAvailability(
+            CompiledPlayablePlan plan,
+            PlayableObjectCatalog catalog,
+            CompiledPlayablePlanValidationResult result)
+        {
+            if (!HasFeatureDescriptorAuthority(catalog))
+                return;
+
+            PlayableScenarioFeatureOptionDefinition[] featureOptions = plan.featureOptions ?? new PlayableScenarioFeatureOptionDefinition[0];
+            for (int i = 0; i < featureOptions.Length; i++)
+            {
+                PlayableScenarioFeatureOptionDefinition definition = featureOptions[i];
+                string featureType = PlayableFeatureTypeIds.Normalize(definition != null ? definition.featureType : string.Empty);
+                if (string.IsNullOrEmpty(featureType))
+                    continue;
+
+                if (!catalog.IsSupportedFeatureType(featureType))
+                    Fail(result, "featureOptions[" + i + "].featureType '" + featureType + "'는 현재 catalog에 없는 feature입니다.");
+            }
+
+            if ((plan.rails ?? new CompiledRailDefinition[0]).Length > 0 && !catalog.IsSupportedFeatureType(PlayableFeatureTypeIds.Rail))
+                Fail(result, "compiled plan이 rail 데이터를 포함하지만 현재 catalog는 rail feature를 지원하지 않습니다.");
+
+            if ((plan.physicsAreas ?? new CompiledPhysicsAreaDefinition[0]).Length > 0 && !catalog.IsSupportedFeatureType(PlayableFeatureTypeIds.PhysicsArea))
+                Fail(result, "compiled plan이 physics_area 데이터를 포함하지만 현재 catalog는 physics_area feature를 지원하지 않습니다.");
+        }
+
+        private static bool HasFeatureDescriptorAuthority(PlayableObjectCatalog catalog)
+        {
+            return catalog != null && (catalog.FeatureDescriptors ?? Array.Empty<FeatureDescriptor>()).Length > 0;
+        }
+
         private static void ValidateCompiledFlowBeats(
             FlowBeatDefinition[] beats,
             FlowActionDefinition[] actions,
-            FacilityAcceptedItemDefinition[] acceptedItems,
+            FeatureAcceptedItemDefinition[] acceptedItems,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             Dictionary<string, int> currencyUnits,
@@ -153,11 +196,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, completeWhenError);
             }
 
-            var acceptedItemKeysByFacilityId = BuildAcceptedItemKeysByFacilityId(acceptedItems);
+            var acceptedItemKeysByTargetId = BuildAcceptedItemKeysByTargetId(acceptedItems);
             HashSet<string> actionIds = ValidateCompiledFlowActions(
                 actions,
                 seenBeatIds,
-                acceptedItemKeysByFacilityId,
+                acceptedItemKeysByTargetId,
                 spawnLookup,
                 catalog,
                 currencyUnits,
@@ -177,7 +220,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static HashSet<string> ValidateCompiledFlowActions(
             FlowActionDefinition[] actions,
             HashSet<string> beatIds,
-            Dictionary<string, HashSet<string>> acceptedItemKeysByFacilityId,
+            Dictionary<string, HashSet<string>> acceptedItemKeysByTargetId,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             Dictionary<string, int> currencyUnits,
@@ -238,7 +281,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateCompiledFlowActionPayload(
                     action,
                     actionLabel,
-                    acceptedItemKeysByFacilityId,
+                    acceptedItemKeysByTargetId,
                     spawnLookup,
                     catalog,
                     result);
@@ -250,7 +293,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidateCompiledFlowActionPayload(
             FlowActionDefinition action,
             string label,
-            Dictionary<string, HashSet<string>> acceptedItemKeysByFacilityId,
+            Dictionary<string, HashSet<string>> acceptedItemKeysByTargetId,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             CompiledPlayablePlanValidationResult result)
@@ -355,8 +398,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         return;
                     }
 
-                    if (!PortablePrefabMetadataUtility.TryGetMetadata(customerPrefab, out CatalogPrefabMetadata customerMetadata) || !customerMetadata.supportsCustomerFacility)
-                        Fail(result, label + ".payload.customerSpawn.targetId '" + payload.customerSpawn.targetId + "'는 customer spawn이 가능한 facility가 아닙니다.");
+                    if (!PortablePrefabMetadataUtility.TryGetMetadata(customerPrefab, out CatalogPrefabMetadata customerMetadata) || !customerMetadata.supportsCustomerFeature)
+                        Fail(result, label + ".payload.customerSpawn.targetId '" + payload.customerSpawn.targetId + "'는 customer spawn이 가능한 feature가 아닙니다.");
                     else if (catalog == null || !catalog.IsValidGameplayDesignIndex("customer", payload.customerSpawn.customerDesignIndex))
                         Fail(result, label + ".payload.customerSpawn.customerDesignIndex '" + payload.customerSpawn.customerDesignIndex + "'는 customer catalog design으로 해석되지 않습니다.");
                     break;
@@ -393,7 +436,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     if (!ItemRefUtility.IsValid(payload.sellerRequest.item))
                         Fail(result, label + ".payload.sellerRequest.item은 familyId와 variantId가 모두 필요합니다.");
 
-                    if (!acceptedItemKeysByFacilityId.TryGetValue(targetId, out HashSet<string> acceptedItemKeys) || !acceptedItemKeys.Contains(itemKey))
+                    if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> acceptedItemKeys) || !acceptedItemKeys.Contains(itemKey))
                         Fail(result, label + ".payload.sellerRequest.item '" + itemKey + "'은(는) target seller accepted item에 포함되어야 합니다.");
                     break;
 
@@ -491,25 +534,25 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 Fail(result, label + ".eventKey '" + eventKey + "'는 지원되지 않습니다.");
         }
 
-        private static Dictionary<string, HashSet<string>> BuildAcceptedItemKeysByFacilityId(FacilityAcceptedItemDefinition[] acceptedItems)
+        private static Dictionary<string, HashSet<string>> BuildAcceptedItemKeysByTargetId(FeatureAcceptedItemDefinition[] acceptedItems)
         {
             var values = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            FacilityAcceptedItemDefinition[] safeAcceptedItems = acceptedItems ?? new FacilityAcceptedItemDefinition[0];
+            FeatureAcceptedItemDefinition[] safeAcceptedItems = acceptedItems ?? new FeatureAcceptedItemDefinition[0];
             for (int i = 0; i < safeAcceptedItems.Length; i++)
             {
-                FacilityAcceptedItemDefinition acceptedItem = safeAcceptedItems[i];
-                if (acceptedItem == null || string.IsNullOrWhiteSpace(acceptedItem.facilityId))
+                FeatureAcceptedItemDefinition acceptedItem = safeAcceptedItems[i];
+                if (acceptedItem == null || string.IsNullOrWhiteSpace(acceptedItem.targetId))
                     continue;
 
-                string facilityId = acceptedItem.facilityId.Trim();
+                string targetId = acceptedItem.targetId.Trim();
                 string itemKey = ItemRefUtility.ToStableKey(acceptedItem.item);
                 if (string.IsNullOrEmpty(itemKey))
                     continue;
 
-                if (!values.TryGetValue(facilityId, out HashSet<string> itemKeys))
+                if (!values.TryGetValue(targetId, out HashSet<string> itemKeys))
                 {
                     itemKeys = new HashSet<string>(StringComparer.Ordinal);
-                    values.Add(facilityId, itemKeys);
+                    values.Add(targetId, itemKeys);
                 }
 
                 itemKeys.Add(itemKey);
@@ -754,48 +797,48 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void ValidateFacilityAcceptedItems(FacilityAcceptedItemDefinition[] definitions, Dictionary<string, CompiledSpawnData> spawnLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
+        private static void ValidateFeatureAcceptedItems(FeatureAcceptedItemDefinition[] definitions, Dictionary<string, CompiledSpawnData> spawnLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
         {
-            FacilityAcceptedItemDefinition[] safeDefinitions = definitions ?? new FacilityAcceptedItemDefinition[0];
+            FeatureAcceptedItemDefinition[] safeDefinitions = definitions ?? new FeatureAcceptedItemDefinition[0];
             var seenLaneKeys = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityAcceptedItemDefinition definition = safeDefinitions[i];
+                FeatureAcceptedItemDefinition definition = safeDefinitions[i];
                 if (definition == null)
                 {
-                    Fail(result, "facilityAcceptedItems[" + i + "]가 null입니다.");
+                    Fail(result, "featureAcceptedItems[" + i + "]가 null입니다.");
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(definition.facilityId))
+                if (string.IsNullOrWhiteSpace(definition.targetId))
                 {
-                    Fail(result, "facilityAcceptedItems[" + i + "].facilityId는 필수입니다.");
+                    Fail(result, "featureAcceptedItems[" + i + "].targetId는 필수입니다.");
                     continue;
                 }
 
-                string facilityId = definition.facilityId.Trim();
-                if (!spawnLookup.ContainsKey(facilityId))
-                    Fail(result, "facilityAcceptedItems[" + i + "].facilityId '" + facilityId + "'를 compiled spawns에서 찾지 못했습니다.");
+                string targetId = definition.targetId.Trim();
+                if (!spawnLookup.ContainsKey(targetId))
+                    Fail(result, "featureAcceptedItems[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
 
                 string itemKey = ItemRefUtility.ToStableKey(definition.item);
                 if (string.IsNullOrWhiteSpace(itemKey))
                 {
-                    Fail(result, "facilityAcceptedItems[" + i + "].item은 필수입니다.");
+                    Fail(result, "featureAcceptedItems[" + i + "].item은 필수입니다.");
                     continue;
                 }
 
                 if (!ItemRefUtility.IsValid(definition.item))
-                    Fail(result, "facilityAcceptedItems[" + i + "].item은 familyId와 variantId가 모두 필요합니다.");
+                    Fail(result, "featureAcceptedItems[" + i + "].item은 familyId와 variantId가 모두 필요합니다.");
 
                 if (definition.laneIndex < 0)
                 {
-                    Fail(result, "facilityAcceptedItems[" + i + "].laneIndex는 0 이상이어야 합니다.");
+                    Fail(result, "featureAcceptedItems[" + i + "].laneIndex는 0 이상이어야 합니다.");
                     continue;
                 }
 
-                string laneKey = facilityId + "::" + definition.laneIndex;
+                string laneKey = targetId + "::" + definition.laneIndex;
                 if (!seenLaneKeys.Add(laneKey))
-                    Fail(result, "중복된 facilityAcceptedItems lane '" + laneKey + "'입니다.");
+                    Fail(result, "중복된 featureAcceptedItems lane '" + laneKey + "'입니다.");
             }
         }
 
@@ -865,7 +908,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 Fail(
                     result,
-                    "MissingCustomerPaths: Step 3 layoutSpec.customerPaths[]가 비어 있습니다. customer-facing facility targetId: " +
+                    "MissingCustomerPaths: Step 3 layoutSpec.customerPaths[]가 비어 있습니다. customer-facing feature targetId: " +
                     string.Join(", ", requiredTargets));
                 return;
             }
@@ -902,7 +945,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 }
 
                 if (!SupportsCustomerPathAuthoring(prefab))
-                    Fail(result, "layoutSpec.customerPaths[" + i + "].targetId '" + targetId + "'는 customer line이 가능한 facility가 아닙니다.");
+                    Fail(result, "layoutSpec.customerPaths[" + i + "].targetId '" + targetId + "'는 customer line이 가능한 feature가 아닙니다.");
 
                 ValidateCustomerPathPoint(entry.spawnPoint, "layoutSpec.customerPaths[" + i + "].spawnPoint", result);
                 ValidateCustomerPathPoint(entry.leavePoint, "layoutSpec.customerPaths[" + i + "].leavePoint", result);
@@ -934,57 +977,57 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         segments.Add("누락 targetId: " + string.Join(", ", missingTargets));
                     if (unexpectedTargets.Count > 0)
                         segments.Add("초과 targetId: " + string.Join(", ", unexpectedTargets));
-                    Fail(result, "CustomerPathCoverageMismatch: Step 3 customerPaths coverage가 customer-facing facility와 일치하지 않습니다. " + string.Join(" / ", segments));
+                    Fail(result, "CustomerPathCoverageMismatch: Step 3 customerPaths coverage가 customer-facing feature와 일치하지 않습니다. " + string.Join(" / ", segments));
                 }
             }
         }
 
-        private static void ValidateFacilityOutputItems(
+        private static void ValidateFeatureOutputItems(
             CompiledSpawnData[] spawns,
-            FacilityOutputItemDefinition[] definitions,
+            FeatureOutputItemDefinition[] definitions,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             CompiledPlayablePlanValidationResult result)
         {
-            FacilityOutputItemDefinition[] safeDefinitions = definitions ?? new FacilityOutputItemDefinition[0];
-            var outputItemByFacilityId = new Dictionary<string, string>(StringComparer.Ordinal);
+            FeatureOutputItemDefinition[] safeDefinitions = definitions ?? new FeatureOutputItemDefinition[0];
+            var outputItemByTargetId = new Dictionary<string, string>(StringComparer.Ordinal);
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityOutputItemDefinition definition = safeDefinitions[i];
+                FeatureOutputItemDefinition definition = safeDefinitions[i];
                 if (definition == null)
                 {
-                    Fail(result, "facilityOutputItems[" + i + "]가 null입니다.");
+                    Fail(result, "featureOutputItems[" + i + "]가 null입니다.");
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(definition.facilityId))
+                if (string.IsNullOrWhiteSpace(definition.targetId))
                 {
-                    Fail(result, "facilityOutputItems[" + i + "].facilityId는 필수입니다.");
+                    Fail(result, "featureOutputItems[" + i + "].targetId는 필수입니다.");
                     continue;
                 }
 
-                string facilityId = definition.facilityId.Trim();
-                if (!spawnLookup.ContainsKey(facilityId))
-                    Fail(result, "facilityOutputItems[" + i + "].facilityId '" + facilityId + "'를 compiled spawns에서 찾지 못했습니다.");
+                string targetId = definition.targetId.Trim();
+                if (!spawnLookup.ContainsKey(targetId))
+                    Fail(result, "featureOutputItems[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
 
                 string itemKey = ItemRefUtility.ToStableKey(definition.item);
                 if (string.IsNullOrWhiteSpace(itemKey))
                 {
-                    Fail(result, "facilityOutputItems[" + i + "].item은 필수입니다.");
+                    Fail(result, "featureOutputItems[" + i + "].item은 필수입니다.");
                     continue;
                 }
 
                 if (!ItemRefUtility.IsValid(definition.item))
-                    Fail(result, "facilityOutputItems[" + i + "].item은 familyId와 variantId가 모두 필요합니다.");
+                    Fail(result, "featureOutputItems[" + i + "].item은 familyId와 variantId가 모두 필요합니다.");
 
-                if (outputItemByFacilityId.TryGetValue(facilityId, out string existingItemKey) &&
+                if (outputItemByTargetId.TryGetValue(targetId, out string existingItemKey) &&
                     !string.Equals(existingItemKey, itemKey, StringComparison.Ordinal))
                 {
-                    Fail(result, "facilityOutputItems[" + i + "]는 facilityId '" + facilityId + "'에 대해 단일 output item만 허용합니다.");
+                    Fail(result, "featureOutputItems[" + i + "]는 targetId '" + targetId + "'에 대해 단일 output item만 허용합니다.");
                     continue;
                 }
 
-                outputItemByFacilityId[facilityId] = itemKey;
+                outputItemByTargetId[targetId] = itemKey;
             }
 
             CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
@@ -997,9 +1040,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!string.Equals(spawn.objectId != null ? spawn.objectId.Trim() : string.Empty, "converter", StringComparison.Ordinal))
                     continue;
 
-                string facilityId = spawn.spawnKey.Trim();
-                if (!outputItemByFacilityId.ContainsKey(facilityId))
-                    Fail(result, "processor spawn '" + facilityId + "'에는 facilityOutputItems entry가 필요합니다.");
+                string targetId = spawn.spawnKey.Trim();
+                if (!outputItemByTargetId.ContainsKey(targetId))
+                    Fail(result, "processor spawn '" + targetId + "'에는 featureOutputItems entry가 필요합니다.");
             }
         }
 
@@ -1082,7 +1125,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         {
             return prefab != null &&
                    PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata) &&
-                   metadata.supportsCustomerFacility;
+                   metadata.supportsCustomerFeature;
         }
 
         private static bool IsImageLayoutMode(LayoutSpecDocument layoutSpec)
@@ -1271,68 +1314,117 @@ private static void ValidateEnvironmentSourceImageReferences(
                 Fail(result, "playerOptions.itemStacker.maxCount는 0 이상이어야 합니다.");
         }
 
-        private static void ValidateFacilityOptions(PlayableScenarioFacilityOptionDefinition[] definitions, Dictionary<string, CompiledSpawnData> spawnLookup, CompiledPlayablePlanValidationResult result)
+        private static void ValidateFeatureOptions(PlayableScenarioFeatureOptionDefinition[] definitions, Dictionary<string, CompiledSpawnData> spawnLookup, CompiledPlayablePlanValidationResult result)
         {
-            PlayableScenarioFacilityOptionDefinition[] safeDefinitions = definitions ?? new PlayableScenarioFacilityOptionDefinition[0];
-            var seenFacilityIds = new HashSet<string>(StringComparer.Ordinal);
+            PlayableScenarioFeatureOptionDefinition[] safeDefinitions = definitions ?? new PlayableScenarioFeatureOptionDefinition[0];
+            var seenFeatureIds = new HashSet<string>(StringComparer.Ordinal);
+            var seenTypedTargets = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                PlayableScenarioFacilityOptionDefinition definition = safeDefinitions[i];
+                PlayableScenarioFeatureOptionDefinition definition = safeDefinitions[i];
                 if (definition == null)
                 {
-                    Fail(result, "facilityOptions[" + i + "]가 null입니다.");
+                    Fail(result, "featureOptions[" + i + "]가 null입니다.");
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(definition.facilityId))
+                if (string.IsNullOrWhiteSpace(definition.featureId))
                 {
-                    Fail(result, "facilityOptions[" + i + "].facilityId는 필수입니다.");
+                    Fail(result, "featureOptions[" + i + "].featureId는 필수입니다.");
                     continue;
                 }
 
-                string facilityId = definition.facilityId.Trim();
-                if (!seenFacilityIds.Add(facilityId))
-                    Fail(result, "중복된 facilityOptions facilityId '" + facilityId + "'입니다.");
+                string featureId = definition.featureId.Trim();
+                if (!seenFeatureIds.Add(featureId))
+                    Fail(result, "중복된 featureOptions featureId '" + featureId + "'입니다.");
 
-                if (!spawnLookup.ContainsKey(facilityId))
-                    Fail(result, "facilityOptions[" + i + "].facilityId '" + facilityId + "'를 compiled spawns에서 찾지 못했습니다.");
+                string featureType = PlayableFeatureTypeIds.Normalize(definition.featureType);
+                if (string.IsNullOrEmpty(featureType))
+                {
+                    Fail(result, "featureOptions[" + i + "].featureType는 필수입니다.");
+                    continue;
+                }
 
-                ValidateFacilityOptionValues(definition.options, "facilityOptions[" + i + "].options", result);
+                if (string.IsNullOrWhiteSpace(definition.targetId))
+                {
+                    Fail(result, "featureOptions[" + i + "].targetId는 필수입니다.");
+                    continue;
+                }
 
-                if (spawnLookup.TryGetValue(facilityId, out CompiledSpawnData spawn) &&
+                string targetId = definition.targetId.Trim();
+                if (!seenTypedTargets.Add(featureType + "::" + targetId))
+                    Fail(result, "중복된 featureOptions(featureType, targetId) '" + featureType + "', '" + targetId + "'입니다.");
+
+                if (!string.Equals(featureType, PlayableFeatureTypeIds.PhysicsArea, StringComparison.Ordinal) &&
+                    !spawnLookup.ContainsKey(targetId))
+                    Fail(result, "featureOptions[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
+
+                PlayableScenarioFeatureOptions options = definition.options.NormalizeForFeatureType(featureType);
+                ValidateFeatureOptionValues(featureType, options, "featureOptions[" + i + "].options", result);
+
+                if (spawnLookup.TryGetValue(targetId, out CompiledSpawnData spawn) &&
                     spawn != null &&
                     string.Equals(spawn.objectId != null ? spawn.objectId.Trim() : string.Empty, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
                 {
-                    ValidateSellerCustomerRequestRange(definition.options, "facilityOptions[" + i + "].options", result);
+                    ValidateSellerCustomerRequestRange(options, "featureOptions[" + i + "].options", result);
                 }
             }
         }
 
-        private static void ValidateFacilityOptionValues(PlayableScenarioFacilityOptions options, string label, CompiledPlayablePlanValidationResult result)
+        private static void ValidateFeatureOptionValues(string featureType, PlayableScenarioFeatureOptions options, string label, CompiledPlayablePlanValidationResult result)
         {
-            if (options.customerReqMin < 0 || options.customerReqMax < 0)
-                Fail(result, label + ".customerReqMin/Max는 0 이상이어야 합니다.");
-
-            if (options.customerReqMin > 0 || options.customerReqMax > 0)
+            string normalizedFeatureType = PlayableFeatureTypeIds.Normalize(featureType);
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Seller)
             {
-                if (options.customerReqMin == 0 || options.customerReqMax == 0)
-                    Fail(result, label + ".customerReqMin/Max는 둘 다 0이거나 둘 다 1 이상이어야 합니다.");
-                else if (options.customerReqMin > options.customerReqMax)
-                    Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
+                if (options.customerReqMin < 0 || options.customerReqMax < 0)
+                    Fail(result, label + ".customerReqMin/Max는 0 이상이어야 합니다.");
+
+                if (options.customerReqMin > 0 || options.customerReqMax > 0)
+                {
+                    if (options.customerReqMin == 0 || options.customerReqMax == 0)
+                        Fail(result, label + ".customerReqMin/Max는 둘 다 0이거나 둘 다 1 이상이어야 합니다.");
+                    else if (options.customerReqMin > options.customerReqMax)
+                        Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
+                }
             }
 
-            if (options.inputCountPerConversion < 0)
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.inputCountPerConversion < 0)
                 Fail(result, label + ".inputCountPerConversion은 0 이상이어야 합니다.");
-            if (options.conversionInterval < 0f)
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.conversionInterval < 0f)
                 Fail(result, label + ".conversionInterval은 0 이상이어야 합니다.");
-            if (options.inputItemMoveInterval < 0f)
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.inputItemMoveInterval < 0f)
                 Fail(result, label + ".inputItemMoveInterval은 0 이상이어야 합니다.");
-            if (options.spawnInterval < 0f)
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Generator && options.spawnInterval < 0f)
                 Fail(result, label + ".spawnInterval은 0 이상이어야 합니다.");
+            if (normalizedFeatureType == PlayableFeatureTypeIds.Rail)
+            {
+                if (options.rail.spawnIntervalSeconds <= 0f)
+                    Fail(result, label + ".rail.spawnIntervalSeconds는 0보다 커야 합니다.");
+                if (options.rail.travelDurationSeconds <= 0f)
+                    Fail(result, label + ".rail.travelDurationSeconds는 0보다 커야 합니다.");
+            }
+            if (normalizedFeatureType == PlayableFeatureTypeIds.PhysicsArea && options.physicsArea.itemsPerBlock <= 0)
+                Fail(result, label + ".physicsArea.itemsPerBlock는 0보다 커야 합니다.");
+
+            bool requiresItemHandling =
+                normalizedFeatureType == PlayableFeatureTypeIds.Generator ||
+                normalizedFeatureType == PlayableFeatureTypeIds.Converter ||
+                normalizedFeatureType == PlayableFeatureTypeIds.Seller;
+            if (requiresItemHandling)
+            {
+                if (options.itemTweenDuration <= 0f)
+                    Fail(result, label + ".itemTweenDuration은 0보다 커야 합니다.");
+                if (options.itemTweenParabolaHeight < 0f)
+                    Fail(result, label + ".itemTweenParabolaHeight는 0 이상이어야 합니다.");
+                if (options.itemStacker.maxCount < 0)
+                    Fail(result, label + ".itemStacker.maxCount는 0 이상이어야 합니다.");
+                if (options.itemStacker.popIntervalSeconds < 0f)
+                    Fail(result, label + ".itemStacker.popIntervalSeconds는 0 이상이어야 합니다.");
+            }
         }
 
         private static void ValidateSellerCustomerRequestRange(
-            PlayableScenarioFacilityOptions options,
+            PlayableScenarioFeatureOptions options,
             string label,
             CompiledPlayablePlanValidationResult result)
         {
@@ -1346,9 +1438,9 @@ private static void ValidateEnvironmentSourceImageReferences(
                 Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
         }
 
-private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FacilityAcceptedItemDefinition[] facilityAcceptedItems, FacilityOutputItemDefinition[] facilityOutputItems, ItemPriceDefinition[] itemPrices, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
+private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, ItemPriceDefinition[] itemPrices, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
 {
-    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, facilityAcceptedItems, facilityOutputItems, itemPrices, catalog);
+    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog);
     for (int i = 0; i < resolution.Errors.Count; i++)
         Fail(result, resolution.Errors[i]);
 

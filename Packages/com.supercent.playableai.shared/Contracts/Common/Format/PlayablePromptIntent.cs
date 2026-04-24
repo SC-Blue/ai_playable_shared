@@ -235,7 +235,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string id;
         public string role;
         public string designId;
-        public PlayableScenarioFacilityOptions facilityOptions;
+        public PlayableScenarioFeatureOptions featureOptions;
         public ScenarioModelSellerRequestableItemDefinition[] sellerRequestableItems = new ScenarioModelSellerRequestableItemDefinition[0];
         public PhysicsAreaOptionsDefinition physicsAreaOptions;
         public RailOptionsDefinition railOptions;

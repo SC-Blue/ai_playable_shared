@@ -4,7 +4,8 @@ namespace Supercent.PlayableAI.Common.Contracts
 {
     public static class CatalogGameplayTaxonomy
     {
-        public const string SourceCategoryFacility = CatalogCategoryIds.FACILITY;
+        public const string SourceCategoryFeature = CatalogCategoryIds.FEATURE;
+        public const string SourceCategoryUnlocker = GameplayCatalog.UNLOCKER_CATEGORY;
         public const string SourceCategoryCharacter = CatalogCategoryIds.CHARACTER;
         public const string SourceCategoryItem = CatalogCategoryIds.ITEM;
 
@@ -20,7 +21,8 @@ namespace Supercent.PlayableAI.Common.Contracts
         public static bool IsSupportedSourceGameplayCategory(string category)
         {
             string normalizedCategory = Normalize(category);
-            return string.Equals(normalizedCategory, SourceCategoryFacility, System.StringComparison.Ordinal) ||
+            return string.Equals(normalizedCategory, SourceCategoryFeature, System.StringComparison.Ordinal) ||
+                   string.Equals(normalizedCategory, SourceCategoryUnlocker, System.StringComparison.Ordinal) ||
                    string.Equals(normalizedCategory, SourceCategoryCharacter, System.StringComparison.Ordinal) ||
                    string.Equals(normalizedCategory, SourceCategoryItem, System.StringComparison.Ordinal);
         }
@@ -52,6 +54,12 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return true;
             }
 
+            if (string.Equals(normalizedCategory, SourceCategoryUnlocker, System.StringComparison.Ordinal))
+            {
+                role = RoleUnlockPad;
+                return true;
+            }
+
             if (string.Equals(normalizedCategory, SourceCategoryCharacter, System.StringComparison.Ordinal))
             {
                 if (string.Equals(normalizedObjectId, RoleCustomer, System.StringComparison.Ordinal) ||
@@ -75,7 +83,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return false;
             }
 
-            if (!string.Equals(normalizedCategory, SourceCategoryFacility, System.StringComparison.Ordinal))
+            if (!string.Equals(normalizedCategory, SourceCategoryFeature, System.StringComparison.Ordinal))
                 return false;
 
             if (string.Equals(normalizedDesignMode, DesignModeIds.ASSEMBLED_PATH, System.StringComparison.Ordinal) ||
@@ -104,12 +112,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return true;
             }
 
-            if (string.Equals(normalizedObjectId, "unlocker", System.StringComparison.Ordinal))
-            {
-                role = RoleUnlockPad;
-                return true;
-            }
-
             return false;
         }
 
@@ -121,7 +123,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 case RoleProcessor:
                 case RoleSeller:
                 case RoleRail:
-                    return GameplayCatalog.FACILITY_CATEGORY;
+                    return GameplayCatalog.FEATURE_CATEGORY;
                 case RoleUnlockPad:
                     return GameplayCatalog.UNLOCKER_CATEGORY;
                 case RoleItem:

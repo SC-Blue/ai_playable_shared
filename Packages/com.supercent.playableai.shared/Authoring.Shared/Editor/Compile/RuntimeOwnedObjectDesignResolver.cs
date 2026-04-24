@@ -22,8 +22,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
     {
         public static RuntimeOwnedObjectDesignResolution Resolve(
             CompiledSpawnData[] spawns,
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems,
-            FacilityOutputItemDefinition[] facilityOutputItems,
+            FeatureAcceptedItemDefinition[] featureAcceptedItems,
+            FeatureOutputItemDefinition[] featureOutputItems,
             ItemPriceDefinition[] itemPrices,
             PlayableObjectCatalog catalog)
         {
@@ -63,7 +63,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         CatalogIdentityRules.CUSTOMER_DESIGN_ID,
                         requiredObjectDesignKeys);
 
-                if (metadata.containsItemSellFacility)
+                if (metadata.containsSellerFeature)
                     AddRequiredObjectDesign(
                         CatalogIdentityRules.MONEY_OBJECT_ID,
                         CatalogIdentityRules.MONEY_DESIGN_ID,
@@ -89,8 +89,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 }
             }
 
-            CollectAcceptedItems(facilityAcceptedItems, requiredObjectDesignKeys);
-            CollectOutputItems(facilityOutputItems, requiredObjectDesignKeys);
+            CollectAcceptedItems(featureAcceptedItems, requiredObjectDesignKeys);
+            CollectOutputItems(featureOutputItems, requiredObjectDesignKeys);
             CollectPricedItems(itemPrices, requiredObjectDesignKeys);
 
             var sortedKeys = new List<string>(requiredObjectDesignKeys);
@@ -137,13 +137,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         }
 
         private static void CollectAcceptedItems(
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems,
+            FeatureAcceptedItemDefinition[] featureAcceptedItems,
             HashSet<string> requiredObjectDesignKeys)
         {
-            FacilityAcceptedItemDefinition[] safeDefinitions = facilityAcceptedItems ?? new FacilityAcceptedItemDefinition[0];
+            FeatureAcceptedItemDefinition[] safeDefinitions = featureAcceptedItems ?? new FeatureAcceptedItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityAcceptedItemDefinition definition = safeDefinitions[i];
+                FeatureAcceptedItemDefinition definition = safeDefinitions[i];
                 if (definition == null || !ItemRefUtility.IsValid(definition.item))
                     continue;
 
@@ -152,13 +152,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         }
 
         private static void CollectOutputItems(
-            FacilityOutputItemDefinition[] facilityOutputItems,
+            FeatureOutputItemDefinition[] featureOutputItems,
             HashSet<string> requiredObjectDesignKeys)
         {
-            FacilityOutputItemDefinition[] safeDefinitions = facilityOutputItems ?? new FacilityOutputItemDefinition[0];
+            FeatureOutputItemDefinition[] safeDefinitions = featureOutputItems ?? new FeatureOutputItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityOutputItemDefinition definition = safeDefinitions[i];
+                FeatureOutputItemDefinition definition = safeDefinitions[i];
                 if (definition == null || !ItemRefUtility.IsValid(definition.item))
                     continue;
 

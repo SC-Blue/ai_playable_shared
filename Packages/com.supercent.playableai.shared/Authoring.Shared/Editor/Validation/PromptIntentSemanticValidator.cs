@@ -60,7 +60,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 result.FailureCode = PlayableFailureCode.IntentValidationFailed;
             ValidateSaleValues(intent.saleValues, currencyById, catalog, result);
             ValidateStages(intent.stages, objectById, currencyById, saleValueByItemKey, catalog, result);
-            ValidateFacilityItemConsistency(intent.stages, result);
+            ValidateFeatureItemConsistency(intent.stages, result);
             return FinalizeResult(result);
         }
 
@@ -820,7 +820,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         }
         }
 
-        private static void ValidateFacilityItemConsistency(
+        private static void ValidateFeatureItemConsistency(
             PromptIntentStageDefinition[] stages,
             PromptIntentSemanticValidationResult result)
         {
@@ -851,7 +851,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         continue;
                     }
 
-                    RegisterFacilityItemConsistency(
+                    RegisterFeatureItemConsistency(
                         processorInputItemByTargetObjectId,
                         Normalize(objective.targetObjectId),
                         inputItemKey,
@@ -862,7 +862,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void RegisterFacilityItemConsistency(
+        private static void RegisterFeatureItemConsistency(
             Dictionary<string, string> itemByTargetObjectId,
             string targetObjectId,
             string itemId,
@@ -904,23 +904,23 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             bool hasInputItemMoveInterval = value.inputItemMoveIntervalSeconds > 0f;
             bool hasSpawnInterval = value.spawnIntervalSeconds > 0f;
 
-            if (hasCustomerRequestCount && !FacilityScenarioOptionRules.SupportsCustomerRequestCount(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+            if (hasCustomerRequestCount && !FeatureScenarioOptionRules.SupportsCustomerRequestCount(role))
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
             if (hasRequestableItems && !string.Equals(Normalize(role), PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
-            if (hasInputCountPerConversion && !FacilityScenarioOptionRules.SupportsInputCountPerConversion(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+            if (hasInputCountPerConversion && !FeatureScenarioOptionRules.SupportsInputCountPerConversion(role))
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
-            if (hasConversionInterval && !FacilityScenarioOptionRules.SupportsConversionIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+            if (hasConversionInterval && !FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(role))
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
-            if (hasInputItemMoveInterval && !FacilityScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+            if (hasInputItemMoveInterval && !FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
-            if (hasSpawnInterval && !FacilityScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FacilityScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
+            if (hasSpawnInterval && !FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
+                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
 
             PromptIntentSellerRequestableItemDefinition[] requestableItems = value.requestableItems ?? new PromptIntentSellerRequestableItemDefinition[0];
             for (int i = 0; i < requestableItems.Length; i++)

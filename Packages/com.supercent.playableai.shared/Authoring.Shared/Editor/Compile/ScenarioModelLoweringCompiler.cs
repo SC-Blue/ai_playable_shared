@@ -62,8 +62,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, SerializableVector3> positions = LayoutSpecGeometryUtility.BuildPositionLookup(objects, layoutSpec, result.Errors);
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId = BuildSaleValueLookup(model.saleValues);
-            FacilityOutputItemDefinition[] facilityOutputItems = BuildFacilityOutputItems(model, spawnKeys, result);
-            Dictionary<string, ItemRef> outputItemsByFacilityId = BuildFacilityOutputItemLookup(facilityOutputItems);
+            FeatureOutputItemDefinition[] featureOutputItems = BuildFeatureOutputItems(model, spawnKeys, result);
+            Dictionary<string, ItemRef> outputItemsByTargetId = BuildFeatureOutputItemLookup(featureOutputItems);
             Dictionary<string, LoweredStageState> stageStatesById = new Dictionary<string, LoweredStageState>(StringComparer.Ordinal);
             var loweredStages = new List<LoweredStageState>();
 
@@ -75,7 +75,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (stage == null)
                     continue;
 
-                LoweredStageState loweredStage = LowerStage(stage, previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByFacilityId, catalog, result);
+                LoweredStageState loweredStage = LowerStage(stage, previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, catalog, result);
                 if (loweredStage == null)
                     continue;
 
@@ -85,14 +85,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 previousStageId = loweredStage.StageId;
             }
 
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems = BuildFacilityAcceptedItems(model, spawnKeys, result);
+            FeatureAcceptedItemDefinition[] featureAcceptedItems = BuildFeatureAcceptedItems(model, spawnKeys, result);
             SellerRequestableItemRuleDefinition[] sellerRequestRules =
-                BuildSellerRequestableItemRules(model.objects, spawnKeys, facilityAcceptedItems, result);
+                BuildSellerRequestableItemRules(model.objects, spawnKeys, featureAcceptedItems, result);
             ItemPriceDefinition[] itemPrices = BuildItemPrices(model.saleValues);
-            CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, facilityAcceptedItems, result);
+            CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, featureAcceptedItems, result);
             CompiledPhysicsAreaDefinition[] physicsAreas = BuildPhysicsAreas(objects, positions, layoutSpec, result);
             CompiledRailDefinition[] rails = BuildRails(objects, spawnKeys, layoutSpec, result);
-            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, facilityAcceptedItems, facilityOutputItems, itemPrices, catalog, result);
+            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog, result);
             ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
@@ -134,10 +134,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 rails = rails,
                 currencies = BuildCurrencies(model.currencies),
                 itemPrices = itemPrices,
-                facilityAcceptedItems = facilityAcceptedItems,
-                facilityOutputItems = facilityOutputItems,
+                featureAcceptedItems = featureAcceptedItems,
+                featureOutputItems = featureOutputItems,
                 playerOptions = model.playerOptions,
-                facilityOptions = BuildFacilityOptions(model.objects, spawnKeys),
+                featureOptions = BuildFeatureOptions(model.objects, spawnKeys),
                 unlocks = unlocks.ToArray(),
                 beats = loweredFlowBeats,
                 actions = loweredFlowActions,
@@ -636,7 +636,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
-            Dictionary<string, ItemRef> outputItemsByFacilityId,
+            Dictionary<string, ItemRef> outputItemsByTargetId,
             PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
@@ -654,7 +654,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             string lastEntrySetupBeatId = entryGuideBeats.Length > 0
                 ? entryGuideBeats[entryGuideBeats.Length - 1].id
                 : lastIntroBeatId;
-            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByFacilityId, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
+            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
             string lastObjectiveOrEntrySetupBeatId = objectiveBeats.Length > 0
                 ? objectiveBeats[objectiveBeats.Length - 1].id
                 : lastEntrySetupBeatId;
@@ -697,7 +697,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < entryEffects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = entryEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 string beatId = stageId + "__focus_" + i.ToString("00");
@@ -740,7 +740,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
-            Dictionary<string, ItemRef> outputItemsByFacilityId,
+            Dictionary<string, ItemRef> outputItemsByTargetId,
             string stageId,
             string lastEntrySetupBeatId,
             List<FlowActionDefinition> actions,
@@ -775,7 +775,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     enterWhen,
                     spawnKeys,
                     saleValuesByObjectId,
-                    outputItemsByFacilityId,
+                    outputItemsByTargetId,
                     actions,
                     result));
             }
@@ -797,7 +797,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < completionEffects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = completionEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 string beatId = stageId + "__completion_focus_" + i.ToString("00");
@@ -970,7 +970,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = effectIndex - 1; i >= 0; i--)
             {
                 ScenarioModelEffectDefinition effect = safeEffects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 return stageId + focusBeatPrefix + i.ToString("00");
@@ -985,7 +985,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             StepConditionDefinition enterWhen,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
-            Dictionary<string, ItemRef> outputItemsByFacilityId,
+            Dictionary<string, ItemRef> outputItemsByTargetId,
             List<FlowActionDefinition> actions,
             ScenarioModelLoweringResult result)
         {
@@ -993,7 +993,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 id = beatId,
                 enterWhen = enterWhen ?? new StepConditionDefinition { type = StepConditionRules.ALWAYS },
-                completeWhen = BuildObjectiveCompletionCondition(objective, spawnKeys, saleValuesByObjectId, outputItemsByFacilityId, result),
+                completeWhen = BuildObjectiveCompletionCondition(objective, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, result),
             };
 
             if (objective.absorbsArrow)
@@ -1090,13 +1090,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ScenarioModelObjectiveDefinition objective,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByItemKey,
-            Dictionary<string, ItemRef> outputItemsByFacilityId,
+            Dictionary<string, ItemRef> outputItemsByTargetId,
             ScenarioModelLoweringResult result)
         {
             string kind = objective != null ? objective.kind : string.Empty;
             string completionType = PromptIntentCapabilityRegistry.GetObjectiveCompletionStepConditionType(kind);
             string completionSignalId = PromptIntentCapabilityRegistry.GetObjectiveCompletionGameplaySignalId(kind);
-            ItemRef completionItem = ResolveObjectiveCompletionItem(objective, spawnKeys, outputItemsByFacilityId);
+            ItemRef completionItem = ResolveObjectiveCompletionItem(objective, spawnKeys, outputItemsByTargetId);
             switch (completionType)
             {
                 case StepConditionRules.UNLOCKER_UNLOCKED:
@@ -1136,7 +1136,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static ItemRef ResolveObjectiveCompletionItem(
             ScenarioModelObjectiveDefinition objective,
             Dictionary<string, string> spawnKeys,
-            Dictionary<string, ItemRef> outputItemsByFacilityId)
+            Dictionary<string, ItemRef> outputItemsByTargetId)
         {
             if (objective == null)
                 return null;
@@ -1149,12 +1149,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return null;
 
             string normalizedTargetObjectId = IntentAuthoringUtility.Normalize(objective.targetObjectId);
-            string facilityId = string.Empty;
+            string targetId = string.Empty;
             if (spawnKeys != null)
-                spawnKeys.TryGetValue(normalizedTargetObjectId, out facilityId);
-            if (string.IsNullOrEmpty(facilityId) ||
-                outputItemsByFacilityId == null ||
-                !outputItemsByFacilityId.TryGetValue(facilityId, out ItemRef outputItem) ||
+                spawnKeys.TryGetValue(normalizedTargetObjectId, out targetId);
+            if (string.IsNullOrEmpty(targetId) ||
+                outputItemsByTargetId == null ||
+                !outputItemsByTargetId.TryGetValue(targetId, out ItemRef outputItem) ||
                 !ItemRefUtility.IsValid(outputItem))
             {
                 return null;
@@ -1163,21 +1163,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return outputItem;
         }
 
-        private static Dictionary<string, ItemRef> BuildFacilityOutputItemLookup(FacilityOutputItemDefinition[] facilityOutputItems)
+        private static Dictionary<string, ItemRef> BuildFeatureOutputItemLookup(FeatureOutputItemDefinition[] featureOutputItems)
         {
             var lookup = new Dictionary<string, ItemRef>(StringComparer.Ordinal);
-            FacilityOutputItemDefinition[] safeItems = facilityOutputItems ?? new FacilityOutputItemDefinition[0];
+            FeatureOutputItemDefinition[] safeItems = featureOutputItems ?? new FeatureOutputItemDefinition[0];
             for (int i = 0; i < safeItems.Length; i++)
             {
-                FacilityOutputItemDefinition definition = safeItems[i];
+                FeatureOutputItemDefinition definition = safeItems[i];
                 if (definition == null)
                     continue;
 
-                string facilityId = IntentAuthoringUtility.Normalize(definition.facilityId);
-                if (string.IsNullOrEmpty(facilityId) || !ItemRefUtility.IsValid(definition.item))
+                string targetId = IntentAuthoringUtility.Normalize(definition.targetId);
+                if (string.IsNullOrEmpty(targetId) || !ItemRefUtility.IsValid(definition.item))
                     continue;
 
-                lookup[facilityId] = ItemRefUtility.Clone(definition.item);
+                lookup[targetId] = ItemRefUtility.Clone(definition.item);
             }
 
             return lookup;
@@ -1192,7 +1192,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ScenarioModelObjectiveDefinition unlockObjective = null;
             for (int i = 0; i < objectives.Length; i++)
             {
-                if (!string.Equals(objectives[i] != null ? objectives[i].kind : string.Empty, PromptIntentObjectiveKinds.UNLOCK_OBJECT, StringComparison.Ordinal))
+                if (!PromptIntentContractRegistry.IsUnlockObjectiveKind(objectives[i] != null ? objectives[i].kind : string.Empty))
                     continue;
 
                 unlockObjective = objectives[i];
@@ -1224,8 +1224,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal) ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
+                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1259,9 +1259,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal) ||
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
                     string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal) ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1294,15 +1294,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (string.IsNullOrEmpty(lastBeatId))
                 return rules;
 
-            bool stageHasUnlockObjective = HasObjective(stage, PromptIntentObjectiveKinds.UNLOCK_OBJECT);
+            bool stageHasUnlockObjective = HasUnlockObjective(stage);
 
             ScenarioModelEffectDefinition[] effects = stage.completionEffects ?? new ScenarioModelEffectDefinition[0];
             for (int i = 0; i < effects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal) ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.FOCUS_CAMERA, StringComparison.Ordinal))
+                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind) ||
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
                 if (stageHasUnlockObjective)
@@ -1338,6 +1338,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return false;
         }
 
+        private static bool HasUnlockObjective(ScenarioModelStageDefinition stage)
+        {
+            ScenarioModelObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new ScenarioModelObjectiveDefinition[0] : new ScenarioModelObjectiveDefinition[0];
+            for (int i = 0; i < objectives.Length; i++)
+            {
+                if (PromptIntentContractRegistry.IsUnlockObjectiveKind(objectives[i] != null ? objectives[i].kind : string.Empty))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static List<CustomerSpawnRuleDefinition> BuildEntryCustomerSpawnRules(
             ScenarioModelStageDefinition stage,
             LoweredStageState loweredStage,
@@ -1353,7 +1365,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < effects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                     continue;
 
                 int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
@@ -1383,7 +1395,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < effects.Length; i++)
             {
                 ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null || !string.Equals(effect.kind, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
+                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
                     continue;
 
                 int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
@@ -1800,11 +1812,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, SerializableVector3> positions,
             LayoutSpecDocument layoutSpec,
             PlayableObjectCatalog catalog,
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems,
+            FeatureAcceptedItemDefinition[] featureAcceptedItems,
             ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            Dictionary<string, int> acceptedItemCountByFacilityId = BuildAcceptedItemCountLookup(facilityAcceptedItems);
+            Dictionary<string, int> acceptedItemCountByTargetId = BuildAcceptedItemCountLookup(featureAcceptedItems);
             var spawns = new List<CompiledSpawnData>();
             for (int i = 0; i < safeObjects.Length; i++)
             {
@@ -1828,7 +1840,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
-                string resolvedDesignId = ResolveSpawnDesignId(value, gameplayObjectId, scenarioObjectId, acceptedItemCountByFacilityId);
+                string resolvedDesignId = ResolveSpawnDesignId(value, gameplayObjectId, scenarioObjectId, acceptedItemCountByTargetId);
                 int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(catalog, gameplayObjectId, resolvedDesignId, result.Errors, "objects[" + i + "]");
                 if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
                     result.FailureCode = PlayableFailureCode.LoweringFailed;
@@ -1853,21 +1865,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return spawns.ToArray();
         }
 
-        private static Dictionary<string, int> BuildAcceptedItemCountLookup(FacilityAcceptedItemDefinition[] definitions)
+        private static Dictionary<string, int> BuildAcceptedItemCountLookup(FeatureAcceptedItemDefinition[] definitions)
         {
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-            FacilityAcceptedItemDefinition[] safeDefinitions = definitions ?? new FacilityAcceptedItemDefinition[0];
+            FeatureAcceptedItemDefinition[] safeDefinitions = definitions ?? new FeatureAcceptedItemDefinition[0];
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
-                FacilityAcceptedItemDefinition definition = safeDefinitions[i];
-                string facilityId = IntentAuthoringUtility.Normalize(definition != null ? definition.facilityId : string.Empty);
-                if (string.IsNullOrEmpty(facilityId))
+                FeatureAcceptedItemDefinition definition = safeDefinitions[i];
+                string targetId = IntentAuthoringUtility.Normalize(definition != null ? definition.targetId : string.Empty);
+                if (string.IsNullOrEmpty(targetId))
                     continue;
 
-                if (counts.TryGetValue(facilityId, out int currentCount))
-                    counts[facilityId] = currentCount + 1;
+                if (counts.TryGetValue(targetId, out int currentCount))
+                    counts[targetId] = currentCount + 1;
                 else
-                    counts.Add(facilityId, 1);
+                    counts.Add(targetId, 1);
             }
 
             return counts;
@@ -2020,7 +2032,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ScenarioModelObjectDefinition value,
             string gameplayObjectId,
             string scenarioObjectId,
-            Dictionary<string, int> acceptedItemCountByFacilityId)
+            Dictionary<string, int> acceptedItemCountByTargetId)
         {
             return value.designId;
         }
@@ -2108,13 +2120,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static ObjectDesignSelectionDefinition[] BuildObjectDesigns(
             CompiledSpawnData[] spawns,
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems,
-            FacilityOutputItemDefinition[] facilityOutputItems,
+            FeatureAcceptedItemDefinition[] featureAcceptedItems,
+            FeatureOutputItemDefinition[] featureOutputItems,
             ItemPriceDefinition[] itemPrices,
             PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
-            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, facilityAcceptedItems, facilityOutputItems, itemPrices, catalog);
+            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog);
             for (int i = 0; i < resolution.Errors.Count; i++)
                 result.Errors.Add(resolution.Errors[i]);
 
@@ -2264,23 +2276,23 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return values;
         }
 
-        private static FacilityAcceptedItemDefinition[] BuildFacilityAcceptedItems(
+        private static FeatureAcceptedItemDefinition[] BuildFeatureAcceptedItems(
             PlayableScenarioModel model,
             Dictionary<string, string> spawnKeys,
             ScenarioModelLoweringResult result)
         {
-            FacilityAcceptedItemDefinition[] values = IntentAuthoringUtility.BuildFacilityAcceptedItems(model, spawnKeys, result.Errors);
+            FeatureAcceptedItemDefinition[] values = IntentAuthoringUtility.BuildFeatureAcceptedItems(model, spawnKeys, result.Errors);
             if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
             return values;
         }
 
-        private static FacilityOutputItemDefinition[] BuildFacilityOutputItems(
+        private static FeatureOutputItemDefinition[] BuildFeatureOutputItems(
             PlayableScenarioModel model,
             Dictionary<string, string> spawnKeys,
             ScenarioModelLoweringResult result)
         {
-            FacilityOutputItemDefinition[] values = IntentAuthoringUtility.BuildFacilityOutputItems(model, spawnKeys, result.Errors);
+            FeatureOutputItemDefinition[] values = IntentAuthoringUtility.BuildFeatureOutputItems(model, spawnKeys, result.Errors);
             if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
             return values;
@@ -2289,27 +2301,27 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static SellerRequestableItemRuleDefinition[] BuildSellerRequestableItemRules(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, string> spawnKeys,
-            FacilityAcceptedItemDefinition[] facilityAcceptedItems,
+            FeatureAcceptedItemDefinition[] featureAcceptedItems,
             ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            var acceptedItemKeysByFacilityId = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            FacilityAcceptedItemDefinition[] safeAcceptedItems = facilityAcceptedItems ?? new FacilityAcceptedItemDefinition[0];
+            var acceptedItemKeysByTargetId = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            FeatureAcceptedItemDefinition[] safeAcceptedItems = featureAcceptedItems ?? new FeatureAcceptedItemDefinition[0];
             for (int i = 0; i < safeAcceptedItems.Length; i++)
             {
-                FacilityAcceptedItemDefinition acceptedItem = safeAcceptedItems[i];
+                FeatureAcceptedItemDefinition acceptedItem = safeAcceptedItems[i];
                 if (acceptedItem == null)
                     continue;
 
-                string facilityId = IntentAuthoringUtility.Normalize(acceptedItem.facilityId);
+                string targetId = IntentAuthoringUtility.Normalize(acceptedItem.targetId);
                 string itemKey = ItemRefUtility.ToStableKey(acceptedItem.item);
-                if (string.IsNullOrEmpty(facilityId) || string.IsNullOrEmpty(itemKey))
+                if (string.IsNullOrEmpty(targetId) || string.IsNullOrEmpty(itemKey))
                     continue;
 
-                if (!acceptedItemKeysByFacilityId.TryGetValue(facilityId, out HashSet<string> itemKeys))
+                if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> itemKeys))
                 {
                     itemKeys = new HashSet<string>(StringComparer.Ordinal);
-                    acceptedItemKeysByFacilityId.Add(facilityId, itemKeys);
+                    acceptedItemKeysByTargetId.Add(targetId, itemKeys);
                 }
 
                 itemKeys.Add(itemKey);
@@ -2327,7 +2339,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 string objectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string facilityId))
+                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
                 ScenarioModelSellerRequestableItemDefinition[] requestableItems = value.sellerRequestableItems ?? new ScenarioModelSellerRequestableItemDefinition[0];
@@ -2341,7 +2353,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     if (string.IsNullOrEmpty(itemKey))
                         continue;
 
-                    if (!acceptedItemKeysByFacilityId.TryGetValue(facilityId, out HashSet<string> acceptedItems) || !acceptedItems.Contains(itemKey))
+                    if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> acceptedItems) || !acceptedItems.Contains(itemKey))
                     {
                         result.Errors.Add("seller '" + objectId + "'의 requestable item '" + itemKey + "'은(는) accepted item으로 선언되어야 합니다.");
                         continue;
@@ -2349,7 +2361,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
                     values.Add(new SellerRequestableItemRuleDefinition
                     {
-                        targetId = facilityId,
+                        targetId = targetId,
                         item = ItemRefUtility.Clone(requestableItem.item),
                         startWhen = BuildRequestableItemStartWhen(requestableItem.startCondition, spawnKeys, result),
                     });
@@ -2385,12 +2397,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             };
         }
 
-        private static PlayableScenarioFacilityOptionDefinition[] BuildFacilityOptions(
+        private static PlayableScenarioFeatureOptionDefinition[] BuildFeatureOptions(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, string> spawnKeys)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            var values = new List<PlayableScenarioFacilityOptionDefinition>();
+            var values = new List<PlayableScenarioFeatureOptionDefinition>();
             for (int i = 0; i < safeObjects.Length; i++)
             {
                 ScenarioModelObjectDefinition value = safeObjects[i];
@@ -2398,25 +2410,30 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 string role = IntentAuthoringUtility.Normalize(value.role);
-                if (!string.Equals(role, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal) &&
-                    !string.Equals(role, PromptIntentObjectRoles.PROCESSOR, StringComparison.Ordinal) &&
-                    !string.Equals(role, PromptIntentObjectRoles.GENERATOR, StringComparison.Ordinal))
-                {
+                string featureType = ResolveFeatureType(role);
+                if (!PromptIntentContractRegistry.ObjectRoleSupportsScenarioOptions(role) ||
+                    string.IsNullOrEmpty(featureType))
                     continue;
-                }
 
                 string objectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string facilityId))
+                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
-                values.Add(new PlayableScenarioFacilityOptionDefinition
+                values.Add(new PlayableScenarioFeatureOptionDefinition
                 {
-                    facilityId = facilityId,
-                    options = value.facilityOptions,
+                    featureId = role + ":" + targetId,
+                    featureType = featureType,
+                    targetId = targetId,
+                    options = value.featureOptions.NormalizeForFeatureType(featureType),
                 });
             }
 
             return values.ToArray();
+        }
+
+        private static string ResolveFeatureType(string role)
+        {
+            return PromptIntentContractRegistry.ResolveFeatureTypeForRole(IntentAuthoringUtility.Normalize(role));
         }
 
         private static int ResolveDefaultCustomerDesignIndex(PlayableObjectCatalog catalog, ScenarioModelLoweringResult result)

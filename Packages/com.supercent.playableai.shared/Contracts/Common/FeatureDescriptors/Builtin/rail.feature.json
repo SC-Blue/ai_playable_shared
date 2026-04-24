@@ -1,0 +1,33 @@
+{
+  "featureId": "builtin.rail",
+  "featureType": "rail",
+  "isBuiltin": true,
+  "displayName": "레일 기능",
+  "summary": "아이템 자동 공급 레일 feature",
+  "catalogExposure": { "exposeInCatalog": true, "exposeToServer": true, "exposeToAuthoring": true },
+  "objectRoles": [
+    { "role": "rail", "summary": "아이템 자동 공급 레일", "catalogBacked": true, "supportsDesignId": true, "supportsScenarioOptions": false, "supportsRailSinkTarget": false }
+  ],
+  "scenarioOptionSchema": {
+    "fields": [
+      { "fieldId": "item", "summary": "공급 아이템", "valueType": "item_ref", "required": true },
+      { "fieldId": "spawnIntervalSeconds", "summary": "생성 간격", "valueType": "float", "required": false },
+      { "fieldId": "travelDurationSeconds", "summary": "이동 시간", "valueType": "float", "required": false },
+      { "fieldId": "sinkEndpointTargetObjectId", "summary": "도착 대상", "valueType": "target_object_id", "required": true }
+    ]
+  },
+  "targetSurfaces": [],
+  "gameplaySignals": [
+    { "signalId": "rail_item_arrived", "summary": "rail 도착 신호", "supportsTargetId": true, "requiresTargetId": true, "supportsItem": true, "requiresItem": true, "supportsCurrencyId": false, "requiresCurrencyId": false, "requiredTargetEventKey": "" }
+  ],
+  "conditionKinds": [
+    { "kind": "rail_item_arrived", "summary": "rail 도착 신호", "supportsStageId": false, "requiresStageId": false, "supportsTargetObjectId": true, "requiresTargetObjectId": true, "supportsItem": true, "requiresItem": true, "supportsCurrencyId": false, "requiresCurrencyId": false, "supportsAmountValue": false, "requiresPositiveAmountValue": false, "supportedTargetRoles": [], "allowAnyTargetRole": true, "gameplaySignalId": "rail_item_arrived", "stepConditionType": "gameplay_signal", "reactiveConditionType": "gameplay_signal" }
+  ],
+  "objectiveKinds": [],
+  "effectKinds": [],
+  "compiledGameplayRoleMappings": [
+    { "gameplayObjectId": "rail", "role": "rail", "summary": "compiled rail spawn -> rail role" }
+  ],
+  "inputOutputSemantics": { "generatedItems": [], "outputItems": [], "acceptedTargetRoles": [ "processor", "seller" ], "supportsCustomerFeature": false, "containsCustomerSingleLine": false, "containsSellerFeature": false, "containsMoneyHandler": false },
+  "layoutRequirements": { "catalogBacked": true, "supportsDesignId": true, "designMode": "assembled_path", "placementMode": "path", "pathShape": [ "straight", "corner" ] }
+}

@@ -8,7 +8,7 @@ namespace PlayableAI.AuthoringCore
     {
         public static bool IsCatalogBackedRole(string role)
         {
-            return !string.Equals(Normalize(role), PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal);
+            return PromptIntentContractRegistry.IsCatalogBackedObjectRole(role);
         }
 
         public static bool TryResolveCatalogObjectIdForRole(
@@ -19,32 +19,28 @@ namespace PlayableAI.AuthoringCore
         {
             objectId = string.Empty;
             error = string.Empty;
-            switch (Normalize(role))
+            string normalizedRole = Normalize(role);
+            if (string.Equals(normalizedRole, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
+                return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId, out error);
+
+            if (!PromptIntentContractRegistry.IsSupportedObjectRole(normalizedRole))
             {
-                case PromptIntentObjectRoles.GENERATOR:
-                    objectId = "generator";
-                    return true;
-                case PromptIntentObjectRoles.PROCESSOR:
-                    objectId = "converter";
-                    return true;
-                case PromptIntentObjectRoles.SELLER:
-                    objectId = "seller";
-                    return true;
-                case PromptIntentObjectRoles.RAIL:
-                    objectId = "rail";
-                    return true;
-                case PromptIntentObjectRoles.UNLOCK_PAD:
-                    objectId = "unlocker";
-                    return true;
-                case PromptIntentObjectRoles.PLAYER:
-                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId, out error);
-                case PromptIntentObjectRoles.PHYSICS_AREA:
-                    error = "physics_area는 catalog-backed role이 아닙니다.";
-                    return false;
-                default:
-                    error = "지원되지 않는 object role '" + (role ?? string.Empty) + "'입니다.";
-                    return false;
+                error = "지원되지 않는 object role '" + (role ?? string.Empty) + "'입니다.";
+                return false;
             }
+
+            if (!PromptIntentContractRegistry.IsCatalogBackedObjectRole(normalizedRole))
+            {
+                error = normalizedRole + "는 catalog-backed role이 아닙니다.";
+                return false;
+            }
+
+            objectId = PromptIntentContractRegistry.ResolveCatalogGameplayObjectIdForRole(normalizedRole);
+            if (!string.IsNullOrEmpty(objectId))
+                return true;
+
+            error = "role '" + normalizedRole + "'에 대한 catalog objectId를 찾지 못했습니다.";
+            return false;
         }
 
         public static bool TryResolveUniqueCatalogObjectIdByCategory(

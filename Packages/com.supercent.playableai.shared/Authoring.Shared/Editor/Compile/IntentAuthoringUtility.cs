@@ -1177,14 +1177,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 PromptIntentCapabilityRegistry.GetEffectRuntimeEventKey(normalizedEffectKind));
         }
 
-        public static FacilityAcceptedItemDefinition[] BuildFacilityAcceptedItems(
+        public static FeatureAcceptedItemDefinition[] BuildFeatureAcceptedItems(
             PlayableScenarioModel model,
             Dictionary<string, string> spawnKeys,
             List<string> errors)
         {
-            var itemsByFacilityId = new Dictionary<string, List<ItemRef>>(System.StringComparer.Ordinal);
+            var itemsByTargetId = new Dictionary<string, List<ItemRef>>(System.StringComparer.Ordinal);
             if (model == null)
-                return new FacilityAcceptedItemDefinition[0];
+                return new FeatureAcceptedItemDefinition[0];
 
             ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];
             for (int stageIndex = 0; stageIndex < stages.Length; stageIndex++)
@@ -1200,9 +1200,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     string kind = Normalize(objective.kind);
                     if (string.Equals(kind, PromptIntentObjectiveKinds.SELL_ITEM, System.StringComparison.Ordinal))
                     {
-                        RegisterFacilityItem(
-                            itemsByFacilityId,
-                            ResolveFacilityId(spawnKeys, objective.targetObjectId, errors, "sell_item.targetObjectId"),
+                        RegisterFeatureItem(
+                            itemsByTargetId,
+                            ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "sell_item.targetObjectId"),
                             objective.item,
                             "seller",
                             errors);
@@ -1220,9 +1220,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         continue;
                     }
 
-                    RegisterFacilityItem(
-                        itemsByFacilityId,
-                        ResolveFacilityId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId"),
+                    RegisterFeatureItem(
+                        itemsByTargetId,
+                        ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId"),
                         inputItem,
                         "processor",
                         errors);
@@ -1230,19 +1230,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             int definitionCount = 0;
-            foreach (KeyValuePair<string, List<ItemRef>> pair in itemsByFacilityId)
+            foreach (KeyValuePair<string, List<ItemRef>> pair in itemsByTargetId)
                 definitionCount += pair.Value != null ? pair.Value.Count : 0;
 
-            var definitions = new FacilityAcceptedItemDefinition[definitionCount];
+            var definitions = new FeatureAcceptedItemDefinition[definitionCount];
             int writeIndex = 0;
-            foreach (KeyValuePair<string, List<ItemRef>> pair in itemsByFacilityId)
+            foreach (KeyValuePair<string, List<ItemRef>> pair in itemsByTargetId)
             {
                 List<ItemRef> items = pair.Value ?? new List<ItemRef>();
                 for (int laneIndex = 0; laneIndex < items.Count; laneIndex++)
                 {
-                    definitions[writeIndex++] = new FacilityAcceptedItemDefinition
+                    definitions[writeIndex++] = new FeatureAcceptedItemDefinition
                     {
-                        facilityId = pair.Key,
+                        targetId = pair.Key,
                         item = ItemRefUtility.Clone(items[laneIndex]),
                         laneIndex = laneIndex,
                     };
@@ -1252,15 +1252,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return definitions;
         }
 
-        public static FacilityOutputItemDefinition[] BuildFacilityOutputItems(
+        public static FeatureOutputItemDefinition[] BuildFeatureOutputItems(
             PlayableScenarioModel model,
             Dictionary<string, string> spawnKeys,
             List<string> errors)
         {
-            var outputItemByFacilityId = new Dictionary<string, ItemRef>(System.StringComparer.Ordinal);
-            var requiredProcessorOutputLabelsByFacilityId = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            var outputItemByTargetId = new Dictionary<string, ItemRef>(System.StringComparer.Ordinal);
+            var requiredProcessorOutputLabelsByTargetId = new Dictionary<string, string>(System.StringComparer.Ordinal);
             if (model == null)
-                return new FacilityOutputItemDefinition[0];
+                return new FeatureOutputItemDefinition[0];
 
             var roleByObjectId = new Dictionary<string, string>(System.StringComparer.Ordinal);
             ScenarioModelObjectDefinition[] objects = model.objects ?? new ScenarioModelObjectDefinition[0];
@@ -1287,13 +1287,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     string kind = Normalize(objective.kind);
                     if (string.Equals(kind, PromptIntentObjectiveKinds.CONVERT_ITEM, System.StringComparison.Ordinal))
                     {
-                        string facilityId = ResolveFacilityId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId");
-                        if (string.IsNullOrEmpty(facilityId))
+                        string targetId = ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId");
+                        if (string.IsNullOrEmpty(targetId))
                             continue;
 
                         string requirementLabel = "stages[" + stageIndex + "].objectives[" + objectiveIndex + "]";
-                        if (!requiredProcessorOutputLabelsByFacilityId.ContainsKey(facilityId))
-                            requiredProcessorOutputLabelsByFacilityId.Add(facilityId, requirementLabel);
+                        if (!requiredProcessorOutputLabelsByTargetId.ContainsKey(targetId))
+                            requiredProcessorOutputLabelsByTargetId.Add(targetId, requirementLabel);
                         continue;
                     }
 
@@ -1309,29 +1309,29 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     if (!ItemRefUtility.IsValid(outputItem))
                         continue;
 
-                    string processorFacilityId = ResolveFacilityId(spawnKeys, objective.targetObjectId, errors, "collect_item.targetObjectId");
-                    if (string.IsNullOrEmpty(processorFacilityId))
+                    string processorTargetId = ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "collect_item.targetObjectId");
+                    if (string.IsNullOrEmpty(processorTargetId))
                         continue;
 
-                    if (outputItemByFacilityId.TryGetValue(processorFacilityId, out ItemRef existingOutputItem))
+                    if (outputItemByTargetId.TryGetValue(processorTargetId, out ItemRef existingOutputItem))
                     {
                         if (!ItemRefUtility.Equals(existingOutputItem, outputItem) && errors != null)
                         {
                             errors.Add(
-                                "processor collect_item.targetObjectId '" + processorFacilityId + "'에는 단일 output item만 허용됩니다: '" +
+                                "processor collect_item.targetObjectId '" + processorTargetId + "'에는 단일 output item만 허용됩니다: '" +
                                 ItemRefUtility.ToStableKey(existingOutputItem) + "' vs '" + ItemRefUtility.ToStableKey(outputItem) + "'.");
                         }
 
                         continue;
                     }
 
-                    outputItemByFacilityId.Add(processorFacilityId, ItemRefUtility.Clone(outputItem));
+                    outputItemByTargetId.Add(processorTargetId, ItemRefUtility.Clone(outputItem));
                 }
             }
 
-            foreach (KeyValuePair<string, string> pair in requiredProcessorOutputLabelsByFacilityId)
+            foreach (KeyValuePair<string, string> pair in requiredProcessorOutputLabelsByTargetId)
             {
-                if (outputItemByFacilityId.ContainsKey(pair.Key))
+                if (outputItemByTargetId.ContainsKey(pair.Key))
                     continue;
 
                 if (errors != null)
@@ -1342,13 +1342,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 }
             }
 
-            var definitions = new FacilityOutputItemDefinition[outputItemByFacilityId.Count];
+            var definitions = new FeatureOutputItemDefinition[outputItemByTargetId.Count];
             int writeIndex = 0;
-            foreach (KeyValuePair<string, ItemRef> pair in outputItemByFacilityId)
+            foreach (KeyValuePair<string, ItemRef> pair in outputItemByTargetId)
             {
-                definitions[writeIndex++] = new FacilityOutputItemDefinition
+                definitions[writeIndex++] = new FeatureOutputItemDefinition
                 {
-                    facilityId = pair.Key,
+                    targetId = pair.Key,
                     item = ItemRefUtility.Clone(pair.Value),
                 };
             }
@@ -1356,22 +1356,22 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return definitions;
         }
 
-        private static void RegisterFacilityItem(
-            Dictionary<string, List<ItemRef>> itemsByFacilityId,
-            string facilityId,
+        private static void RegisterFeatureItem(
+            Dictionary<string, List<ItemRef>> itemsByTargetId,
+            string targetId,
             ItemRef item,
             string roleLabel,
             List<string> errors)
         {
-            string normalizedFacilityId = Normalize(facilityId);
+            string normalizedTargetId = Normalize(targetId);
             string itemKey = ItemRefUtility.ToStableKey(item);
-            if (string.IsNullOrEmpty(normalizedFacilityId) || string.IsNullOrEmpty(itemKey))
+            if (string.IsNullOrEmpty(normalizedTargetId) || string.IsNullOrEmpty(itemKey))
                 return;
 
-            if (!itemsByFacilityId.TryGetValue(normalizedFacilityId, out List<ItemRef> items))
+            if (!itemsByTargetId.TryGetValue(normalizedTargetId, out List<ItemRef> items))
             {
                 items = new List<ItemRef>();
-                itemsByFacilityId.Add(normalizedFacilityId, items);
+                itemsByTargetId.Add(normalizedTargetId, items);
             }
 
             for (int i = 0; i < items.Count; i++)
@@ -1386,7 +1386,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (errors != null)
                 {
                     errors.Add(
-                        roleLabel + " '" + normalizedFacilityId + "'에 서로 다른 item('" +
+                        roleLabel + " '" + normalizedTargetId + "'에 서로 다른 item('" +
                         ItemRefUtility.ToDisplayString(items[0]) + "', '" + itemKey + "')가 매핑되어 있습니다.");
                 }
                 return;
@@ -1395,7 +1395,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             items.Add(ItemRefUtility.Clone(item));
         }
 
-        private static string ResolveFacilityId(
+        private static string ResolveTargetId(
             Dictionary<string, string> spawnKeys,
             string targetObjectId,
             List<string> errors,

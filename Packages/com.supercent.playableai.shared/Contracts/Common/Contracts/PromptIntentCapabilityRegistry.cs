@@ -58,6 +58,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string kind;
         public string summary;
+        public string[] semanticTags = new string[0];
         public string[] supportedTargetRoles = new string[0];
         public bool allowAnyTargetRole;
         public string systemActionId;
@@ -139,9 +140,19 @@ namespace Supercent.PlayableAI.Common.Contracts
         };
         // </generated-capability-registry-data>
 
+        public static void SetActiveFeatureDescriptors(FeatureDescriptor[] descriptors)
+        {
+            PromptIntentFeatureDescriptorBridge.SetActiveFeatureDescriptors(descriptors);
+        }
+
+        public static void ClearActiveFeatureDescriptors()
+        {
+            PromptIntentFeatureDescriptorBridge.ClearActiveFeatureDescriptors();
+        }
+
         public static PromptIntentTargetSurfaceRuleDescriptor[] GetTargetSurfaceRules()
         {
-            return CloneTargetSurfaceRules(TARGET_SURFACES);
+            return CloneTargetSurfaceRules(GetTargetSurfacesInternal());
         }
 
         public static string[] GetSupportedFlowTargetEventKeys(string role)
@@ -158,7 +169,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentGameplaySignalRuleDescriptor[] GetGameplaySignalRules()
         {
-            return CloneGameplaySignalRules(GAMEPLAY_SIGNALS);
+            return CloneGameplaySignalRules(GetGameplaySignalsInternal());
         }
 
         public static bool IsSupportedGameplaySignalId(string signalId)
@@ -232,7 +243,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentConditionCapabilityDescriptor[] GetConditionCapabilities()
         {
-            return CloneConditionCapabilities(CONDITION_CAPABILITIES);
+            return CloneConditionCapabilities(GetConditionCapabilitiesInternal());
         }
 
         public static string[] GetConditionSupportedTargetRoles(string kind)
@@ -267,7 +278,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentObjectiveCapabilityDescriptor[] GetObjectiveCapabilities()
         {
-            return CloneObjectiveCapabilities(OBJECTIVE_CAPABILITIES);
+            return CloneObjectiveCapabilities(GetObjectiveCapabilitiesInternal());
         }
 
         public static string[] GetObjectiveSupportedTargetRoles(string kind)
@@ -314,7 +325,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         public static PromptIntentEffectCapabilityDescriptor[] GetEffectCapabilities()
         {
-            return CloneEffectCapabilities(EFFECT_CAPABILITIES);
+            return CloneEffectCapabilities(GetEffectCapabilitiesInternal());
         }
 
         public static string[] GetEffectSupportedTargetRoles(string kind)
@@ -342,6 +353,23 @@ namespace Supercent.PlayableAI.Common.Contracts
             return true;
         }
 
+        public static bool EffectHasSemanticTag(string kind, string tag)
+        {
+            PromptIntentEffectCapabilityDescriptor descriptor = FindEffectCapability(kind);
+            return descriptor != null && ContainsValue(descriptor.semanticTags, tag);
+        }
+
+        public static bool IsCustomerSpawnEffectKind(string kind)
+        {
+            return EffectHasSemanticTag(kind, "customer_spawn");
+        }
+
+        public static bool IsCameraFocusEffectKind(string kind)
+        {
+            return TryGetEffectSystemActionAuthoringId(kind, out string systemActionId) &&
+                   string.Equals(systemActionId, SystemActionIds.FOCUS_CAMERA_ON_TARGET, System.StringComparison.Ordinal);
+        }
+
         public static string GetEffectRuntimeEventKey(string kind)
         {
             PromptIntentEffectCapabilityDescriptor descriptor = FindEffectCapability(kind);
@@ -360,6 +388,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null && descriptor.buildsSystemActionTarget;
         }
 
+        public static bool EffectBuildsActivationTarget(string kind)
+        {
+            return EffectBuildsSceneActivationTarget(kind) || EffectBuildsSystemActionTarget(kind);
+        }
+
         public static string ResolveArrowTiming(string explicitTiming, bool arrowOnFocusArrival)
         {
             string normalizedTiming = Normalize(explicitTiming);
@@ -372,10 +405,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentTargetSurfaceRuleDescriptor FindTargetSurface(string role)
         {
             string normalized = Normalize(role);
-            for (int i = 0; i < TARGET_SURFACES.Length; i++)
+            PromptIntentTargetSurfaceRuleDescriptor[] descriptors = GetTargetSurfacesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (TARGET_SURFACES[i].role == normalized)
-                    return TARGET_SURFACES[i];
+                if (descriptors[i].role == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -384,10 +418,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentGameplaySignalRuleDescriptor FindGameplaySignal(string signalId)
         {
             string normalized = Normalize(signalId);
-            for (int i = 0; i < GAMEPLAY_SIGNALS.Length; i++)
+            PromptIntentGameplaySignalRuleDescriptor[] descriptors = GetGameplaySignalsInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (GAMEPLAY_SIGNALS[i].signalId == normalized)
-                    return GAMEPLAY_SIGNALS[i];
+                if (descriptors[i].signalId == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -408,10 +443,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentConditionCapabilityDescriptor FindConditionCapability(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < CONDITION_CAPABILITIES.Length; i++)
+            PromptIntentConditionCapabilityDescriptor[] descriptors = GetConditionCapabilitiesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (CONDITION_CAPABILITIES[i].kind == normalized)
-                    return CONDITION_CAPABILITIES[i];
+                if (descriptors[i].kind == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -420,10 +456,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentObjectiveCapabilityDescriptor FindObjectiveCapability(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < OBJECTIVE_CAPABILITIES.Length; i++)
+            PromptIntentObjectiveCapabilityDescriptor[] descriptors = GetObjectiveCapabilitiesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (OBJECTIVE_CAPABILITIES[i].kind == normalized)
-                    return OBJECTIVE_CAPABILITIES[i];
+                if (descriptors[i].kind == normalized)
+                    return descriptors[i];
             }
 
             return null;
@@ -432,13 +469,39 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static PromptIntentEffectCapabilityDescriptor FindEffectCapability(string kind)
         {
             string normalized = Normalize(kind);
-            for (int i = 0; i < EFFECT_CAPABILITIES.Length; i++)
+            PromptIntentEffectCapabilityDescriptor[] descriptors = GetEffectCapabilitiesInternal();
+            for (int i = 0; i < descriptors.Length; i++)
             {
-                if (EFFECT_CAPABILITIES[i].kind == normalized)
-                    return EFFECT_CAPABILITIES[i];
+                if (descriptors[i].kind == normalized)
+                    return descriptors[i];
             }
 
             return null;
+        }
+
+        private static PromptIntentTargetSurfaceRuleDescriptor[] GetTargetSurfacesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeTargetSurfaces(TARGET_SURFACES);
+        }
+
+        private static PromptIntentGameplaySignalRuleDescriptor[] GetGameplaySignalsInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeGameplaySignals(GAMEPLAY_SIGNALS);
+        }
+
+        private static PromptIntentConditionCapabilityDescriptor[] GetConditionCapabilitiesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeConditionCapabilities(CONDITION_CAPABILITIES);
+        }
+
+        private static PromptIntentObjectiveCapabilityDescriptor[] GetObjectiveCapabilitiesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeObjectiveCapabilities(OBJECTIVE_CAPABILITIES);
+        }
+
+        private static PromptIntentEffectCapabilityDescriptor[] GetEffectCapabilitiesInternal()
+        {
+            return PromptIntentFeatureDescriptorBridge.MergeEffectCapabilities(EFFECT_CAPABILITIES);
         }
 
         private static PromptIntentTargetSurfaceRuleDescriptor[] CloneTargetSurfaceRules(PromptIntentTargetSurfaceRuleDescriptor[] values)
@@ -547,6 +610,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 {
                     kind = values[i].kind,
                     summary = values[i].summary,
+                    semanticTags = CloneStrings(values[i].semanticTags),
                     supportedTargetRoles = CloneStrings(values[i].supportedTargetRoles),
                     allowAnyTargetRole = values[i].allowAnyTargetRole,
                     systemActionId = values[i].systemActionId,

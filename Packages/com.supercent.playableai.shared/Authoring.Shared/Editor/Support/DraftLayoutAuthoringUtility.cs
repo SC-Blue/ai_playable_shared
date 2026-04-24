@@ -175,28 +175,12 @@ namespace PlayableAI.AuthoringCore
         private static bool TryResolveCatalogObjectIdForRole(PlayableObjectCatalog catalog, string role, out string objectId)
         {
             objectId = string.Empty;
-            switch (Normalize(role))
-            {
-                case PromptIntentObjectRoles.GENERATOR:
-                    objectId = "generator";
-                    return true;
-                case PromptIntentObjectRoles.PROCESSOR:
-                    objectId = "converter";
-                    return true;
-                case PromptIntentObjectRoles.SELLER:
-                    objectId = "seller";
-                    return true;
-                case PromptIntentObjectRoles.RAIL:
-                    objectId = "rail";
-                    return true;
-                case PromptIntentObjectRoles.UNLOCK_PAD:
-                    objectId = "unlocker";
-                    return true;
-                case PromptIntentObjectRoles.PLAYER:
-                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId);
-                default:
-                    return false;
-            }
+            string normalizedRole = Normalize(role);
+            if (string.Equals(normalizedRole, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
+                return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId);
+
+            objectId = PromptIntentContractRegistry.ResolveCatalogGameplayObjectIdForRole(normalizedRole);
+            return !string.IsNullOrEmpty(objectId);
         }
 
         private static bool TryResolveUniqueCatalogObjectIdByCategory(

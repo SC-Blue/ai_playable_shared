@@ -2,7 +2,7 @@ using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.Common.Contracts
 {
-    public static class FacilityScenarioOptionRules
+    public static class FeatureScenarioOptionRules
     {
         public const string CUSTOMER_REQUEST_COUNT = PromptIntentContractRegistry.SCENARIO_OPTION_CUSTOMER_REQUEST_COUNT;
         public const string REQUESTABLE_ITEMS = PromptIntentContractRegistry.SCENARIO_OPTION_REQUESTABLE_ITEMS;
@@ -46,14 +46,14 @@ namespace Supercent.PlayableAI.Common.Contracts
             return PromptIntentContractRegistry.DescribeSupportedScenarioOptions(role);
         }
 
-        public static PlayableScenarioFacilityOptions CreateRoleDefaultFacilityOptions(string role)
+        public static PlayableScenarioFeatureOptions CreateRoleDefaultFeatureOptions(string role)
         {
-            return PromptIntentContractRegistry.CreateRoleDefaultFacilityOptions(role);
+            return PromptIntentContractRegistry.CreateRoleDefaultFeatureOptions(role);
         }
 
-        public static void ApplyRoleDefaults(string role, ref PlayableScenarioFacilityOptions options)
+        public static void ApplyRoleDefaults(string role, ref PlayableScenarioFeatureOptions options)
         {
-            PromptIntentContractRegistry.ApplyRoleDefaultFacilityOptions(role, ref options);
+            PromptIntentContractRegistry.ApplyRoleDefaultFeatureOptions(role, ref options);
         }
     }
 }

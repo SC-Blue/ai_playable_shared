@@ -571,7 +571,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
     }
 
-    /// <summary>시나리오 스펙이 참조하는 gameplay 오브젝트 (Facility, Unlocker, Item, PlayerModel, Customer).</summary>
+    /// <summary>시나리오 스펙이 참조하는 gameplay 오브젝트 (Feature, Unlocker, Item, PlayerModel, Customer).</summary>
     [System.Serializable]
     public sealed class GameplayCatalog
     {
@@ -583,7 +583,8 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string ITEMS_ARRAY_PATH = "_gameplayCatalog._items";
         public const string PLAYER_MODELS_ARRAY_PATH = "_gameplayCatalog._playerModels";
         public const string CUSTOMERS_ARRAY_PATH = "_gameplayCatalog._customers";
-        public const string FACILITY_CATEGORY = "facility";
+        public const string CUSTOM_FEATURES_ARRAY_PATH = "_gameplayCatalog._customFeatures";
+        public const string FEATURE_CATEGORY = "feature";
         public const string UNLOCKER_CATEGORY = "unlocker";
         public const string ITEM_CATEGORY = "item";
         public const string PLAYER_MODEL_CATEGORY = "playermodel";
@@ -601,6 +602,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         [SerializeField] private GameplayCatalogEntry[] _playerModels = new GameplayCatalogEntry[0];
 
         [SerializeField] private GameplayCatalogEntry[] _customers = new GameplayCatalogEntry[0];
+        [SerializeField] private GameplayCatalogEntry[] _customFeatures = new GameplayCatalogEntry[0];
 
         public IReadOnlyList<GameplayCatalogEntry> GetGameplayEntries()
         {
@@ -613,6 +615,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             AddGameplayEntries(list, _items);
             AddGameplayEntries(list, _playerModels);
             AddGameplayEntries(list, _customers);
+            AddGameplayEntries(list, _customFeatures);
             return list;
         }
 
@@ -620,14 +623,15 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             return new GameplayCatalogSectionDefinition[]
             {
-                CreateSection(GENERATORS_ARRAY_PATH, "생성기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _generators),
-                CreateSection(RAILS_ARRAY_PATH, "레일", FACILITY_CATEGORY, GameplayDesignMode.AssembledPath, _rails),
-                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _converters),
-                CreateSection(SELLERS_ARRAY_PATH, "판매기", FACILITY_CATEGORY, GameplayDesignMode.SinglePrefab, _sellers),
+                CreateSection(GENERATORS_ARRAY_PATH, "생성기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _generators),
+                CreateSection(RAILS_ARRAY_PATH, "레일", FEATURE_CATEGORY, GameplayDesignMode.AssembledPath, _rails),
+                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _converters),
+                CreateSection(SELLERS_ARRAY_PATH, "판매기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _sellers),
                 CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", UNLOCKER_CATEGORY, GameplayDesignMode.SinglePrefab, _unlockers),
                 CreateSection(ITEMS_ARRAY_PATH, "아이템", ITEM_CATEGORY, GameplayDesignMode.SinglePrefab, _items),
                 CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", PLAYER_MODEL_CATEGORY, GameplayDesignMode.SinglePrefab, _playerModels),
                 CreateSection(CUSTOMERS_ARRAY_PATH, "손님", CUSTOMER_CATEGORY, GameplayDesignMode.SinglePrefab, _customers),
+                CreateSection(CUSTOM_FEATURES_ARRAY_PATH, "커스텀 Feature", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _customFeatures),
             };
         }
 
@@ -645,7 +649,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                    TryFindGameplayEntry(normalized, _unlockers, out entry) ||
                    TryFindGameplayEntry(normalized, _items, out entry) ||
                    TryFindGameplayEntry(normalized, _playerModels, out entry) ||
-                   TryFindGameplayEntry(normalized, _customers, out entry);
+                   TryFindGameplayEntry(normalized, _customers, out entry) ||
+                   TryFindGameplayEntry(normalized, _customFeatures, out entry);
         }
 
         public bool TryResolveGameplayPrefab(string objectId, int requestedDesignIndex, out GameObject prefab, out int resolvedDesignIndex)
@@ -737,7 +742,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             GameplayCatalogEntry[] unlockers,
             GameplayCatalogEntry[] items,
             GameplayCatalogEntry[] playerModels,
-            GameplayCatalogEntry[] customers)
+            GameplayCatalogEntry[] customers,
+            GameplayCatalogEntry[] customFeatures = null)
         {
             _generators = generators ?? new GameplayCatalogEntry[0];
             _rails = rails ?? new GameplayCatalogEntry[0];
@@ -747,6 +753,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             _items = items ?? new GameplayCatalogEntry[0];
             _playerModels = playerModels ?? new GameplayCatalogEntry[0];
             _customers = customers ?? new GameplayCatalogEntry[0];
+            _customFeatures = customFeatures ?? new GameplayCatalogEntry[0];
         }
 
         private static GameplayCatalogSectionDefinition CreateSection(string arrayPath, string label, string expectedCategory, GameplayDesignMode designMode, GameplayCatalogEntry[] entries)
@@ -1391,7 +1398,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         [Tooltip("배치 없이 design만 선택하는 content. ui/core/guide 등 agent가 고르는 비배치 오브젝트를 담습니다.")]
         [SerializeField] private ContentSelectionCatalog _contentSelections = new ContentSelectionCatalog();
 
-        [Tooltip("시나리오 스펙이 참조하는 gameplay 오브젝트. Facility/Unlocker/PlayerModel/Customer는 gameplay placements, runtime-owned Item/Customer는 objectDesign selection에 사용합니다.")]
+        [Tooltip("시나리오 스펙이 참조하는 gameplay 오브젝트. Feature/Unlocker/PlayerModel/Customer는 gameplay placements, runtime-owned Item/Customer는 objectDesign selection에 사용합니다.")]
         [SerializeField] private GameplayCatalog _gameplayCatalog = new GameplayCatalog();
 
         [Tooltip("Step 3 image layout에서 사용하는 environment 오브젝트. wall/road/fence 등의 explicit layout 배치를 담당합니다.")]
@@ -1400,6 +1407,9 @@ namespace Supercent.PlayableAI.Common.Contracts
         [Tooltip("시나리오 스펙의 themeId 고정값.")]
         [SerializeField] private string _themeId = string.Empty;
 
+        [Tooltip("현재 세션에서 사용 가능한 feature descriptor authority.")]
+        [SerializeField] private FeatureDescriptor[] _featureDescriptors = Array.Empty<FeatureDescriptor>();
+
         public string PrefabsRootPath => _prefabsRootPath ?? string.Empty;
         public EditorBasedCatalog EditorBased => _editorBased ?? new EditorBasedCatalog();
         public ContentSelectionCatalog ContentSelections => _contentSelections ?? new ContentSelectionCatalog();
@@ -1407,10 +1417,67 @@ namespace Supercent.PlayableAI.Common.Contracts
         public EnvironmentCatalog Environment => _environmentCatalog ?? new EnvironmentCatalog();
         public string ThemeId => _themeId ?? string.Empty;
         public GameObject EnvironmentFloorPrefab => Environment.FloorPrefab;
+        public FeatureDescriptor[] FeatureDescriptors => FeatureDescriptorUtility.CloneArray(_featureDescriptors);
 
         public void SetThemeId(string themeId)
         {
             _themeId = themeId ?? string.Empty;
+        }
+
+        public void SetFeatureDescriptors(FeatureDescriptor[] descriptors)
+        {
+            _featureDescriptors = FeatureDescriptorUtility.CloneArray(descriptors);
+        }
+
+        public bool IsSupportedFeatureType(string featureType)
+        {
+            string normalizedFeatureType = FeatureDescriptorUtility.Normalize(featureType);
+            if (string.IsNullOrEmpty(normalizedFeatureType))
+                return false;
+
+            FeatureDescriptor[] safeDescriptors = _featureDescriptors ?? Array.Empty<FeatureDescriptor>();
+            for (int i = 0; i < safeDescriptors.Length; i++)
+            {
+                FeatureDescriptor descriptor = safeDescriptors[i];
+                if (descriptor == null)
+                    continue;
+
+                if (string.Equals(
+                        FeatureDescriptorUtility.Normalize(descriptor.featureType),
+                        normalizedFeatureType,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool TryGetFeatureDescriptor(string featureType, out FeatureDescriptor descriptor)
+        {
+            string normalizedFeatureType = FeatureDescriptorUtility.Normalize(featureType);
+            FeatureDescriptor[] safeDescriptors = _featureDescriptors ?? Array.Empty<FeatureDescriptor>();
+            for (int i = 0; i < safeDescriptors.Length; i++)
+            {
+                FeatureDescriptor candidate = safeDescriptors[i];
+                if (candidate == null)
+                    continue;
+
+                if (!string.Equals(
+                        FeatureDescriptorUtility.Normalize(candidate.featureType),
+                        normalizedFeatureType,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                descriptor = FeatureDescriptorUtility.Clone(candidate);
+                return true;
+            }
+
+            descriptor = new FeatureDescriptor();
+            return false;
         }
 
         public IReadOnlyList<GameplayCatalogEntry> GetGameplayEntries()
@@ -1796,12 +1863,13 @@ namespace Supercent.PlayableAI.Common.Contracts
             GameplayCatalogEntry[] unlockers,
             GameplayCatalogEntry[] items,
             GameplayCatalogEntry[] playerModels,
-            GameplayCatalogEntry[] customers)
+            GameplayCatalogEntry[] customers,
+            GameplayCatalogEntry[] customFeatures = null)
         {
             if (_gameplayCatalog == null)
                 _gameplayCatalog = new GameplayCatalog();
 
-            _gameplayCatalog.SetRoleArrays(generators, rails, converters, sellers, unlockers, items, playerModels, customers);
+            _gameplayCatalog.SetRoleArrays(generators, rails, converters, sellers, unlockers, items, playerModels, customers, customFeatures);
         }
 
         public void SetEnvironmentRoleArrays(EnvironmentCatalogEntry[] walls, EnvironmentCatalogEntry[] fences, EnvironmentCatalogEntry[] roads)

@@ -1,4 +1,5 @@
 using System;
+using Supercent.PlayableAI.Common.Contracts;
 
 namespace Supercent.PlayableAI.Common.Format
 {
@@ -7,11 +8,12 @@ namespace Supercent.PlayableAI.Common.Format
         unknown = 0,
         core = 1,
         ui = 2,
-        facility = 3,
+        feature = 3,
         character = 4,
         environment = 5,
         item = 6,
         guide = 7,
+        unlocker = 8,
     }
 
     public enum ContentCatalogSubscriptionType
@@ -45,7 +47,8 @@ namespace Supercent.PlayableAI.Common.Format
 
     public static class CatalogCategoryIds
     {
-        public const string FACILITY = "facility";
+        public const string FEATURE = "feature";
+        public const string UNLOCKER = "unlocker";
         public const string ITEM = "item";
         public const string CHARACTER = "character";
         public const string ENVIRONMENT = "environment";
@@ -169,6 +172,12 @@ namespace Supercent.PlayableAI.Common.Format
                 return false;
             }
 
+            if (!IsLowerSnakeCaseToken(normalized))
+            {
+                errorMessage = "objectId '" + normalized + "'는 lower_snake_case여야 합니다.";
+                return false;
+            }
+
             errorMessage = string.Empty;
             return true;
         }
@@ -185,6 +194,12 @@ namespace Supercent.PlayableAI.Common.Format
             if (normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER) >= 0)
             {
                 errorMessage = "designId '" + normalized + "'에는 '/'가 포함되면 안 됩니다.";
+                return false;
+            }
+
+            if (!IsLowerSnakeCaseToken(normalized))
+            {
+                errorMessage = "designId '" + normalized + "'는 lower_snake_case여야 합니다.";
                 return false;
             }
 
@@ -217,17 +232,42 @@ namespace Supercent.PlayableAI.Common.Format
             return true;
         }
 
+        private static bool IsLowerSnakeCaseToken(string value)
+        {
+            string normalized = Normalize(value);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+
+            char first = normalized[0];
+            if (first < 'a' || first > 'z')
+                return false;
+
+            for (int i = 1; i < normalized.Length; i++)
+            {
+                char c = normalized[i];
+                if ((c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '_')
+                    continue;
+
+                return false;
+            }
+
+            return true;
+        }
+
         public static string ToToken(ContentCatalogCategory value)
         {
             return value switch
             {
                 ContentCatalogCategory.core => "core",
                 ContentCatalogCategory.ui => "ui",
-                ContentCatalogCategory.facility => "facility",
+                ContentCatalogCategory.feature => "feature",
                 ContentCatalogCategory.character => "character",
                 ContentCatalogCategory.environment => "environment",
                 ContentCatalogCategory.item => "item",
                 ContentCatalogCategory.guide => "guide",
+                ContentCatalogCategory.unlocker => "unlocker",
                 _ => "unknown",
             };
         }
@@ -293,6 +333,8 @@ namespace Supercent.PlayableAI.Common.Format
         public string generatedAtUtc = string.Empty;
         public string contentHash = string.Empty;
         public GeneratedContentCatalogEntry[] entries = new GeneratedContentCatalogEntry[0];
+        public string[] availableBuiltinFeatureTypes = Array.Empty<string>();
+        public FeatureDescriptor[] customFeatureDescriptors = Array.Empty<FeatureDescriptor>();
     }
 
     [Serializable]

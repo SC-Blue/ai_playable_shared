@@ -44,18 +44,28 @@ namespace PlayableAI.AuthoringCore
             AuthoringCoreExecutionProfile profile,
             LayoutSpecDocument layoutSpec = null)
         {
-            var result = new AuthoringCoreRunResult();
+            PromptIntentContractRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            PromptIntentCapabilityRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            try
+            {
+                var result = new AuthoringCoreRunResult();
 
-            AuthoringInputContractDetectionResult detection = AuthoringInputContractDetector.Detect(intentJson);
-            if (!detection.IsPromptIntent)
-                return Fail(result, GenerationStageNames.INTENT_VALIDATION, detection.FailureCode, detection.Message, detection.Message);
+                AuthoringInputContractDetectionResult detection = AuthoringInputContractDetector.Detect(intentJson);
+                if (!detection.IsPromptIntent)
+                    return Fail(result, GenerationStageNames.INTENT_VALIDATION, detection.FailureCode, detection.Message, detection.Message);
 
-            PromptIntentJsonValidationResult intentValidation = PromptIntentJsonValidator.Validate(intentJson, catalog);
-            if (!intentValidation.IsValid)
-                return Fail(result, GenerationStageNames.INTENT_VALIDATION, intentValidation.FailureCode, intentValidation.Message, intentValidation.Errors);
+                PromptIntentJsonValidationResult intentValidation = PromptIntentJsonValidator.Validate(intentJson, catalog);
+                if (!intentValidation.IsValid)
+                    return Fail(result, GenerationStageNames.INTENT_VALIDATION, intentValidation.FailureCode, intentValidation.Message, intentValidation.Errors);
 
-            result.Intent = intentValidation.Contract;
-            return Run(result, intentValidation.Contract, catalog, profile, layoutSpec);
+                result.Intent = intentValidation.Contract;
+                return Run(result, intentValidation.Contract, catalog, profile, layoutSpec);
+            }
+            finally
+            {
+                PromptIntentCapabilityRegistry.ClearActiveFeatureDescriptors();
+                PromptIntentContractRegistry.ClearActiveFeatureDescriptors();
+            }
         }
 
         public static AuthoringCoreRunResult Run(
@@ -64,12 +74,22 @@ namespace PlayableAI.AuthoringCore
             AuthoringCoreExecutionProfile profile,
             LayoutSpecDocument layoutSpec = null)
         {
-            var result = new AuthoringCoreRunResult();
-            if (intent == null)
-                return Fail(result, GenerationStageNames.INTENT_VALIDATION, PlayableFailureCode.InvalidValue, "PlayablePromptIntent가 null입니다.", "PlayablePromptIntent가 null입니다.");
+            PromptIntentContractRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            PromptIntentCapabilityRegistry.SetActiveFeatureDescriptors(catalog != null ? catalog.FeatureDescriptors : null);
+            try
+            {
+                var result = new AuthoringCoreRunResult();
+                if (intent == null)
+                    return Fail(result, GenerationStageNames.INTENT_VALIDATION, PlayableFailureCode.InvalidValue, "PlayablePromptIntent가 null입니다.", "PlayablePromptIntent가 null입니다.");
 
-            result.Intent = intent;
-            return Run(result, intent, catalog, profile, layoutSpec);
+                result.Intent = intent;
+                return Run(result, intent, catalog, profile, layoutSpec);
+            }
+            finally
+            {
+                PromptIntentCapabilityRegistry.ClearActiveFeatureDescriptors();
+                PromptIntentContractRegistry.ClearActiveFeatureDescriptors();
+            }
         }
 
         private static AuthoringCoreRunResult Run(

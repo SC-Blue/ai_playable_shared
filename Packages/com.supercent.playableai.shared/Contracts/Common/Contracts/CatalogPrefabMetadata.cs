@@ -7,9 +7,9 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string[] generatedItemStableKeys = new string[0];
         public string[] outputItemStableKeys = new string[0];
-        public bool supportsCustomerFacility;
+        public bool supportsCustomerFeature;
         public bool containsCustomerSingleLine;
-        public bool containsItemSellFacility;
+        public bool containsSellerFeature;
         public bool containsMoneyHandler;
         public int placementFootprintWidthCells;
         public int placementFootprintDepthCells;

@@ -114,8 +114,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 Fail(result, "playerOptions.itemStacker.maxCount는 0 이상이어야 합니다.");
         }
 
-        private static void ValidateFacilityOptions(
-            PlayableScenarioFacilityOptions options,
+        private static void ValidateFeatureOptions(
+            PlayableScenarioFeatureOptions options,
             string label,
             ScenarioModelValidationResult result)
         {
@@ -163,9 +163,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!value.startsPresent && value.startsActive)
                     Fail(result, "objects[" + i + "]는 present later인데 active at start로 표시되었습니다.");
 
-                string label = "objects[" + i + "].facilityOptions";
-                ValidateFacilityOptions(value.facilityOptions, label, result);
-                ValidateObjectFacilityOptionsByRole(value.role, value.facilityOptions, label, result);
+                string label = "objects[" + i + "].featureOptions";
+                ValidateFeatureOptions(value.featureOptions, label, result);
+                ValidateObjectFeatureOptionsByRole(value.role, value.featureOptions, label, result);
                 ValidateSellerRequestableItemDefinitions(value, "objects[" + i + "]", objectById, result);
                 ValidateRoleSpecificOptions(value, "objects[" + i + "]", objectById, result);
             }
@@ -270,18 +270,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void ValidateObjectFacilityOptionsByRole(
+        private static void ValidateObjectFeatureOptionsByRole(
             string role,
-            PlayableScenarioFacilityOptions options,
+            PlayableScenarioFeatureOptions options,
             string label,
             ScenarioModelValidationResult result)
         {
             string normalizedRole = role != null ? role.Trim() : string.Empty;
-            bool supportsCustomerRequestCount = FacilityScenarioOptionRules.SupportsCustomerRequestCount(normalizedRole);
-            bool supportsInputCountPerConversion = FacilityScenarioOptionRules.SupportsInputCountPerConversion(normalizedRole);
-            bool supportsConversionInterval = FacilityScenarioOptionRules.SupportsConversionIntervalSeconds(normalizedRole);
-            bool supportsInputItemMoveInterval = FacilityScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(normalizedRole);
-            bool supportsSpawnInterval = FacilityScenarioOptionRules.SupportsSpawnIntervalSeconds(normalizedRole);
+            bool supportsCustomerRequestCount = FeatureScenarioOptionRules.SupportsCustomerRequestCount(normalizedRole);
+            bool supportsInputCountPerConversion = FeatureScenarioOptionRules.SupportsInputCountPerConversion(normalizedRole);
+            bool supportsConversionInterval = FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(normalizedRole);
+            bool supportsInputItemMoveInterval = FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(normalizedRole);
+            bool supportsSpawnInterval = FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(normalizedRole);
 
             switch (normalizedRole)
             {

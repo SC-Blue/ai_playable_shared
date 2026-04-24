@@ -16,10 +16,10 @@ namespace Supercent.PlayableAI.Common.Format
         public CompiledRailDefinition[] rails = new CompiledRailDefinition[0];
         public CurrencyDefinition[] currencies = new CurrencyDefinition[0];
         public ItemPriceDefinition[] itemPrices = new ItemPriceDefinition[0];
-        public FacilityAcceptedItemDefinition[] facilityAcceptedItems = new FacilityAcceptedItemDefinition[0];
-        public FacilityOutputItemDefinition[] facilityOutputItems = new FacilityOutputItemDefinition[0];
+        public FeatureAcceptedItemDefinition[] featureAcceptedItems = new FeatureAcceptedItemDefinition[0];
+        public FeatureOutputItemDefinition[] featureOutputItems = new FeatureOutputItemDefinition[0];
         public PlayableScenarioPlayerOptions playerOptions;
-        public PlayableScenarioFacilityOptionDefinition[] facilityOptions = new PlayableScenarioFacilityOptionDefinition[0];
+        public PlayableScenarioFeatureOptionDefinition[] featureOptions = new PlayableScenarioFeatureOptionDefinition[0];
         public UnlockDefinition[] unlocks = new UnlockDefinition[0];
         public int flowSchemaVersion = FLOW_SCHEMA_VERSION;
         public FlowBeatDefinition[] beats = new FlowBeatDefinition[0];
