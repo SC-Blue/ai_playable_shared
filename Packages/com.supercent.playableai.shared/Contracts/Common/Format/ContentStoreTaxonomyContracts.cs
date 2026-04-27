@@ -336,7 +336,7 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string normalizedCategory = Normalize(category);
             string normalizedObjectId = Normalize(objectId);
-            ContentStoreTaxonomySubcategoryGroup? group = BuiltInSubcategoryGroups.FirstOrDefault(value => string.Equals(value.category, normalizedCategory, StringComparison.Ordinal));
+            ContentStoreTaxonomySubcategoryGroup group = BuiltInSubcategoryGroups.FirstOrDefault(value => string.Equals(value.category, normalizedCategory, StringComparison.Ordinal));
             return group != null && group.subcategories.Any(option => string.Equals(option.id, normalizedObjectId, StringComparison.Ordinal));
         }
 
