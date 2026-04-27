@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Supercent.PlayableAI.Common.Contracts
 {
     [DisallowMultipleComponent]
-    [AddComponentMenu("PlayableAI/Content Options/Environment Variation")]
+    [AddComponentMenu("AIPS/Content Options/Environment Variation")]
     public sealed class ContentEnvironmentVariationOption : MonoBehaviour
     {
         public string variationMode = GeneratedContentCatalogContracts.VARIATION_MODE_SINGLE;

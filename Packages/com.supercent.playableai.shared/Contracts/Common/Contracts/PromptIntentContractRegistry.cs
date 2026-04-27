@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.Common.Format;
 
@@ -108,99 +108,99 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         private static readonly PromptIntentObjectRoleDescriptor[] OBJECT_ROLES =
         {
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PLAYER, summary = "플레이어 모델", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.GENERATOR, summary = "생성 시설", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PROCESSOR, summary = "가공/포장 시설", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.SELLER, summary = "판매 카운터", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.UNLOCK_PAD, summary = "해금 발판", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PHYSICS_AREA, summary = "물리 스태킹 영역", catalogBacked = false, supportsDesignId = false, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.RAIL, summary = "아이템 자동 공급 레일", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PLAYER, summary = "Player model", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.GENERATOR, summary = "Generator facility", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PROCESSOR, summary = "Processing/packing facility", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.SELLER, summary = "Sales counter", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.UNLOCK_PAD, summary = "Unlock pad", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PHYSICS_AREA, summary = "Physics stacking area", catalogBacked = false, supportsDesignId = false, supportsScenarioOptions = false, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.RAIL, summary = "Automatic item supply rail", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
         };
 
         private static readonly PromptIntentScenarioOptionDescriptor[] SCENARIO_OPTIONS =
         {
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CUSTOMER_REQUEST_COUNT, summary = "seller 손님 주문 수 범위", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_REQUESTABLE_ITEMS, summary = "seller 주문 가능 품목 오픈 조건", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_COUNT_PER_CONVERSION, summary = "processor 변환당 입력 개수", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CONVERSION_INTERVAL_SECONDS, summary = "processor 변환 간격", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_ITEM_MOVE_INTERVAL_SECONDS, summary = "processor 입력 이동 간격", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_SPAWN_INTERVAL_SECONDS, summary = "generator 생성 간격", supportedRoles = new[] { PromptIntentObjectRoles.GENERATOR } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CUSTOMER_REQUEST_COUNT, summary = "Seller customer order count range", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_REQUESTABLE_ITEMS, summary = "Seller requestable item unlock condition", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_COUNT_PER_CONVERSION, summary = "Processor input count per conversion", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CONVERSION_INTERVAL_SECONDS, summary = "Processor conversion interval", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_ITEM_MOVE_INTERVAL_SECONDS, summary = "Processor input item movement interval", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
+            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_SPAWN_INTERVAL_SECONDS, summary = "Generator spawn interval", supportedRoles = new[] { PromptIntentObjectRoles.GENERATOR } },
         };
 
         private static readonly PromptIntentConditionKindDescriptor[] CONDITION_KINDS =
         {
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.START, summary = "시작 시 진입", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.STAGE_COMPLETED, summary = "이전 stage 완료 후 진입", supportsStageId = true, requiresStageId = true, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.BALANCE_AT_LEAST, summary = "보유 금액 threshold 도달", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = true, requiresPositiveAmountValue = true },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.UNLOCK_COMPLETED, summary = "해금 발판 완료", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_GENERATED, summary = "generator에서 아이템 생성", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_COLLECTED, summary = "아이템 직접 획득", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_CONVERTED, summary = "processor 변환 완료", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.RAIL_ITEM_ARRIVED, summary = "rail 자동 공급 도착", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.SALE_COMPLETED, summary = "판매 거래 완료 및 결제", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.MONEY_COLLECTED, summary = "돈 수집 완료", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.CUSTOMER_SERVED, summary = "손님 응대 완료", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.START, summary = "Enter at start", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.STAGE_COMPLETED, summary = "Enter after previous stage completion", supportsStageId = true, requiresStageId = true, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.BALANCE_AT_LEAST, summary = "Enter when balance reaches threshold", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = true, requiresPositiveAmountValue = true },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.UNLOCK_COMPLETED, summary = "Unlock pad completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_GENERATED, summary = "Item generated by generator", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_COLLECTED, summary = "Item directly collected", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_CONVERTED, summary = "Processor conversion completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.RAIL_ITEM_ARRIVED, summary = "Automatic rail supply arrived", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.SALE_COMPLETED, summary = "Sale transaction completed and paid", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.MONEY_COLLECTED, summary = "Money collection completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.CUSTOMER_SERVED, summary = "Customer service completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
         };
 
         private static readonly PromptIntentObjectiveKindDescriptor[] OBJECTIVE_KINDS =
         {
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.UNLOCK_OBJECT, summary = "해금 발판 상호작용", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = true, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_ITEM, summary = "아이템 획득", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.CONVERT_ITEM, summary = "가공/포장 투입 및 변환", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = true, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.SELL_ITEM, summary = "판매 카운터에 판매", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_CURRENCY, summary = "돈 수집", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.WAIT_SECONDS, summary = "지정 시간 대기", requiresTargetObjectId = false, requiresItem = false, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = true, canAbsorbArrow = false },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.UNLOCK_OBJECT, summary = "Interact with unlock pad", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = true, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_ITEM, summary = "Collect item", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.CONVERT_ITEM, summary = "Insert and convert processing/packing input", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = true, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.SELL_ITEM, summary = "Sell at sales counter", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_CURRENCY, summary = "Collect money", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.WAIT_SECONDS, summary = "Wait for specified duration", requiresTargetObjectId = false, requiresItem = false, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = true, canAbsorbArrow = false },
         };
 
         private static readonly PromptIntentEffectKindDescriptor[] EFFECT_KINDS =
         {
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_OBJECT, summary = "오브젝트 노출", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.ACTIVATE_OBJECT, summary = "오브젝트 활성화", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.FOCUS_CAMERA, summary = "카메라 포커스", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_ARROW, summary = "오브젝트브 연동 화살표 유도", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_GUIDE_ARROW, summary = "프레젠테이션 전용 화살표 유도", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SPAWN_CUSTOMER, summary = "손님 등장", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_ENDCARD, summary = "엔드카드 노출", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.END_GAME, summary = "엔드카드 없이 즉시 게임 종료/CTA 호출", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.HIDE_GUIDE, summary = "가이드 숨김", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = true },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_OBJECT, summary = "Reveal object", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.ACTIVATE_OBJECT, summary = "Activate object", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.FOCUS_CAMERA, summary = "Focus camera", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_ARROW, summary = "Show objective-bound arrow guidance", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_GUIDE_ARROW, summary = "Show presentation-only arrow guidance", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SPAWN_CUSTOMER, summary = "Spawn customer", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_ENDCARD, summary = "Reveal endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.END_GAME, summary = "End game immediately and trigger CTA without endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.HIDE_GUIDE, summary = "Hide guide", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = true },
         };
 
         private static readonly PromptIntentValueDescriptor[] EFFECT_TIMING_KINDS =
         {
-            new PromptIntentValueDescriptor { value = PromptIntentEffectTimingKinds.ARRIVAL, summary = "타깃 도착/비춤 직후" },
-            new PromptIntentValueDescriptor { value = PromptIntentEffectTimingKinds.COMPLETED, summary = "연출/복귀 완료 후" },
+            new PromptIntentValueDescriptor { value = PromptIntentEffectTimingKinds.ARRIVAL, summary = "Immediately after target arrival/focus" },
+            new PromptIntentValueDescriptor { value = PromptIntentEffectTimingKinds.COMPLETED, summary = "After presentation/return completes" },
         };
 
         private static readonly PromptIntentValueDescriptor[] FLOW_TARGET_EVENT_KEYS =
         {
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.ROOT, summary = "오브젝트 루트 상호작용" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.GET_ITEM, summary = "아이템 집기 유도" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.DROP_ITEM, summary = "투입/내려놓기 유도" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.SELL_ITEM, summary = "판매 유도" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.COLLECT_MONEY, summary = "돈 수집 유도" },
+            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.ROOT, summary = "Object root interaction" },
+            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.GET_ITEM, summary = "Guide item pickup" },
+            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.DROP_ITEM, summary = "Guide item drop-off" },
+            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.SELL_ITEM, summary = "Guide sale" },
+            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.COLLECT_MONEY, summary = "Guide money collection" },
         };
 
         private static readonly PromptIntentValueDescriptor[] CURRENCY_START_VISUAL_MODES =
         {
-            new PromptIntentValueDescriptor { value = CurrencyStartVisualRules.STACKED, summary = "시작 시 돈 더미가 쌓여 있음" },
-            new PromptIntentValueDescriptor { value = CurrencyStartVisualRules.NONE, summary = "시작 시 돈 비주얼 없음" },
+            new PromptIntentValueDescriptor { value = CurrencyStartVisualRules.STACKED, summary = "Money stack visible at start" },
+            new PromptIntentValueDescriptor { value = CurrencyStartVisualRules.NONE, summary = "No money visual at start" },
         };
 
         private static readonly PromptIntentValueDescriptor[] RAIL_ENDPOINT_SIDES =
         {
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_LEFT, summary = "왼쪽 끝점" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_RIGHT, summary = "오른쪽 끝점" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_TOP, summary = "위쪽 끝점" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_BOTTOM, summary = "아래쪽 끝점" },
+            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_LEFT, summary = "Left endpoint" },
+            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_RIGHT, summary = "Right endpoint" },
+            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_TOP, summary = "Top endpoint" },
+            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_BOTTOM, summary = "Bottom endpoint" },
         };
 
         private static readonly PromptIntentCompiledGameplayRoleDescriptor[] COMPILED_GAMEPLAY_ROLES =
         {
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "generator", role = PromptIntentObjectRoles.GENERATOR, summary = "compiled generator spawn -> generator role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "converter", role = PromptIntentObjectRoles.PROCESSOR, summary = "compiled converter spawn -> processor role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "seller", role = PromptIntentObjectRoles.SELLER, summary = "compiled seller spawn -> seller role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "unlocker", role = PromptIntentObjectRoles.UNLOCK_PAD, summary = "compiled unlocker spawn -> unlock_pad role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "rail", role = PromptIntentObjectRoles.RAIL, summary = "compiled rail spawn -> rail role" },
+            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "generator", role = PromptIntentObjectRoles.GENERATOR, summary = "Compiled generator spawn maps to generator role" },
+            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "converter", role = PromptIntentObjectRoles.PROCESSOR, summary = "Compiled converter spawn maps to processor role" },
+            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "seller", role = PromptIntentObjectRoles.SELLER, summary = "Compiled seller spawn maps to seller role" },
+            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "unlocker", role = PromptIntentObjectRoles.UNLOCK_PAD, summary = "Compiled unlocker spawn maps to unlock_pad role" },
+            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "rail", role = PromptIntentObjectRoles.RAIL, summary = "Compiled rail spawn maps to rail role" },
         };
         // </generated-contract-registry-data>
 
@@ -309,11 +309,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             string[] names = GetSupportedScenarioOptionNames(role);
             if (names.Length == 0)
-                return "지원하지 않습니다.";
+                return "No scenario options are supported.";
             if (names.Length == 1)
-                return names[0] + "만 지원합니다.";
+                return "Only " + names[0] + " is supported.";
 
-            return JoinNames(names) + "만 지원합니다.";
+            return "Only " + JoinNames(names) + " are supported.";
         }
 
         public static PlayableScenarioFeatureOptions CreateRoleDefaultFeatureOptions(string role)

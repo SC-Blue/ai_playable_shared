@@ -328,6 +328,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string contentHash = string.Empty;
         public GeneratedContentCatalogEntry[] entries = new GeneratedContentCatalogEntry[0];
         public string[] availableBuiltinFeatureTypes = Array.Empty<string>();
+        public FeatureDescriptor[] stableFeatureDescriptors = Array.Empty<FeatureDescriptor>();
         public FeatureDescriptor[] customFeatureDescriptors = Array.Empty<FeatureDescriptor>();
     }
 

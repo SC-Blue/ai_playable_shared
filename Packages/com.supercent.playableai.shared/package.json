@@ -1,7 +1,7 @@
 {
   "name": "com.supercent.playableai.shared",
   "version": "2.1.0",
-  "displayName": "Supercent PlayableAI Shared",
+  "displayName": "Supercent AI Playable Studio Shared",
   "description": "Vendored release package for shared contracts and authoring code used by both the Unity project and server-side tools.",
   "unity": "2022.3",
   "author": {

@@ -15,7 +15,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public static string Validate(string startVisualMode, string label)
         {
             if (string.IsNullOrWhiteSpace(startVisualMode))
-                return label + "가 필요합니다.";
+                return label + " is required.";
 
             string normalized = startVisualMode.Trim();
             if (PromptIntentContractRegistry.IsSupportedCurrencyStartVisualMode(normalized))
@@ -23,16 +23,16 @@ namespace Supercent.PlayableAI.Common.Contracts
 
             string[] supportedModes = PromptIntentContractRegistry.GetCurrencyStartVisualModes();
             if (supportedModes.Length == 0)
-                return label + "는 지원되는 mode가 없습니다.";
+                return label + " has no supported modes.";
             if (supportedModes.Length == 1)
-                return label + "는 '" + supportedModes[0] + "'이어야 합니다.";
+                return label + " must be '" + supportedModes[0] + "'.";
 
             string supportedList = supportedModes[0];
             for (int i = 1; i < supportedModes.Length - 1; i++)
                 supportedList += "', '" + supportedModes[i];
 
-            supportedList += "' 또는 '" + supportedModes[supportedModes.Length - 1];
-            return label + "는 '" + supportedList + "'이어야 합니다.";
+            supportedList += "' or '" + supportedModes[supportedModes.Length - 1];
+            return label + " must be '" + supportedList + "'.";
         }
 
         public static bool ShouldCreateInitialStack(string startVisualMode)

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Supercent.PlayableAI.Common.Contracts
 {
     [DisallowMultipleComponent]
-    [AddComponentMenu("PlayableAI/Content Metadata")]
+    [AddComponentMenu("AIPS/Content Metadata")]
     public sealed class ContentMetadata : MonoBehaviour
     {
         public string contentId = string.Empty;

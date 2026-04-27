@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Supercent.PlayableAI.Common.Contracts
 {
-    [CreateAssetMenu(fileName = "feature_descriptor", menuName = "PlayableAI/Feature Descriptor")]
+    [CreateAssetMenu(fileName = "feature_descriptor", menuName = "AIPS/Feature Descriptor")]
     public sealed class FeatureDescriptorAsset : ScriptableObject
     {
         [SerializeField] private FeatureDescriptor _descriptor = new FeatureDescriptor();

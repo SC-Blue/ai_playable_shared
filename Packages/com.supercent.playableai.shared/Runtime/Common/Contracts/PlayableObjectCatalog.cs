@@ -1244,7 +1244,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     }
 
     /// <summary>EditorBasedCatalog + ContentSelectionCatalog + GameplayCatalog + EnvironmentCatalog.</summary>
-    [CreateAssetMenu(fileName = "playable_object_catalog", menuName = "PlayableAI/Settings/Object Catalog (오브젝트 카탈로그)")]
+    [CreateAssetMenu(fileName = "playable_object_catalog", menuName = "AIPS/Settings/Object Catalog (오브젝트 카탈로그)")]
     public sealed class PlayableObjectCatalog : ScriptableObject
     {
         [Tooltip("스캔 루트. 예: Assets/Supercent/PlayableAI/Concepts/PizzaReady/Prefabs")]

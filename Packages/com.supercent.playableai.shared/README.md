@@ -1,4 +1,4 @@
-# Supercent PlayableAI Shared
+# Supercent AI Playable Studio Shared
 
 Vendored release package for the shared contracts and authoring code used by both the Unity project and server-side tools.
 
