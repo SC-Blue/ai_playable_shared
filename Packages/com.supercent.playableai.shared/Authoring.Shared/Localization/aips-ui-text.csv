@@ -891,7 +891,6 @@ key,ko,en,vi,comment
 "contentStore.catalogEntryMissing","Catalog entry를 찾지 못했습니다.","Could not find the catalog entry.","Khong tim thay catalog entry.","Unity Content Store"
 "contentStore.entryMissing","entry가 없습니다.","Entry is missing.","Thieu entry.","Unity Content Store"
 "contentStore.featureCategoryOnly","feature category만 업로드할 수 있습니다.","Only feature category can be uploaded.","Chi co the upload category feature.","Unity Content Store"
-"contentStore.customFeaturePathOnly","legacy custom feature 폴더는 업로드할 수 없습니다. Assets/AIPS/Contents/{themeId}/features/{featureType}/{designId} 구조를 사용하세요.","Legacy custom feature folders cannot be uploaded. Use Assets/AIPS/Contents/{themeId}/features/{featureType}/{designId}.","Khong the upload legacy custom feature folder. Hay dung Assets/AIPS/Contents/{themeId}/features/{featureType}/{designId}.","Unity Content Store"
 "contentStore.fileOutsideProjectRoot","파일이 project root 밖에 있습니다: {0}","File is outside the project root: {0}","File nam ngoai project root: {0}","Unity Content Store"
 "contentStore.installedPathFolderMissing","installedPath 폴더를 찾지 못했습니다: {0}","Could not find installedPath folder: {0}","Khong tim thay thu muc installedPath: {0}","Unity Content Store"
 "contentStore.installedPathFolderEmpty","installedPath 폴더가 비어 있습니다: {0}","installedPath folder is empty: {0}","Thu muc installedPath dang trong: {0}","Unity Content Store"

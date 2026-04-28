@@ -10,9 +10,6 @@ namespace Supercent.PlayableAI.Common.Format
         public const string FeatureRuntime = "feature_runtime";
         public const string FeatureVariant = "features";
         public const string Shared = "shared";
-        public const string LegacyFeature = "feature";
-        public const string LegacyStableFeature = "features/stable";
-        public const string LegacyCustomFeature = "features/custom";
     }
 
     public static class ContentStoreContentKindIds
@@ -29,10 +26,6 @@ namespace Supercent.PlayableAI.Common.Format
         public const string FeatureRuntime = "feature_runtime";
         public const string FeatureVariant = "feature_variant";
         public const string SharedAsset = "shared_asset";
-
-        public const string LegacyStableFeature = "stable_feature";
-        public const string LegacyCustomFeature = "custom_feature";
-        public const string LegacyShared = "shared";
     }
 
     public static class ContentStoreSharedCategoryIds
@@ -50,7 +43,7 @@ namespace Supercent.PlayableAI.Common.Format
         public ContentStoreTaxonomyOption[] themes = Array.Empty<ContentStoreTaxonomyOption>();
         public ContentStoreTaxonomyOption[] contentKinds = Array.Empty<ContentStoreTaxonomyOption>();
         public ContentStoreTaxonomyOption[] builtInGroups = Array.Empty<ContentStoreTaxonomyOption>();
-        public ContentStoreTaxonomyOption[] stableFeatureGroups = Array.Empty<ContentStoreTaxonomyOption>();
+        public ContentStoreTaxonomyOption[] featureGroups = Array.Empty<ContentStoreTaxonomyOption>();
         public ContentStoreTaxonomyOption[] sharedAssetGroups = Array.Empty<ContentStoreTaxonomyOption>();
         public ContentStoreTaxonomySubcategoryGroup[] builtInSubcategoryGroups = Array.Empty<ContentStoreTaxonomySubcategoryGroup>();
     }
@@ -83,8 +76,8 @@ namespace Supercent.PlayableAI.Common.Format
     {
         private static readonly ContentStoreTaxonomyOption[] ThemeOptions =
         {
-            Option("PizzaReady", "PizzaReady", "/assets/themes/pizza_ready.webp", "pizza_ready", "pizza-ready", "pizzaready"),
-            Option("SuzysRestaurant", "SuzysRestaurant", "/assets/themes/suzys_restaurant.webp", "suzys_restaurant", "suzy", "suzy_restaurant", "suzys-restaurant", "suzy-restaurant", "suzysrestaurant", "suzyrestaurant"),
+            Option("PizzaReady", "피자레디", "/assets/themes/pizza_ready.webp", "pizza_ready", "pizza-ready", "pizzaready"),
+            Option("SuzysRestaurant", "수지 레스토랑", "/assets/themes/suzys_restaurant.webp", "suzys_restaurant", "suzy", "suzy_restaurant", "suzys-restaurant", "suzy-restaurant", "suzysrestaurant", "suzyrestaurant"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] ContentKindOptions =
@@ -104,7 +97,7 @@ namespace Supercent.PlayableAI.Common.Format
             Option(CatalogCategoryIds.UNLOCKER, "해금발판"),
         };
 
-        private static readonly ContentStoreTaxonomyOption[] StableFeatureGroupOptions =
+        private static readonly ContentStoreTaxonomyOption[] FeatureGroupOptions =
         {
             Option(PlayableFeatureTypeIds.Generator, "생성기"),
             Option(PlayableFeatureTypeIds.Converter, "변환기"),
@@ -155,7 +148,7 @@ namespace Supercent.PlayableAI.Common.Format
                 themes = CloneOptions(ThemeOptions),
                 contentKinds = CloneOptions(ContentKindOptions),
                 builtInGroups = CloneOptions(BuiltInGroupOptions),
-                stableFeatureGroups = CloneOptions(StableFeatureGroupOptions),
+                featureGroups = CloneOptions(FeatureGroupOptions),
                 sharedAssetGroups = CloneOptions(SharedAssetGroupOptions),
                 builtInSubcategoryGroups = BuiltInSubcategoryGroups.Select(CloneGroup).ToArray(),
             };
@@ -218,10 +211,7 @@ namespace Supercent.PlayableAI.Common.Format
                 return ContentStoreContentKindIds.BuiltIn;
             if (IsFeatureRuntimeBoundary(normalizedBoundary))
                 return ContentStoreContentKindIds.FeatureRuntime;
-            if (IsFeatureVariantBoundary(normalizedBoundary) ||
-                IsStableFeatureBoundary(normalizedBoundary) ||
-                IsCustomFeatureBoundary(normalizedBoundary) ||
-                string.Equals(normalizedBoundary, ContentStoreBoundaryIds.LegacyFeature, StringComparison.Ordinal))
+            if (IsFeatureVariantBoundary(normalizedBoundary))
                 return ContentStoreContentKindIds.FeatureVariant;
             if (IsBuiltInCategory(normalizedCategory))
                 return ContentStoreContentKindIds.BuiltIn;
@@ -258,16 +248,6 @@ namespace Supercent.PlayableAI.Common.Format
         public static bool IsBuiltInBoundary(string boundary)
         {
             return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.BuiltIn, StringComparison.Ordinal);
-        }
-
-        public static bool IsStableFeatureBoundary(string boundary)
-        {
-            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.LegacyStableFeature, StringComparison.Ordinal);
-        }
-
-        public static bool IsCustomFeatureBoundary(string boundary)
-        {
-            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.LegacyCustomFeature, StringComparison.Ordinal);
         }
 
         public static bool IsSharedBoundary(string boundary)
@@ -344,7 +324,7 @@ namespace Supercent.PlayableAI.Common.Format
             string normalized = Normalize(boundary);
             if (IsBuiltInBoundary(normalized))
                 return ResolveProjectPathToken(ContentStoreBoundaryIds.BuiltIn);
-            if (IsFeatureVariantBoundary(normalized) || IsStableFeatureBoundary(normalized) || IsCustomFeatureBoundary(normalized))
+            if (IsFeatureVariantBoundary(normalized))
                 return ResolveProjectPathToken("features");
             if (IsFeatureRuntimeBoundary(normalized))
                 return "Assets/AIPS/Features/runtime";
@@ -362,10 +342,10 @@ namespace Supercent.PlayableAI.Common.Format
             return BuiltInGroupOptions.Any(option => string.Equals(option.id, normalized, StringComparison.Ordinal));
         }
 
-        public static bool IsStableFeatureType(string featureType)
+        public static bool IsFeatureType(string featureType)
         {
             string normalized = Normalize(featureType);
-            return StableFeatureGroupOptions.Any(option => string.Equals(option.id, normalized, StringComparison.Ordinal));
+            return FeatureGroupOptions.Any(option => string.Equals(option.id, normalized, StringComparison.Ordinal));
         }
 
         public static bool IsBuiltInSubcategory(string category, string objectId)
@@ -376,9 +356,9 @@ namespace Supercent.PlayableAI.Common.Format
             return group != null && group.subcategories.Any(option => string.Equals(option.id, normalizedObjectId, StringComparison.Ordinal));
         }
 
-        public static bool IsReservedStableFeatureToken(string value)
+        public static bool IsReservedFeatureToken(string value)
         {
-            return IsStableFeatureType(value);
+            return IsFeatureType(value);
         }
 
         public static bool IsSupportedThemeId(string themeId)
@@ -416,7 +396,9 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string canonical = CanonicalizeThemeId(themeId);
             string pathToken = ResolveThemeContentPathToken(canonical);
-            return new[] { pathToken, canonical }.Distinct(StringComparer.Ordinal).ToArray();
+            return string.IsNullOrWhiteSpace(pathToken)
+                ? Array.Empty<string>()
+                : new[] { pathToken };
         }
 
         private static ContentStoreTaxonomyOption Option(string id, string label, string iconUrl = "", params string[] aliases)
