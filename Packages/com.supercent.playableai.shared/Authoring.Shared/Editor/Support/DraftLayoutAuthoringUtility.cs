@@ -174,13 +174,7 @@ namespace PlayableAI.AuthoringCore
 
         private static bool TryResolveCatalogObjectIdForRole(PlayableObjectCatalog catalog, string role, out string objectId)
         {
-            objectId = string.Empty;
-            string normalizedRole = Normalize(role);
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
-                return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId);
-
-            objectId = PromptIntentContractRegistry.ResolveCatalogGameplayObjectIdForRole(normalizedRole);
-            return !string.IsNullOrEmpty(objectId);
+            return CatalogRoleUtility.TryResolveCatalogObjectIdForRole(catalog, role, out objectId, out _);
         }
 
         private static bool TryResolveUniqueCatalogObjectIdByCategory(

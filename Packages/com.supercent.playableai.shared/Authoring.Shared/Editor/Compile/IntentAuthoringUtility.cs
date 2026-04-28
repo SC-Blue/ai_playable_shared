@@ -112,46 +112,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         public static bool TryResolveCatalogObjectId(PlayableObjectCatalog catalog, string role, out string objectId, out string error)
         {
-            objectId = string.Empty;
-            error = string.Empty;
-            if (catalog == null)
-            {
-                error = "PlayableObjectCatalog가 필요합니다.";
-                return false;
-            }
-
-            switch (Normalize(role))
-            {
-                case PromptIntentObjectRoles.GENERATOR:
-                    objectId = "generator";
-                    break;
-                case PromptIntentObjectRoles.PROCESSOR:
-                    objectId = "converter";
-                    break;
-                case PromptIntentObjectRoles.SELLER:
-                    objectId = "seller";
-                    break;
-                case PromptIntentObjectRoles.UNLOCK_PAD:
-                    objectId = "unlocker";
-                    break;
-                case PromptIntentObjectRoles.RAIL:
-                    objectId = "rail";
-                    break;
-                case PromptIntentObjectRoles.PLAYER:
-                    return TryResolveUniqueCatalogObjectIdByCategory(catalog, GameplayCatalog.PLAYER_MODEL_CATEGORY, out objectId, out error);
-                case PromptIntentObjectRoles.PHYSICS_AREA:
-                    error = "physics_area는 catalog-backed role이 아닙니다.";
-                    return false;
-                default:
-                    error = "지원되지 않는 object role '" + role + "'입니다.";
-                    return false;
-            }
-
-            if (catalog.IsSupportedGameplayObject(objectId))
-                return true;
-
-            error = "Catalog에 role '" + role + "'에 대응하는 gameplay objectId '" + objectId + "'가 없습니다.";
-            return false;
+            return global::PlayableAI.AuthoringCore.CatalogRoleUtility.TryResolveCatalogObjectIdForRole(catalog, role, out objectId, out error);
         }
 
         public static bool IsCatalogBackedRole(string role)

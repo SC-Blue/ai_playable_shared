@@ -23,7 +23,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         public static PromptIntentJsonValidationResult Validate(string json, PlayableObjectCatalog catalog)
         {
             var result = new PromptIntentJsonValidationResult();
-            _ = catalog;
 
             AuthoringInputContractDetectionResult detection = AuthoringInputContractDetector.Detect(json);
             if (!detection.IsPromptIntent)
@@ -52,7 +51,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             ValidateCurrencies(result.Contract.currencies, result);
             ValidateSaleValues(result.Contract.saleValues, result);
-            ValidateObjects(result.Contract.objects, result);
+            ValidateObjects(result.Contract.objects, catalog, result);
             ValidateContentSelections(result.Contract.contentSelections, result);
             ValidateStages(result.Contract.stages, result);
             ValidateScenarioOptions(result.Contract.scenarioOptions, result);
@@ -116,6 +115,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static void ValidateObjects(
             PromptIntentObjectDefinition[] values,
+            PlayableObjectCatalog catalog,
             PromptIntentJsonValidationResult result)
         {
             var seenIds = new HashSet<string>(StringComparer.Ordinal);
@@ -138,7 +138,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 if (string.IsNullOrEmpty(role))
                     Fail(result, PlayableFailureCode.MissingRequiredField, "objects[" + i + "].role은 필수입니다.");
-                else if (!PromptIntentObjectRoles.IsSupported(role))
+                else if (!IsSupportedObjectRole(role, catalog))
                     Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].role '" + role + "'은(는) 지원되지 않습니다.");
 
                 if (value.designId != null && string.IsNullOrEmpty(Normalize(value.designId)))
@@ -153,6 +153,98 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidatePhysicsAreaOptions(value.physicsAreaOptions, role, "objects[" + i + "].physicsAreaOptions", result);
                 ValidateRailOptions(value.railOptions, role, "objects[" + i + "].railOptions", result);
             }
+        }
+
+        private static bool IsSupportedObjectRole(string role, PlayableObjectCatalog catalog)
+        {
+            string normalizedRole = Normalize(role);
+            if (string.IsNullOrEmpty(normalizedRole))
+                return false;
+            if (PromptIntentObjectRoles.IsSupported(normalizedRole))
+                return true;
+            if (TryResolveCatalogFeatureObjectRole(catalog, normalizedRole, out _))
+                return true;
+            return TryResolveRuntimeDescriptorCatalogRole(catalog, normalizedRole, out _);
+        }
+
+        private static bool TryResolveRuntimeDescriptorCatalogRole(PlayableObjectCatalog catalog, string role, out string objectId)
+        {
+            objectId = string.Empty;
+            if (catalog == null)
+                return false;
+
+            string normalizedRole = Normalize(role);
+            FeatureDescriptor[] descriptors = catalog.FeatureDescriptors ?? Array.Empty<FeatureDescriptor>();
+            for (int descriptorIndex = 0; descriptorIndex < descriptors.Length; descriptorIndex++)
+            {
+                FeatureDescriptor descriptor = descriptors[descriptorIndex];
+                if (descriptor == null)
+                    continue;
+
+                FeatureCompiledGameplayRoleDescriptor[] mappings =
+                    descriptor.compiledGameplayRoleMappings ?? Array.Empty<FeatureCompiledGameplayRoleDescriptor>();
+                for (int mappingIndex = 0; mappingIndex < mappings.Length; mappingIndex++)
+                {
+                    FeatureCompiledGameplayRoleDescriptor mapping = mappings[mappingIndex];
+                    if (mapping == null ||
+                        !string.Equals(Normalize(mapping.role), normalizedRole, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    string mappedObjectId = Normalize(mapping.gameplayObjectId);
+                    if (string.IsNullOrEmpty(mappedObjectId))
+                        continue;
+                    if (!catalog.TryGetGameplayEntry(mappedObjectId, out GameplayCatalogEntry entry) || entry == null)
+                        continue;
+
+                    objectId = mappedObjectId;
+                    return true;
+                }
+
+                FeatureObjectRoleDescriptor[] roles =
+                    descriptor.objectRoles ?? Array.Empty<FeatureObjectRoleDescriptor>();
+                for (int roleIndex = 0; roleIndex < roles.Length; roleIndex++)
+                {
+                    FeatureObjectRoleDescriptor objectRole = roles[roleIndex];
+                    if (objectRole == null ||
+                        !objectRole.catalogBacked ||
+                        !string.Equals(Normalize(objectRole.role), normalizedRole, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    string descriptorFeatureType = Normalize(descriptor.featureType);
+                    if (string.IsNullOrEmpty(descriptorFeatureType))
+                        continue;
+                    if (!catalog.TryGetGameplayEntry(descriptorFeatureType, out GameplayCatalogEntry entry) || entry == null)
+                        continue;
+
+                    objectId = descriptorFeatureType;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveCatalogFeatureObjectRole(PlayableObjectCatalog catalog, string role, out string objectId)
+        {
+            objectId = string.Empty;
+            if (catalog == null)
+                return false;
+
+            string normalizedRole = Normalize(role);
+            if (string.IsNullOrEmpty(normalizedRole))
+                return false;
+
+            if (!catalog.TryGetGameplayEntry(normalizedRole, out GameplayCatalogEntry entry) || entry == null)
+                return false;
+            if (!string.Equals(Normalize(entry.category), GameplayCatalog.FEATURE_CATEGORY, StringComparison.Ordinal))
+                return false;
+
+            objectId = normalizedRole;
+            return true;
         }
 
         private static void ValidateContentSelections(

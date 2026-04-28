@@ -7,22 +7,38 @@ namespace Supercent.PlayableAI.Common.Format
     public static class ContentStoreBoundaryIds
     {
         public const string BuiltIn = "built_in";
-        public const string StableFeature = "features/stable";
-        public const string CustomFeature = "features/custom";
+        public const string FeatureRuntime = "feature_runtime";
+        public const string FeatureVariant = "features";
         public const string Shared = "shared";
         public const string LegacyFeature = "feature";
+        public const string LegacyStableFeature = "features/stable";
+        public const string LegacyCustomFeature = "features/custom";
     }
 
     public static class ContentStoreContentKindIds
     {
         public const string BuiltIn = "built_in";
-        public const string Feature = "feature";
-        public const string CustomFeature = "custom_feature";
-        public const string Shared = "shared";
+        public const string FeatureRuntime = "feature_runtime";
+        public const string FeatureVariant = "feature_variant";
+        public const string SharedAsset = "shared_asset";
+    }
+
+    public static class ContentStorePackageKindIds
+    {
+        public const string BuiltIn = "built_in";
+        public const string FeatureRuntime = "feature_runtime";
+        public const string FeatureVariant = "feature_variant";
+        public const string SharedAsset = "shared_asset";
+
+        public const string LegacyStableFeature = "stable_feature";
+        public const string LegacyCustomFeature = "custom_feature";
+        public const string LegacyShared = "shared";
     }
 
     public static class ContentStoreSharedCategoryIds
     {
+        public const string Asset = "asset";
+        public const string AssetsPathToken = "assets";
         public const string Font = "font";
         public const string FontsPathToken = "fonts";
     }
@@ -74,9 +90,9 @@ namespace Supercent.PlayableAI.Common.Format
         private static readonly ContentStoreTaxonomyOption[] ContentKindOptions =
         {
             Option(ContentStoreContentKindIds.BuiltIn, "Built-in"),
-            Option(ContentStoreContentKindIds.Feature, "Feature"),
-            Option(ContentStoreContentKindIds.CustomFeature, "Custom Feature"),
-            Option(ContentStoreContentKindIds.Shared, "Shared Asset"),
+            Option(ContentStoreContentKindIds.FeatureRuntime, "Feature Runtime"),
+            Option(ContentStoreContentKindIds.FeatureVariant, "Feature Variant"),
+            Option(ContentStoreContentKindIds.SharedAsset, "Shared Asset"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] BuiltInGroupOptions =
@@ -99,6 +115,7 @@ namespace Supercent.PlayableAI.Common.Format
 
         private static readonly ContentStoreTaxonomyOption[] SharedAssetGroupOptions =
         {
+            Option(ContentStoreSharedCategoryIds.Asset, "Theme Assets", aliases: new[] { ContentStoreSharedCategoryIds.AssetsPathToken, "shared_asset", "shared_assets" }),
             Option(ContentStoreSharedCategoryIds.Font, "Font", aliases: new[] { ContentStoreSharedCategoryIds.FontsPathToken }),
         };
 
@@ -152,7 +169,7 @@ namespace Supercent.PlayableAI.Common.Format
             string normalizedObjectId = Normalize(objectId);
             string kind = ResolveContentKind(normalizedBoundary, normalizedCategory, normalizedFeatureType);
 
-            if (string.Equals(kind, ContentStoreContentKindIds.Shared, StringComparison.Ordinal))
+            if (string.Equals(kind, ContentStoreContentKindIds.SharedAsset, StringComparison.Ordinal))
             {
                 return new ContentStorePackageTaxonomy
                 {
@@ -172,22 +189,21 @@ namespace Supercent.PlayableAI.Common.Format
                 };
             }
 
-            if (string.Equals(kind, ContentStoreContentKindIds.CustomFeature, StringComparison.Ordinal))
+            if (string.Equals(kind, ContentStoreContentKindIds.FeatureRuntime, StringComparison.Ordinal))
             {
-                string group = FirstNonEmpty(normalizedFeatureType, normalizedCategory == CatalogCategoryIds.FEATURE ? string.Empty : normalizedCategory);
                 return new ContentStorePackageTaxonomy
                 {
                     kind = kind,
-                    group = group,
-                    subcategory = string.Equals(normalizedObjectId, group, StringComparison.Ordinal) ? string.Empty : normalizedObjectId,
+                    group = FirstNonEmpty(normalizedFeatureType, normalizedObjectId),
+                    subcategory = string.Empty,
                 };
             }
 
             return new ContentStorePackageTaxonomy
             {
-                kind = ContentStoreContentKindIds.Feature,
-                group = normalizedFeatureType,
-                subcategory = string.Empty,
+                kind = ContentStoreContentKindIds.FeatureVariant,
+                group = FirstNonEmpty(normalizedFeatureType, normalizedObjectId),
+                subcategory = string.Equals(normalizedObjectId, normalizedFeatureType, StringComparison.Ordinal) ? string.Empty : normalizedObjectId,
             };
         }
 
@@ -197,33 +213,46 @@ namespace Supercent.PlayableAI.Common.Format
             string normalizedCategory = Normalize(category);
             string normalizedFeatureType = Normalize(featureType);
             if (IsSharedBoundary(normalizedBoundary))
-                return ContentStoreContentKindIds.Shared;
+                return ContentStoreContentKindIds.SharedAsset;
             if (IsBuiltInBoundary(normalizedBoundary))
                 return ContentStoreContentKindIds.BuiltIn;
-            if (IsCustomFeatureBoundary(normalizedBoundary))
-                return ContentStoreContentKindIds.CustomFeature;
-            if (IsStableFeatureBoundary(normalizedBoundary) || string.Equals(normalizedBoundary, ContentStoreBoundaryIds.LegacyFeature, StringComparison.Ordinal))
-                return ContentStoreContentKindIds.Feature;
+            if (IsFeatureRuntimeBoundary(normalizedBoundary))
+                return ContentStoreContentKindIds.FeatureRuntime;
+            if (IsFeatureVariantBoundary(normalizedBoundary) ||
+                IsStableFeatureBoundary(normalizedBoundary) ||
+                IsCustomFeatureBoundary(normalizedBoundary) ||
+                string.Equals(normalizedBoundary, ContentStoreBoundaryIds.LegacyFeature, StringComparison.Ordinal))
+                return ContentStoreContentKindIds.FeatureVariant;
             if (IsBuiltInCategory(normalizedCategory))
                 return ContentStoreContentKindIds.BuiltIn;
             if (string.Equals(normalizedCategory, CatalogCategoryIds.FEATURE, StringComparison.Ordinal) || !string.IsNullOrEmpty(normalizedFeatureType))
-                return ContentStoreContentKindIds.Feature;
-            return ContentStoreContentKindIds.Feature;
+                return ContentStoreContentKindIds.FeatureVariant;
+            return ContentStoreContentKindIds.FeatureVariant;
         }
 
         public static bool IsSupportedUploadBoundary(string boundary)
         {
             string normalized = Normalize(boundary);
             return IsBuiltInBoundary(normalized) ||
-                IsStableFeatureBoundary(normalized) ||
-                IsCustomFeatureBoundary(normalized) ||
+                IsFeatureRuntimeBoundary(normalized) ||
+                IsFeatureVariantBoundary(normalized) ||
                 IsSharedBoundary(normalized);
         }
 
         public static bool IsFeatureBoundary(string boundary)
         {
             string normalized = Normalize(boundary);
-            return IsStableFeatureBoundary(normalized) || IsCustomFeatureBoundary(normalized);
+            return IsFeatureVariantBoundary(normalized);
+        }
+
+        public static bool IsFeatureRuntimeBoundary(string boundary)
+        {
+            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.FeatureRuntime, StringComparison.Ordinal);
+        }
+
+        public static bool IsFeatureVariantBoundary(string boundary)
+        {
+            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.FeatureVariant, StringComparison.Ordinal);
         }
 
         public static bool IsBuiltInBoundary(string boundary)
@@ -233,12 +262,12 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static bool IsStableFeatureBoundary(string boundary)
         {
-            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.StableFeature, StringComparison.Ordinal);
+            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.LegacyStableFeature, StringComparison.Ordinal);
         }
 
         public static bool IsCustomFeatureBoundary(string boundary)
         {
-            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.CustomFeature, StringComparison.Ordinal);
+            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.LegacyCustomFeature, StringComparison.Ordinal);
         }
 
         public static bool IsSharedBoundary(string boundary)
@@ -257,6 +286,9 @@ namespace Supercent.PlayableAI.Common.Format
         public static string ResolveSharedCategoryPathToken(string category)
         {
             string normalized = Normalize(category);
+            if (string.Equals(normalized, ContentStoreSharedCategoryIds.Asset, StringComparison.Ordinal) ||
+                string.Equals(normalized, ContentStoreSharedCategoryIds.AssetsPathToken, StringComparison.Ordinal))
+                return ContentStoreSharedCategoryIds.AssetsPathToken;
             if (string.Equals(normalized, ContentStoreSharedCategoryIds.Font, StringComparison.Ordinal) ||
                 string.Equals(normalized, ContentStoreSharedCategoryIds.FontsPathToken, StringComparison.Ordinal))
                 return ContentStoreSharedCategoryIds.FontsPathToken;
@@ -272,6 +304,8 @@ namespace Supercent.PlayableAI.Common.Format
                     return "BuiltIn";
                 case "features":
                     return "Features";
+                case "runtime":
+                    return "Runtime";
                 case "stable":
                     return "Stable";
                 case "custom":
@@ -298,6 +332,8 @@ namespace Supercent.PlayableAI.Common.Format
                     return "PhysicsArea";
                 case ContentStoreSharedCategoryIds.FontsPathToken:
                     return "Fonts";
+                case ContentStoreSharedCategoryIds.AssetsPathToken:
+                    return string.Empty;
                 default:
                     return normalized;
             }
@@ -308,10 +344,10 @@ namespace Supercent.PlayableAI.Common.Format
             string normalized = Normalize(boundary);
             if (IsBuiltInBoundary(normalized))
                 return ResolveProjectPathToken(ContentStoreBoundaryIds.BuiltIn);
-            if (IsStableFeatureBoundary(normalized))
-                return ResolveProjectPathToken("features") + "/" + ResolveProjectPathToken("stable");
-            if (IsCustomFeatureBoundary(normalized))
-                return ResolveProjectPathToken("features") + "/" + ResolveProjectPathToken("custom");
+            if (IsFeatureVariantBoundary(normalized) || IsStableFeatureBoundary(normalized) || IsCustomFeatureBoundary(normalized))
+                return ResolveProjectPathToken("features");
+            if (IsFeatureRuntimeBoundary(normalized))
+                return "Assets/AIPS/Features/runtime";
             return normalized;
         }
 

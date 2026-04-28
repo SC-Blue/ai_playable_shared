@@ -566,7 +566,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     string reason = collidesWithBuiltin
                         ? "built-in featureType과 충돌합니다."
                         : "이미 정의된 featureType과 중복됩니다.";
-                    throw new InvalidOperationException("custom feature descriptor '" + featureType + "'가 " + reason);
+                    throw new InvalidOperationException("feature runtime descriptor '" + featureType + "'가 " + reason);
                 }
 
                 target[featureType] = Clone(descriptor);
