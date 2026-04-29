@@ -141,8 +141,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 else if (!IsSupportedObjectRole(role, catalog))
                     Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].role '" + role + "'은(는) 지원되지 않습니다.");
 
-                if (value.designId != null && string.IsNullOrEmpty(Normalize(value.designId)))
-                    Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].designId가 비어 있습니다. 생략하거나 유효한 designId를 사용해야 합니다.");
+                string designId = Normalize(value.designId);
+                if (PromptIntentContractRegistry.ObjectRoleSupportsDesignId(role) && string.IsNullOrEmpty(designId))
+                    Fail(result, PlayableFailureCode.MissingRequiredField, "objects[" + i + "].designId는 필수입니다. current catalog의 실제 designId를 사용해야 합니다.");
                 ValidateObjectFeatureOptions(value.featureOptions, role, objectId, "objects[" + i + "].featureOptions", result);
             }
         }
@@ -173,8 +174,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             if (string.IsNullOrEmpty(featureType))
                 Fail(result, PlayableFailureCode.MissingRequiredField, label + ".featureType이 필요합니다.");
-            else if (!string.Equals(featureType, role, StringComparison.Ordinal))
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".featureType는 objects[].role과 일치해야 합니다.");
+            else
+            {
+                string expectedFeatureType = ResolveFeatureTypeForRole(role);
+                if (string.IsNullOrEmpty(expectedFeatureType))
+                    Fail(result, PlayableFailureCode.InvalidValue, label + "의 object role '" + role + "'에 연결된 active feature descriptor가 없습니다.");
+                else if (!string.Equals(featureType, expectedFeatureType, StringComparison.Ordinal))
+                    Fail(result, PlayableFailureCode.InvalidValue, label + ".featureType '" + featureType + "'는 object role '" + role + "'의 descriptor featureType '" + expectedFeatureType + "'와 같아야 합니다.");
+            }
 
             if (string.IsNullOrEmpty(targetId))
                 Fail(result, PlayableFailureCode.MissingRequiredField, label + ".targetId가 필요합니다.");
@@ -191,6 +198,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         {
             string normalized = Normalize(value);
             return normalized.Length >= 2 && normalized[0] == '{' && normalized[normalized.Length - 1] == '}';
+        }
+
+        private static string ResolveFeatureTypeForRole(string role)
+        {
+            return Normalize(PromptIntentContractRegistry.ResolveFeatureTypeForRole(role));
         }
 
         private static bool IsCoreObjectRole(string role)

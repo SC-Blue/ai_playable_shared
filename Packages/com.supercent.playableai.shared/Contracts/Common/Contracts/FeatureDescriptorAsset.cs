@@ -9,7 +9,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         [SerializeField] private FeatureDescriptor _descriptor = new FeatureDescriptor();
         [SerializeField, HideInInspector] private string _lastValidationError = string.Empty;
 
-        public bool IsBuiltinReadOnly => ToDescriptor().isBuiltin;
+        public bool IsRuntimePackage => ToDescriptor().isRuntimePackage;
         public string LastValidationError => _lastValidationError ?? string.Empty;
 
         public FeatureDescriptor ToDescriptor()

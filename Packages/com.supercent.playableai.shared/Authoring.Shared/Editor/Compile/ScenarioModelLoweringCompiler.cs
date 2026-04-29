@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
 using Supercent.PlayableAI.Common.Format;
@@ -85,10 +86,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             FeatureAcceptedItemDefinition[] featureAcceptedItems = BuildFeatureAcceptedItems(model, spawnKeys, result);
             ItemPriceDefinition[] itemPrices = BuildItemPrices(model.saleValues);
+            CurrencyDefinition[] currencies = BuildCurrencies(model.currencies);
             CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, featureAcceptedItems, result);
             FeatureJsonPayload[] featureLayouts = BuildFeatureLayouts(objects, spawnKeys, layoutSpec, result);
-            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog, result);
+            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog, result);
             ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
+            if (result.Errors.Count > 0)
+                return FinalizeFailure(result);
+            PlayableScenarioFeatureOptionDefinition[] featureOptions = BuildFeatureOptions(model.objects, spawnKeys, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
 
@@ -125,12 +130,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 objectDesigns = objectDesigns,
                 contentSelections = contentSelections,
                 spawns = spawns,
-                currencies = BuildCurrencies(model.currencies),
+                currencies = currencies,
                 itemPrices = itemPrices,
                 featureAcceptedItems = featureAcceptedItems,
                 featureOutputItems = featureOutputItems,
                 playerOptions = model.playerOptions,
-                featureOptions = BuildFeatureOptions(model.objects, spawnKeys),
+                featureOptions = featureOptions,
                 featureLayouts = featureLayouts,
                 unlocks = unlocks.ToArray(),
                 beats = loweredFlowBeats,
@@ -1517,10 +1522,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
+                bool runtimeOwnedDescriptorObject = IsDescriptorRuntimeOwnedObject(catalog, value.role);
                 string resolvedDesignId = ResolveSpawnDesignId(value, gameplayObjectId, scenarioObjectId, acceptedItemCountByTargetId);
-                int designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(catalog, gameplayObjectId, resolvedDesignId, result.Errors, "objects[" + i + "]");
-                if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
-                    result.FailureCode = PlayableFailureCode.LoweringFailed;
+                int designIndex = -1;
+                if (!runtimeOwnedDescriptorObject)
+                {
+                    designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(catalog, gameplayObjectId, resolvedDesignId, result.Errors, "objects[" + i + "]");
+                    if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
+                        result.FailureCode = PlayableFailureCode.LoweringFailed;
+                }
 
                 spawns.Add(new CompiledSpawnData
                 {
@@ -1540,6 +1550,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return spawns.ToArray();
+        }
+
+        private static bool IsDescriptorRuntimeOwnedObject(PlayableObjectCatalog catalog, string role)
+        {
+            return global::PlayableAI.AuthoringCore.CatalogRoleUtility.TryResolveDescriptorObjectRole(
+                       catalog,
+                       role,
+                       out _,
+                       out FeatureObjectRoleDescriptor descriptorRole) &&
+                   descriptorRole != null &&
+                   !descriptorRole.catalogBacked &&
+                   !descriptorRole.supportsDesignId;
         }
 
         private static Dictionary<string, int> BuildAcceptedItemCountLookup(FeatureAcceptedItemDefinition[] definitions)
@@ -1665,10 +1687,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             FeatureAcceptedItemDefinition[] featureAcceptedItems,
             FeatureOutputItemDefinition[] featureOutputItems,
             ItemPriceDefinition[] itemPrices,
+            CurrencyDefinition[] currencies,
             PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
-            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog);
+            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog);
             for (int i = 0; i < resolution.Errors.Count; i++)
                 result.Errors.Add(resolution.Errors[i]);
 
@@ -1760,7 +1783,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static PlayableScenarioFeatureOptionDefinition[] BuildFeatureOptions(
             ScenarioModelObjectDefinition[] objects,
-            Dictionary<string, string> spawnKeys)
+            Dictionary<string, string> spawnKeys,
+            PlayableObjectCatalog catalog,
+            ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
             var values = new List<PlayableScenarioFeatureOptionDefinition>();
@@ -1779,11 +1804,24 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
+                if (catalog == null || !catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor))
+                {
+                    result.Errors.Add("objects[" + i + "] feature '" + featureType + "' descriptor를 찾지 못했습니다.");
+                    continue;
+                }
+
+                string loweredOptionsJson = LowerFeatureOptionsJson(
+                    descriptor,
+                    sourceOptions.optionsJson,
+                    spawnKeys,
+                    result.Errors,
+                    "objects[" + i + "] feature '" + featureType + "'");
+
                 var compiledOptions = new PlayableScenarioFeatureOptions
                 {
                     featureType = featureType,
                     targetId = targetId,
-                    optionsJson = sourceOptions.optionsJson != null ? sourceOptions.optionsJson.Trim() : string.Empty,
+                    optionsJson = loweredOptionsJson,
                 };
 
                 values.Add(new PlayableScenarioFeatureOptionDefinition
@@ -1796,6 +1834,406 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return values.ToArray();
+        }
+
+        internal static string LowerFeatureOptionsJson(
+            FeatureDescriptor descriptor,
+            string optionsJson,
+            Dictionary<string, string> spawnKeys,
+            List<string> errors,
+            string context)
+        {
+            string trimmedJson = optionsJson != null ? optionsJson.Trim() : string.Empty;
+            FeatureOptionFieldDescriptor[] fields = descriptor != null && descriptor.optionSchema != null
+                ? descriptor.optionSchema.fields ?? Array.Empty<FeatureOptionFieldDescriptor>()
+                : Array.Empty<FeatureOptionFieldDescriptor>();
+
+            var targetObjectFields = new List<FeatureOptionFieldDescriptor>();
+            for (int i = 0; i < fields.Length; i++)
+            {
+                FeatureOptionFieldDescriptor field = fields[i];
+                if (field == null)
+                    continue;
+
+                string valueType = FeatureDescriptorUtility.Normalize(field.valueType);
+                if (!string.Equals(valueType, FeatureDescriptorContracts.VALUE_TYPE_TARGET_OBJECT_ID, StringComparison.Ordinal))
+                    continue;
+
+                string fieldId = FeatureDescriptorUtility.Normalize(field.fieldId);
+                if (string.IsNullOrEmpty(fieldId))
+                    continue;
+
+                targetObjectFields.Add(field);
+            }
+
+            if (targetObjectFields.Count == 0 || string.IsNullOrWhiteSpace(trimmedJson))
+                return trimmedJson;
+
+            if (!TryParseTopLevelJsonStringProperties(trimmedJson, out List<JsonStringPropertyToken> tokens, out string parseError))
+            {
+                errors.Add(context + " optionsJson 파싱 실패: " + parseError);
+                return trimmedJson;
+            }
+
+            var replacements = new List<JsonStringReplacement>();
+            for (int i = 0; i < targetObjectFields.Count; i++)
+            {
+                FeatureOptionFieldDescriptor field = targetObjectFields[i];
+                string fieldId = FeatureDescriptorUtility.Normalize(field.fieldId);
+                JsonStringPropertyToken token = FindStringToken(tokens, fieldId);
+                if (token == null)
+                {
+                    if (field.required)
+                        errors.Add(context + " optionsJson에 필수 target_object_id 옵션 '" + fieldId + "'가 없습니다.");
+                    continue;
+                }
+
+                string sourceObjectId = IntentAuthoringUtility.Normalize(token.Value);
+                if (string.IsNullOrEmpty(sourceObjectId))
+                {
+                    if (field.required)
+                        errors.Add(context + " optionsJson target_object_id 옵션 '" + fieldId + "'가 비어 있습니다.");
+                    continue;
+                }
+
+                if (!spawnKeys.TryGetValue(sourceObjectId, out string compiledTargetId) ||
+                    string.IsNullOrEmpty(compiledTargetId))
+                {
+                    errors.Add(context + " optionsJson target_object_id 옵션 '" + fieldId + "'가 알 수 없는 object id를 참조합니다: " + sourceObjectId);
+                    continue;
+                }
+
+                replacements.Add(new JsonStringReplacement
+                {
+                    Start = token.ValueStart,
+                    End = token.ValueEnd,
+                    Value = "\"" + EscapeJsonString(compiledTargetId) + "\"",
+                });
+            }
+
+            if (replacements.Count == 0)
+                return trimmedJson;
+
+            replacements.Sort((left, right) => right.Start.CompareTo(left.Start));
+            var builder = new StringBuilder(trimmedJson);
+            for (int i = 0; i < replacements.Count; i++)
+            {
+                JsonStringReplacement replacement = replacements[i];
+                builder.Remove(replacement.Start, replacement.End - replacement.Start);
+                builder.Insert(replacement.Start, replacement.Value);
+            }
+
+            return builder.ToString();
+        }
+
+        private static JsonStringPropertyToken FindStringToken(List<JsonStringPropertyToken> tokens, string fieldId)
+        {
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                JsonStringPropertyToken token = tokens[i];
+                if (token != null && string.Equals(FeatureDescriptorUtility.Normalize(token.Key), fieldId, StringComparison.Ordinal))
+                    return token;
+            }
+
+            return null;
+        }
+
+        private static bool TryParseTopLevelJsonStringProperties(
+            string json,
+            out List<JsonStringPropertyToken> tokens,
+            out string error)
+        {
+            tokens = new List<JsonStringPropertyToken>();
+            error = string.Empty;
+            int index = 0;
+            SkipWhitespace(json, ref index);
+            if (index >= json.Length || json[index] != '{')
+            {
+                error = "JSON object가 아닙니다.";
+                return false;
+            }
+
+            index++;
+            while (true)
+            {
+                SkipWhitespace(json, ref index);
+                if (index >= json.Length)
+                {
+                    error = "JSON object가 닫히지 않았습니다.";
+                    return false;
+                }
+
+                if (json[index] == '}')
+                {
+                    index++;
+                    SkipWhitespace(json, ref index);
+                    if (index != json.Length)
+                    {
+                        error = "JSON object 뒤에 추가 문자가 있습니다.";
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                if (json[index] != '"')
+                {
+                    error = "JSON object key는 문자열이어야 합니다.";
+                    return false;
+                }
+
+                if (!TryParseJsonString(json, ref index, out string key, out _, out _))
+                {
+                    error = "JSON object key 문자열 파싱에 실패했습니다.";
+                    return false;
+                }
+
+                SkipWhitespace(json, ref index);
+                if (index >= json.Length || json[index] != ':')
+                {
+                    error = "JSON object key '" + key + "' 뒤에 ':'가 없습니다.";
+                    return false;
+                }
+
+                index++;
+                SkipWhitespace(json, ref index);
+                if (index >= json.Length)
+                {
+                    error = "JSON object key '" + key + "' 값이 없습니다.";
+                    return false;
+                }
+
+                if (json[index] == '"')
+                {
+                    if (!TryParseJsonString(json, ref index, out string value, out int valueStart, out int valueEnd))
+                    {
+                        error = "JSON object key '" + key + "' 문자열 값 파싱에 실패했습니다.";
+                        return false;
+                    }
+
+                    tokens.Add(new JsonStringPropertyToken
+                    {
+                        Key = key,
+                        Value = value,
+                        ValueStart = valueStart,
+                        ValueEnd = valueEnd,
+                    });
+                }
+                else if (!TrySkipJsonValue(json, ref index))
+                {
+                    error = "JSON object key '" + key + "' 값을 건너뛰지 못했습니다.";
+                    return false;
+                }
+
+                SkipWhitespace(json, ref index);
+                if (index >= json.Length)
+                {
+                    error = "JSON object가 닫히지 않았습니다.";
+                    return false;
+                }
+
+                if (json[index] == ',')
+                {
+                    index++;
+                    continue;
+                }
+
+                if (json[index] == '}')
+                    continue;
+
+                error = "JSON object 항목 구분자가 올바르지 않습니다.";
+                return false;
+            }
+        }
+
+        private static bool TryParseJsonString(
+            string json,
+            ref int index,
+            out string value,
+            out int valueStart,
+            out int valueEnd)
+        {
+            value = string.Empty;
+            valueStart = index;
+            valueEnd = index;
+            if (index >= json.Length || json[index] != '"')
+                return false;
+
+            var builder = new StringBuilder();
+            index++;
+            while (index < json.Length)
+            {
+                char ch = json[index++];
+                if (ch == '"')
+                {
+                    valueEnd = index;
+                    value = builder.ToString();
+                    return true;
+                }
+
+                if (ch != '\\')
+                {
+                    builder.Append(ch);
+                    continue;
+                }
+
+                if (index >= json.Length)
+                    return false;
+
+                char escaped = json[index++];
+                switch (escaped)
+                {
+                    case '"':
+                    case '\\':
+                    case '/':
+                        builder.Append(escaped);
+                        break;
+                    case 'b':
+                        builder.Append('\b');
+                        break;
+                    case 'f':
+                        builder.Append('\f');
+                        break;
+                    case 'n':
+                        builder.Append('\n');
+                        break;
+                    case 'r':
+                        builder.Append('\r');
+                        break;
+                    case 't':
+                        builder.Append('\t');
+                        break;
+                    case 'u':
+                        if (index + 4 > json.Length)
+                            return false;
+                        string hex = json.Substring(index, 4);
+                        if (!ushort.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out ushort code))
+                            return false;
+                        builder.Append((char)code);
+                        index += 4;
+                        break;
+                    default:
+                        return false;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TrySkipJsonValue(string json, ref int index)
+        {
+            if (index >= json.Length)
+                return false;
+
+            char ch = json[index];
+            if (ch == '"')
+                return TryParseJsonString(json, ref index, out _, out _, out _);
+
+            if (ch == '{' || ch == '[')
+            {
+                char open = ch;
+                char close = ch == '{' ? '}' : ']';
+                int depth = 0;
+                while (index < json.Length)
+                {
+                    ch = json[index];
+                    if (ch == '"')
+                    {
+                        if (!TryParseJsonString(json, ref index, out _, out _, out _))
+                            return false;
+                        continue;
+                    }
+
+                    if (ch == open)
+                    {
+                        depth++;
+                    }
+                    else if (ch == close)
+                    {
+                        depth--;
+                        index++;
+                        if (depth == 0)
+                            return true;
+                        continue;
+                    }
+
+                    index++;
+                }
+
+                return false;
+            }
+
+            while (index < json.Length)
+            {
+                ch = json[index];
+                if (ch == ',' || ch == '}')
+                    return true;
+                index++;
+            }
+
+            return true;
+        }
+
+        private static void SkipWhitespace(string value, ref int index)
+        {
+            while (index < value.Length && char.IsWhiteSpace(value[index]))
+                index++;
+        }
+
+        private static string EscapeJsonString(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            var builder = new StringBuilder(value.Length + 8);
+            for (int i = 0; i < value.Length; i++)
+            {
+                char ch = value[i];
+                switch (ch)
+                {
+                    case '"':
+                        builder.Append("\\\"");
+                        break;
+                    case '\\':
+                        builder.Append("\\\\");
+                        break;
+                    case '\b':
+                        builder.Append("\\b");
+                        break;
+                    case '\f':
+                        builder.Append("\\f");
+                        break;
+                    case '\n':
+                        builder.Append("\\n");
+                        break;
+                    case '\r':
+                        builder.Append("\\r");
+                        break;
+                    case '\t':
+                        builder.Append("\\t");
+                        break;
+                    default:
+                        builder.Append(ch);
+                        break;
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private sealed class JsonStringPropertyToken
+        {
+            public string Key;
+            public string Value;
+            public int ValueStart;
+            public int ValueEnd;
+        }
+
+        private sealed class JsonStringReplacement
+        {
+            public int Start;
+            public int End;
+            public string Value;
         }
 
         private static FeatureJsonPayload[] BuildFeatureLayouts(

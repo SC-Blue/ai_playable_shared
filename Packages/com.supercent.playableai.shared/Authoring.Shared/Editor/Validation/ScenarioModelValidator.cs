@@ -129,8 +129,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             if (string.IsNullOrEmpty(featureType))
                 Fail(result, label + ".featureType이 필요합니다.");
-            else if (!string.Equals(featureType, normalizedRole, StringComparison.Ordinal))
-                Fail(result, label + ".featureType '" + featureType + "'는 object role '" + normalizedRole + "'와 같아야 합니다.");
+            else
+            {
+                string expectedFeatureType = ResolveFeatureTypeForRole(normalizedRole);
+                if (string.IsNullOrEmpty(expectedFeatureType))
+                    Fail(result, label + "의 object role '" + normalizedRole + "'에 연결된 active feature descriptor가 없습니다.");
+                else if (!string.Equals(featureType, expectedFeatureType, StringComparison.Ordinal))
+                    Fail(result, label + ".featureType '" + featureType + "'는 object role '" + normalizedRole + "'의 descriptor featureType '" + expectedFeatureType + "'와 같아야 합니다.");
+            }
 
             if (string.IsNullOrEmpty(targetId))
                 Fail(result, label + ".targetId가 필요합니다.");
@@ -174,6 +180,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         {
             string trimmed = value != null ? value.Trim() : string.Empty;
             return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
+        }
+
+        private static string ResolveFeatureTypeForRole(string role)
+        {
+            return Normalize(PromptIntentContractRegistry.ResolveFeatureTypeForRole(role));
         }
 
         private static bool IsCoreObjectRole(string role)

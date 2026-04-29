@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Supercent.PlayableAI.Common.Contracts;
 using Supercent.PlayableAI.Common.Format;
 
@@ -862,7 +864,20 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return false;
             }
 
-            return catalog.TryResolveGameplayPlacementFootprintFromCatalogMetadata(
+            if (TryResolveDescriptorPlacementFootprint(
+                    catalog,
+                    gameplayObjectId,
+                    placement,
+                    out widthCells,
+                    out depthCells,
+                    out centerOffsetX,
+                    out centerOffsetZ,
+                    out string descriptorFootprintError))
+            {
+                return true;
+            }
+
+            bool resolvedFromCatalog = catalog.TryResolveGameplayPlacementFootprintFromCatalogMetadata(
                 gameplayObjectId,
                 designId,
                 out widthCells,
@@ -870,6 +885,151 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 out centerOffsetX,
                 out centerOffsetZ,
                 out error);
+            if (resolvedFromCatalog)
+                return true;
+
+            if (!string.IsNullOrEmpty(descriptorFootprintError))
+                error = descriptorFootprintError;
+
+            return false;
+        }
+
+        private static bool TryResolveDescriptorPlacementFootprint(
+            PlayableObjectCatalog catalog,
+            string gameplayObjectId,
+            PromptIntentObjectPlacementDefinition placement,
+            out int widthCells,
+            out int depthCells,
+            out float centerOffsetX,
+            out float centerOffsetZ,
+            out string error)
+        {
+            widthCells = 0;
+            depthCells = 0;
+            centerOffsetX = 0f;
+            centerOffsetZ = 0f;
+            error = string.Empty;
+
+            if (catalog == null ||
+                string.IsNullOrWhiteSpace(gameplayObjectId) ||
+                !TryResolveFeatureDescriptorForGameplayObjectId(catalog, gameplayObjectId, out FeatureDescriptor descriptor) ||
+                descriptor.layoutRequirements == null ||
+                descriptor.layoutRequirements.catalogBacked)
+            {
+                return false;
+            }
+
+            if (placement != null &&
+                placement.hasImageBounds &&
+                placement.bboxWidthPx > 0f &&
+                placement.bboxHeightPx > 0f)
+            {
+                widthCells = Math.Max(1, (int)Math.Ceiling(placement.bboxWidthPx));
+                depthCells = Math.Max(1, (int)Math.Ceiling(placement.bboxHeightPx));
+                return true;
+            }
+
+            if (TryResolveFeatureLayoutFootprint(placement != null ? placement.featureLayout : null, out widthCells, out depthCells))
+                return true;
+
+            error = "descriptor-owned feature '" + gameplayObjectId + "'는 catalog design footprint를 사용하지 않습니다. featureLayout에 worldWidth/worldDepth 또는 widthCells/depthCells가 필요합니다.";
+            return false;
+        }
+
+        private static bool TryResolveFeatureDescriptorForGameplayObjectId(
+            PlayableObjectCatalog catalog,
+            string gameplayObjectId,
+            out FeatureDescriptor descriptor)
+        {
+            descriptor = null;
+            FeatureDescriptor[] descriptors = catalog != null ? catalog.FeatureDescriptors ?? Array.Empty<FeatureDescriptor>() : Array.Empty<FeatureDescriptor>();
+            string normalizedGameplayObjectId = PlayableFeatureTypeIds.Normalize(gameplayObjectId);
+            for (int descriptorIndex = 0; descriptorIndex < descriptors.Length; descriptorIndex++)
+            {
+                FeatureDescriptor value = descriptors[descriptorIndex];
+                if (value == null)
+                    continue;
+
+                if (string.Equals(PlayableFeatureTypeIds.Normalize(value.featureType), normalizedGameplayObjectId, StringComparison.Ordinal))
+                {
+                    descriptor = value;
+                    return true;
+                }
+
+                FeatureCompiledGameplayRoleDescriptor[] mappings =
+                    value.compiledGameplayRoleMappings ?? Array.Empty<FeatureCompiledGameplayRoleDescriptor>();
+                for (int mappingIndex = 0; mappingIndex < mappings.Length; mappingIndex++)
+                {
+                    FeatureCompiledGameplayRoleDescriptor mapping = mappings[mappingIndex];
+                    if (mapping != null &&
+                        string.Equals(PlayableFeatureTypeIds.Normalize(mapping.gameplayObjectId), normalizedGameplayObjectId, StringComparison.Ordinal))
+                    {
+                        descriptor = value;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveFeatureLayoutFootprint(FeatureJsonPayload featureLayout, out int widthCells, out int depthCells)
+        {
+            widthCells = 0;
+            depthCells = 0;
+            string json = featureLayout != null ? featureLayout.json : string.Empty;
+            if (string.IsNullOrWhiteSpace(json))
+                return false;
+
+            if (TryReadMaxJsonNumber(json, "widthCells", out float widthByCells) &&
+                TryReadMaxJsonNumber(json, "depthCells", out float depthByCells))
+            {
+                widthCells = Math.Max(1, (int)Math.Ceiling(widthByCells));
+                depthCells = Math.Max(1, (int)Math.Ceiling(depthByCells));
+                return true;
+            }
+
+            if (TryReadMaxJsonNumber(json, "worldWidth", out float widthByWorld) &&
+                TryReadMaxJsonNumber(json, "worldDepth", out float depthByWorld))
+            {
+                widthCells = Math.Max(1, (int)Math.Ceiling(widthByWorld));
+                depthCells = Math.Max(1, (int)Math.Ceiling(depthByWorld));
+                return true;
+            }
+
+            if (TryReadMaxJsonNumber(json, "bboxWidthPx", out float widthByBounds) &&
+                TryReadMaxJsonNumber(json, "bboxHeightPx", out float depthByBounds))
+            {
+                widthCells = Math.Max(1, (int)Math.Ceiling(widthByBounds));
+                depthCells = Math.Max(1, (int)Math.Ceiling(depthByBounds));
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryReadMaxJsonNumber(string json, string propertyName, out float value)
+        {
+            value = 0f;
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(propertyName))
+                return false;
+
+            string pattern = "\\\"" + Regex.Escape(propertyName) + "\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)";
+            MatchCollection matches = Regex.Matches(json, pattern);
+            bool found = false;
+            for (int matchIndex = 0; matchIndex < matches.Count; matchIndex++)
+            {
+                if (!float.TryParse(matches[matchIndex].Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed) ||
+                    parsed <= 0f)
+                {
+                    continue;
+                }
+
+                value = found ? Math.Max(value, parsed) : parsed;
+                found = true;
+            }
+
+            return found;
         }
 
         public static void ValidatePlacementGrid(
@@ -992,6 +1152,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (model == null)
                 return new FeatureAcceptedItemDefinition[0];
 
+            Dictionary<string, string> featureTypeByObjectId = BuildFeatureTypeByObjectId(model);
             ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];
             for (int stageIndex = 0; stageIndex < stages.Length; stageIndex++)
             {
@@ -1008,6 +1169,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     bool usesInputItem = PromptIntentContractRegistry.ObjectiveRequiresInputItem(kind);
                     if (!usesItem && !usesInputItem)
                         continue;
+
+                    string featureType = ResolveObjectiveFeatureType(featureTypeByObjectId, objective.targetObjectId);
+                    if (!usesInputItem &&
+                        PromptIntentContractRegistry.ObjectiveDefinesFeatureOutputItem(featureType, kind))
+                    {
+                        continue;
+                    }
 
                     ItemRef acceptedItem = usesInputItem ? objective.inputItem : objective.item;
                     if (!ItemRefUtility.IsValid(acceptedItem))
@@ -1052,11 +1220,100 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, string> spawnKeys,
             List<string> errors)
         {
-            _ = model;
-            _ = spawnKeys;
-            _ = errors;
-            return new FeatureOutputItemDefinition[0];
+            var itemsByTargetId = new Dictionary<string, ItemRef>(StringComparer.Ordinal);
+            var targetOrder = new List<string>();
+            Dictionary<string, string> featureTypeByObjectId = BuildFeatureTypeByObjectId(model);
+            ScenarioModelStageDefinition[] stages = model != null ? model.stages ?? new ScenarioModelStageDefinition[0] : new ScenarioModelStageDefinition[0];
+            for (int stageIndex = 0; stageIndex < stages.Length; stageIndex++)
+            {
+                ScenarioModelStageDefinition stage = stages[stageIndex];
+                ScenarioModelObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new ScenarioModelObjectiveDefinition[0] : new ScenarioModelObjectiveDefinition[0];
+                for (int objectiveIndex = 0; objectiveIndex < objectives.Length; objectiveIndex++)
+                {
+                    ScenarioModelObjectiveDefinition objective = objectives[objectiveIndex];
+                    if (objective == null)
+                        continue;
+
+                    string kind = Normalize(objective.kind);
+                    string featureType = ResolveObjectiveFeatureType(featureTypeByObjectId, objective.targetObjectId);
+                    if (!PromptIntentContractRegistry.ObjectiveDefinesFeatureOutputItem(featureType, kind))
+                        continue;
+
+                    if (!ItemRefUtility.IsValid(objective.item))
+                    {
+                        if (errors != null)
+                            errors.Add("stages[" + stageIndex + "].objectives[" + objectiveIndex + "]의 " + kind + "에는 output item으로 사용할 item이 필요합니다.");
+                        continue;
+                    }
+
+                    string targetId = ResolveTargetId(spawnKeys, objective.targetObjectId, errors, kind + ".targetObjectId");
+                    if (string.IsNullOrEmpty(targetId))
+                        continue;
+
+                    ItemRef outputItem = ItemRefUtility.Clone(objective.item);
+                    if (itemsByTargetId.TryGetValue(targetId, out ItemRef existing))
+                    {
+                        if (!ItemRefUtility.Equals(existing, outputItem) && errors != null)
+                        {
+                            errors.Add(
+                                "feature '" + targetId + "'에 서로 다른 output item objective가 선언되었습니다: '" +
+                                ItemRefUtility.ToItemKey(existing) + "' vs '" + ItemRefUtility.ToItemKey(outputItem) + "'.");
+                        }
+                        continue;
+                    }
+
+                    itemsByTargetId.Add(targetId, outputItem);
+                    targetOrder.Add(targetId);
+                }
+            }
+
+            var definitions = new FeatureOutputItemDefinition[targetOrder.Count];
+            for (int i = 0; i < targetOrder.Count; i++)
+            {
+                string targetId = targetOrder[i];
+                definitions[i] = new FeatureOutputItemDefinition
+                {
+                    targetId = targetId,
+                    item = ItemRefUtility.Clone(itemsByTargetId[targetId]),
+                };
+            }
+
+            return definitions;
         }
+
+        private static Dictionary<string, string> BuildFeatureTypeByObjectId(PlayableScenarioModel model)
+        {
+            var lookup = new Dictionary<string, string>(StringComparer.Ordinal);
+            ScenarioModelObjectDefinition[] objects = model != null ? model.objects ?? new ScenarioModelObjectDefinition[0] : new ScenarioModelObjectDefinition[0];
+            for (int i = 0; i < objects.Length; i++)
+            {
+                ScenarioModelObjectDefinition obj = objects[i];
+                string objectId = Normalize(obj != null ? obj.id : string.Empty);
+                if (string.IsNullOrEmpty(objectId))
+                    continue;
+
+                string featureType = Normalize(obj != null ? obj.featureOptions.featureType : string.Empty);
+                if (string.IsNullOrEmpty(featureType))
+                    featureType = PromptIntentContractRegistry.ResolveFeatureTypeForRole(obj != null ? obj.role : string.Empty);
+
+                if (!string.IsNullOrEmpty(featureType))
+                    lookup[objectId] = featureType;
+            }
+
+            return lookup;
+        }
+
+        private static string ResolveObjectiveFeatureType(Dictionary<string, string> featureTypeByObjectId, string targetObjectId)
+        {
+            string normalizedTargetObjectId = Normalize(targetObjectId);
+            if (string.IsNullOrEmpty(normalizedTargetObjectId) || featureTypeByObjectId == null)
+                return string.Empty;
+
+            return featureTypeByObjectId.TryGetValue(normalizedTargetObjectId, out string featureType)
+                ? Normalize(featureType)
+                : string.Empty;
+        }
+
         private static void RegisterFeatureItem(
             Dictionary<string, List<ItemRef>> itemsByTargetId,
             string targetId,

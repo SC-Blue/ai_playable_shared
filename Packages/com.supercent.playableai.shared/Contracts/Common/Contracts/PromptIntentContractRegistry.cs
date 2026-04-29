@@ -212,6 +212,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             return PromptIntentFeatureDescriptorBridge.ResolveFeatureTypeForRole(role);
         }
 
+        public static bool ObjectiveDefinesFeatureOutputItem(string featureType, string objectiveKind)
+        {
+            return PromptIntentFeatureDescriptorBridge.ObjectiveDefinesFeatureOutputItem(featureType, objectiveKind);
+        }
+
         public static PromptIntentFeatureOptionDescriptor[] GetFeatureOptions()
         {
             return CloneFeatureOptionDescriptors(GetFeatureOptionsInternal());

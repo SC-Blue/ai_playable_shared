@@ -322,7 +322,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string generatedAtUtc = string.Empty;
         public string contentHash = string.Empty;
         public GeneratedContentCatalogEntry[] entries = new GeneratedContentCatalogEntry[0];
-        public string[] availableBuiltinFeatureTypes = Array.Empty<string>();
+        public string[] availableFeatureTypes = Array.Empty<string>();
         public FeatureDescriptor[] featureDescriptors = Array.Empty<FeatureDescriptor>();
     }
 

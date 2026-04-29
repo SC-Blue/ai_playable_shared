@@ -49,7 +49,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateFeatureAcceptedItems(model, plan.featureAcceptedItems, result);
             ValidateFeatureOutputItems(model, plan.featureOutputItems, result);
             ValidatePlayerOptions(model.playerOptions, plan.playerOptions, result);
-            ValidateFeatureOptions(model.objects, plan.featureOptions, result);
+            ValidateFeatureOptions(model.objects, plan.featureOptions, catalog, result);
             ValidateSpawnStartState(model.objects, plan.spawns, result);
             if (layoutSpec != null)
                 ValidateSpawnPositions(model.objects, plan.spawns, layoutSpec, result);
@@ -256,8 +256,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 string introPrerequisiteActionId = GetPrimaryOwnedActionId(actions, lastEntrySetupBeatId, FlowActionKinds.CAMERA_FOCUS);
                 bool expectsArrivalTiming = FirstObjectiveUsesArrivalTiming(stage);
-                bool objectiveStartsAfterExpectedPrerequisite = expectsArrivalTiming && !string.IsNullOrEmpty(introPrerequisiteActionId)
-                    ? HasActionCompletedEnterWhen(beatById, firstObjectiveBeatId, introPrerequisiteActionId)
+                bool objectiveStartsAfterExpectedPrerequisite = !string.IsNullOrEmpty(introPrerequisiteActionId)
+                    ? HasOneOfEnterWhen(beatById, firstObjectiveBeatId, introPrerequisiteActionId, lastEntrySetupBeatId)
                     : HasBeatCompletedEnterWhen(beatById, firstObjectiveBeatId, lastEntrySetupBeatId);
                 if (!objectiveStartsAfterExpectedPrerequisite)
                 {
@@ -644,9 +644,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidateFeatureOptions(
             ScenarioModelObjectDefinition[] objects,
             PlayableScenarioFeatureOptionDefinition[] actualDefinitions,
+            PlayableObjectCatalog catalog,
             IntentAuditValidationResult result)
         {
-            Dictionary<string, PlayableScenarioFeatureOptions> expectedByTargetId = BuildFeatureOptionsLookup(objects);
+            Dictionary<string, PlayableScenarioFeatureOptions> expectedByTargetId = BuildFeatureOptionsLookup(objects, catalog, result);
             Dictionary<string, PlayableScenarioFeatureOptions> actualByTargetId = BuildFeatureOptionsLookup(actualDefinitions);
 
             foreach (KeyValuePair<string, PlayableScenarioFeatureOptions> pair in expectedByTargetId)
@@ -952,7 +953,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return lookup;
         }
 
-        private static Dictionary<string, PlayableScenarioFeatureOptions> BuildFeatureOptionsLookup(ScenarioModelObjectDefinition[] objects)
+        private static Dictionary<string, PlayableScenarioFeatureOptions> BuildFeatureOptionsLookup(
+            ScenarioModelObjectDefinition[] objects,
+            PlayableObjectCatalog catalog,
+            IntentAuditValidationResult result)
         {
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
             var lookup = new Dictionary<string, PlayableScenarioFeatureOptions>(StringComparer.Ordinal);
@@ -963,17 +967,36 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (value == null)
                     continue;
 
-                string role = IntentAuthoringUtility.Normalize(value.role);
-                string featureType = PromptIntentContractRegistry.ResolveFeatureTypeForRole(role);
-                if (!PromptIntentContractRegistry.ObjectRoleSupportsFeatureOptions(role) ||
-                    string.IsNullOrEmpty(featureType))
+                PlayableScenarioFeatureOptions source = value.featureOptions;
+                string featureType = NormalizeFeatureOptionValue(source.featureType);
+                if (string.IsNullOrEmpty(featureType))
                     continue;
 
                 string objectId = IntentAuthoringUtility.Normalize(value.id);
                 if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
-                lookup[targetId] = value.featureOptions;
+                string loweredOptionsJson = source.optionsJson;
+                if (catalog == null || !catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor))
+                {
+                    Fail(result, "objects[" + i + "] feature '" + featureType + "' descriptor를 찾지 못했습니다.");
+                }
+                else
+                {
+                    loweredOptionsJson = ScenarioModelLoweringCompiler.LowerFeatureOptionsJson(
+                        descriptor,
+                        source.optionsJson,
+                        spawnKeys,
+                        result.Errors,
+                        "objects[" + i + "] feature '" + featureType + "'");
+                }
+
+                lookup[targetId] = new PlayableScenarioFeatureOptions
+                {
+                    featureType = source.featureType,
+                    targetId = targetId,
+                    optionsJson = loweredOptionsJson,
+                };
             }
 
             return lookup;

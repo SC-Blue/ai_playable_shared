@@ -80,7 +80,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateCustomerPaths(layoutSpec, spawnLookup, catalog, result);
                 ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
                 ValidatePlacementSpatialSemantics(layoutSpec, result);
-                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
+                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.itemPrices, plan.currencies, objectDesignLookup, catalog, result);
                 ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
             }
             finally
@@ -828,7 +828,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                if (!SupportsCustomerPathAuthoring(prefab))
+                if (!SupportsCustomerPathAuthoring(catalog, targetSpawn, prefab))
                     Fail(result, "layoutSpec.customerPaths[" + i + "].targetId '" + targetId + "'는 customer line이 가능한 feature가 아닙니다.");
 
                 ValidateCustomerPathPoint(entry.spawnPoint, "layoutSpec.customerPaths[" + i + "].spawnPoint", result);
@@ -975,7 +975,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!catalog.TryResolveGameplayPrefab(spawn.objectId.Trim(), spawn.designIndex, out GameObject prefab, out _) || prefab == null)
                     continue;
 
-                if (SupportsCustomerPathAuthoring(prefab))
+                if (SupportsCustomerPathAuthoring(catalog, spawn, prefab))
                     requiredTargets.Add(ResolveCustomerPathAuthoringId(spawn));
             }
 
@@ -991,11 +991,47 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return ResolveSpawnLabel(spawn);
         }
 
-        private static bool SupportsCustomerPathAuthoring(GameObject prefab)
+        private static bool SupportsCustomerPathAuthoring(PlayableObjectCatalog catalog, CompiledSpawnData spawn, GameObject prefab)
         {
-            return prefab != null &&
-                   PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata) &&
-                   metadata.supportsCustomerFeature;
+            if (prefab != null &&
+                PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata) &&
+                metadata.supportsCustomerFeature)
+            {
+                return true;
+            }
+
+            string objectId = spawn != null && !string.IsNullOrWhiteSpace(spawn.objectId) ? spawn.objectId.Trim() : string.Empty;
+            if (catalog == null || string.IsNullOrEmpty(objectId))
+                return false;
+
+            FeatureDescriptor[] descriptors = catalog.FeatureDescriptors ?? Array.Empty<FeatureDescriptor>();
+            for (int descriptorIndex = 0; descriptorIndex < descriptors.Length; descriptorIndex++)
+            {
+                FeatureDescriptor descriptor = descriptors[descriptorIndex];
+                if (descriptor == null ||
+                    descriptor.inputOutputSemantics == null ||
+                    !descriptor.inputOutputSemantics.supportsCustomerFeature)
+                {
+                    continue;
+                }
+
+                FeatureCompiledGameplayRoleDescriptor[] mappings =
+                    descriptor.compiledGameplayRoleMappings ?? Array.Empty<FeatureCompiledGameplayRoleDescriptor>();
+                for (int mappingIndex = 0; mappingIndex < mappings.Length; mappingIndex++)
+                {
+                    FeatureCompiledGameplayRoleDescriptor mapping = mappings[mappingIndex];
+                    if (mapping != null &&
+                        string.Equals(
+                            mapping.gameplayObjectId != null ? mapping.gameplayObjectId.Trim() : string.Empty,
+                            objectId,
+                            StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static bool IsImageLayoutMode(LayoutSpecDocument layoutSpec)
@@ -1281,9 +1317,9 @@ private static void ValidateEnvironmentSourceImageReferences(
             return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
         }
 
-private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, ItemPriceDefinition[] itemPrices, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
+private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, ItemPriceDefinition[] itemPrices, CurrencyDefinition[] currencies, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
 {
-    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog);
+    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog);
     for (int i = 0; i < resolution.Errors.Count; i++)
         Fail(result, resolution.Errors[i]);
 

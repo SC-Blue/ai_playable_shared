@@ -119,6 +119,23 @@ namespace Supercent.PlayableAI.Common.Contracts
                     if (string.IsNullOrEmpty(key))
                         continue;
 
+                    if (merged.TryGetValue(key, out PromptIntentConditionKindDescriptor existing))
+                    {
+                        existing.summary = Prefer(condition != null ? condition.summary : string.Empty, existing.summary);
+                        existing.supportsStageId = existing.supportsStageId || (condition != null && condition.supportsStageId);
+                        existing.requiresStageId = existing.requiresStageId || (condition != null && condition.requiresStageId);
+                        existing.supportsTargetObjectId = existing.supportsTargetObjectId || (condition != null && condition.supportsTargetObjectId);
+                        existing.requiresTargetObjectId = existing.requiresTargetObjectId || (condition != null && condition.requiresTargetObjectId);
+                        existing.supportsItem = existing.supportsItem || (condition != null && condition.supportsItem);
+                        existing.requiresItem = existing.requiresItem || (condition != null && condition.requiresItem);
+                        existing.supportsCurrencyId = existing.supportsCurrencyId || (condition != null && condition.supportsCurrencyId);
+                        existing.requiresCurrencyId = existing.requiresCurrencyId || (condition != null && condition.requiresCurrencyId);
+                        existing.supportsAmountValue = existing.supportsAmountValue || (condition != null && condition.supportsAmountValue);
+                        existing.requiresPositiveAmountValue = existing.requiresPositiveAmountValue || (condition != null && condition.requiresPositiveAmountValue);
+                        merged[key] = existing;
+                        continue;
+                    }
+
                     Upsert(
                         merged,
                         order,
@@ -161,6 +178,20 @@ namespace Supercent.PlayableAI.Common.Contracts
                     string key = Normalize(objective != null ? objective.kind : string.Empty);
                     if (string.IsNullOrEmpty(key))
                         continue;
+
+                    if (merged.TryGetValue(key, out PromptIntentObjectiveKindDescriptor existing))
+                    {
+                        existing.summary = Prefer(objective != null ? objective.summary : string.Empty, existing.summary);
+                        existing.requiresTargetObjectId = existing.requiresTargetObjectId || (objective != null && objective.requiresTargetObjectId);
+                        existing.requiresItem = existing.requiresItem || (objective != null && objective.requiresItem);
+                        existing.requiresInputItem = existing.requiresInputItem || (objective != null && objective.requiresInputItem);
+                        existing.requiresCurrencyId = existing.requiresCurrencyId || (objective != null && objective.requiresCurrencyId);
+                        existing.requiresAmountValue = existing.requiresAmountValue || (objective != null && objective.requiresAmountValue);
+                        existing.requiresSeconds = existing.requiresSeconds || (objective != null && objective.requiresSeconds);
+                        existing.canAbsorbArrow = existing.canAbsorbArrow || (objective != null && (objective.canAbsorbArrow || objective.requiresAbsorbedArrow));
+                        merged[key] = existing;
+                        continue;
+                    }
 
                     Upsert(
                         merged,
@@ -315,6 +346,28 @@ namespace Supercent.PlayableAI.Common.Contracts
             return string.Empty;
         }
 
+        public static bool ObjectiveDefinesFeatureOutputItem(string featureType, string objectiveKind)
+        {
+            string normalizedFeatureType = Normalize(featureType);
+            string normalizedObjectiveKind = Normalize(objectiveKind);
+            if (string.IsNullOrEmpty(normalizedFeatureType) || string.IsNullOrEmpty(normalizedObjectiveKind))
+                return false;
+
+            FeatureDescriptor[] descriptors = GetEffectiveFeatureDescriptors();
+            for (int i = 0; i < descriptors.Length; i++)
+            {
+                FeatureDescriptor descriptor = descriptors[i];
+                if (!string.Equals(Normalize(descriptor != null ? descriptor.featureType : string.Empty), normalizedFeatureType, StringComparison.Ordinal))
+                    continue;
+
+                FeatureInputOutputSemantics semantics = descriptor != null ? descriptor.inputOutputSemantics : null;
+                return ContainsString(semantics != null ? semantics.generatedItems : Array.Empty<string>(), normalizedObjectiveKind) ||
+                       ContainsString(semantics != null ? semantics.outputItems : Array.Empty<string>(), normalizedObjectiveKind);
+            }
+
+            return false;
+        }
+
         public static PromptIntentTargetSurfaceRuleDescriptor[] MergeTargetSurfaces(PromptIntentTargetSurfaceRuleDescriptor[] builtins)
         {
             var merged = new Dictionary<string, PromptIntentTargetSurfaceRuleDescriptor>(StringComparer.Ordinal);
@@ -376,6 +429,20 @@ namespace Supercent.PlayableAI.Common.Contracts
                     if (string.IsNullOrEmpty(key))
                         continue;
 
+                    if (merged.TryGetValue(key, out PromptIntentGameplaySignalRuleDescriptor existing))
+                    {
+                        existing.summary = Prefer(signal != null ? signal.summary : string.Empty, existing.summary);
+                        existing.supportsTargetId = existing.supportsTargetId || (signal != null && signal.supportsTargetId);
+                        existing.requiresTargetId = existing.requiresTargetId || (signal != null && signal.requiresTargetId);
+                        existing.supportsItem = existing.supportsItem || (signal != null && signal.supportsItem);
+                        existing.requiresItem = existing.requiresItem || (signal != null && signal.requiresItem);
+                        existing.supportsCurrencyId = existing.supportsCurrencyId || (signal != null && signal.supportsCurrencyId);
+                        existing.requiresCurrencyId = existing.requiresCurrencyId || (signal != null && signal.requiresCurrencyId);
+                        existing.requiredTargetEventKey = Prefer(Normalize(signal != null ? signal.requiredTargetEventKey : string.Empty), existing.requiredTargetEventKey);
+                        merged[key] = existing;
+                        continue;
+                    }
+
                     Upsert(
                         merged,
                         order,
@@ -416,6 +483,18 @@ namespace Supercent.PlayableAI.Common.Contracts
                     if (string.IsNullOrEmpty(key))
                         continue;
 
+                    if (merged.TryGetValue(key, out PromptIntentConditionCapabilityDescriptor existing))
+                    {
+                        existing.summary = Prefer(condition != null ? condition.summary : string.Empty, existing.summary);
+                        existing.supportedTargetRoles = UnionStrings(existing.supportedTargetRoles, condition != null ? condition.supportedTargetRoles : Array.Empty<string>());
+                        existing.allowAnyTargetRole = existing.allowAnyTargetRole || (condition != null && condition.allowAnyTargetRole);
+                        existing.gameplaySignalId = Prefer(Normalize(condition != null ? condition.gameplaySignalId : string.Empty), existing.gameplaySignalId);
+                        existing.stepConditionType = Prefer(Normalize(condition != null ? condition.stepConditionType : string.Empty), existing.stepConditionType);
+                        existing.reactiveConditionType = Prefer(Normalize(condition != null ? condition.reactiveConditionType : string.Empty), existing.reactiveConditionType);
+                        merged[key] = existing;
+                        continue;
+                    }
+
                     Upsert(
                         merged,
                         order,
@@ -453,6 +532,20 @@ namespace Supercent.PlayableAI.Common.Contracts
                     string key = Normalize(objective != null ? objective.kind : string.Empty);
                     if (string.IsNullOrEmpty(key))
                         continue;
+
+                    if (merged.TryGetValue(key, out PromptIntentObjectiveCapabilityDescriptor existing))
+                    {
+                        existing.summary = Prefer(objective != null ? objective.summary : string.Empty, existing.summary);
+                        existing.supportedTargetRoles = UnionStrings(existing.supportedTargetRoles, objective != null ? objective.supportedTargetRoles : Array.Empty<string>());
+                        existing.allowAnyTargetRole = existing.allowAnyTargetRole || (objective != null && objective.allowAnyTargetRole);
+                        existing.completionStepConditionType = Prefer(Normalize(objective != null ? objective.completionStepConditionType : string.Empty), existing.completionStepConditionType);
+                        existing.completionGameplaySignalId = Prefer(Normalize(objective != null ? objective.completionGameplaySignalId : string.Empty), existing.completionGameplaySignalId);
+                        existing.targetEventKey = Prefer(Normalize(objective != null ? objective.targetEventKey : string.Empty), existing.targetEventKey);
+                        existing.requiresAbsorbedArrow = existing.requiresAbsorbedArrow || (objective != null && objective.requiresAbsorbedArrow);
+                        existing.requiredArrowEventKey = Prefer(Normalize(objective != null ? objective.requiredArrowEventKey : string.Empty), existing.requiredArrowEventKey);
+                        merged[key] = existing;
+                        continue;
+                    }
 
                     Upsert(
                         merged,
@@ -864,6 +957,22 @@ namespace Supercent.PlayableAI.Common.Contracts
                 if (!string.IsNullOrEmpty(normalized) && !values.Contains(normalized))
                     values.Add(normalized);
             }
+        }
+
+        private static bool ContainsString(string[] values, string target)
+        {
+            string normalizedTarget = Normalize(target);
+            if (string.IsNullOrEmpty(normalizedTarget))
+                return false;
+
+            string[] safeValues = values ?? Array.Empty<string>();
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                if (Normalize(safeValues[i]) == normalizedTarget)
+                    return true;
+            }
+
+            return false;
         }
 
         private static string[] CloneStrings(string[] values)

@@ -29,6 +29,14 @@ namespace PlayableAI.AuthoringCore
             if (TryResolveCatalogFeatureObjectRole(catalog, normalizedRole, out objectId))
                 return true;
 
+            if (TryResolveDescriptorObjectRole(catalog, normalizedRole, out string descriptorFeatureType, out FeatureObjectRoleDescriptor descriptorRole) &&
+                descriptorRole != null &&
+                !descriptorRole.catalogBacked)
+            {
+                objectId = descriptorFeatureType;
+                return true;
+            }
+
             if (!PromptIntentContractRegistry.IsSupportedObjectRole(normalizedRole))
             {
                 error = "지원되지 않는 object role '" + (role ?? string.Empty) + "'입니다.";
@@ -103,6 +111,52 @@ namespace PlayableAI.AuthoringCore
                         continue;
 
                     objectId = descriptorFeatureType;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool TryResolveDescriptorObjectRole(
+            PlayableObjectCatalog catalog,
+            string role,
+            out string featureType,
+            out FeatureObjectRoleDescriptor roleDescriptor)
+        {
+            featureType = string.Empty;
+            roleDescriptor = null;
+            if (catalog == null)
+                return false;
+
+            string normalizedRole = Normalize(role);
+            if (string.IsNullOrEmpty(normalizedRole))
+                return false;
+
+            FeatureDescriptor[] descriptors = catalog.FeatureDescriptors ?? Array.Empty<FeatureDescriptor>();
+            for (int descriptorIndex = 0; descriptorIndex < descriptors.Length; descriptorIndex++)
+            {
+                FeatureDescriptor descriptor = descriptors[descriptorIndex];
+                if (descriptor == null)
+                    continue;
+
+                FeatureObjectRoleDescriptor[] roles =
+                    descriptor.objectRoles ?? Array.Empty<FeatureObjectRoleDescriptor>();
+                for (int roleIndex = 0; roleIndex < roles.Length; roleIndex++)
+                {
+                    FeatureObjectRoleDescriptor objectRole = roles[roleIndex];
+                    if (objectRole == null ||
+                        !string.Equals(Normalize(objectRole.role), normalizedRole, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    string descriptorFeatureType = Normalize(descriptor.featureType);
+                    if (string.IsNullOrEmpty(descriptorFeatureType))
+                        continue;
+
+                    featureType = descriptorFeatureType;
+                    roleDescriptor = objectRole;
                     return true;
                 }
             }

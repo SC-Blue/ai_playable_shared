@@ -245,6 +245,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
+                if (IsDescriptorRuntimeOwnedObject(catalog, role))
+                    continue;
+
                 int resolvedDesignIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
                     catalog,
                     gameplayObjectId,
@@ -259,6 +262,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 Fail(result, "objects[]에는 최소 1개의 player role이 필요합니다.");
             }
+        }
+
+        private static bool IsDescriptorRuntimeOwnedObject(PlayableObjectCatalog catalog, string role)
+        {
+            return global::PlayableAI.AuthoringCore.CatalogRoleUtility.TryResolveDescriptorObjectRole(
+                       catalog,
+                       role,
+                       out _,
+                       out FeatureObjectRoleDescriptor descriptorRole) &&
+                   descriptorRole != null &&
+                   !descriptorRole.catalogBacked &&
+                   !descriptorRole.supportsDesignId;
         }
 
         private static void ValidateSaleValues(

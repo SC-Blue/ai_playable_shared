@@ -32,7 +32,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public string featureId = string.Empty;
         public string featureType = string.Empty;
-        public bool isBuiltin;
+        public bool isRuntimePackage = true;
         public string displayName = string.Empty;
         public string summary = string.Empty;
         public FeatureCatalogExposure catalogExposure = new FeatureCatalogExposure();
@@ -264,7 +264,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             {
                 featureId = Normalize(value.featureId),
                 featureType = Normalize(value.featureType),
-                isBuiltin = value.isBuiltin,
+                isRuntimePackage = value.isRuntimePackage,
                 displayName = value.displayName ?? string.Empty,
                 summary = value.summary ?? string.Empty,
                 catalogExposure = Clone(value.catalogExposure),
@@ -532,11 +532,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             return clones;
         }
 
-        public static FeatureDescriptor[] Merge(FeatureDescriptor[] builtins, FeatureDescriptor[] customs)
+        public static FeatureDescriptor[] Merge(FeatureDescriptor[] baseDescriptors, FeatureDescriptor[] runtimeDescriptors)
         {
             var byType = new Dictionary<string, FeatureDescriptor>(StringComparer.Ordinal);
-            AddRange(byType, builtins, allowBuiltinOverride: true);
-            AddRange(byType, customs, allowBuiltinOverride: false);
+            AddRange(byType, baseDescriptors, allowDuplicateOverride: true);
+            AddRange(byType, runtimeDescriptors, allowDuplicateOverride: false);
 
             var merged = new FeatureDescriptor[byType.Count];
             int index = 0;
@@ -545,7 +545,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             return merged;
         }
 
-        private static void AddRange(IDictionary<string, FeatureDescriptor> target, FeatureDescriptor[] values, bool allowBuiltinOverride)
+        private static void AddRange(IDictionary<string, FeatureDescriptor> target, FeatureDescriptor[] values, bool allowDuplicateOverride)
         {
             FeatureDescriptor[] safeValues = values ?? Array.Empty<FeatureDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
@@ -555,14 +555,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                     continue;
 
                 string featureType = Normalize(descriptor.featureType);
-                if (!allowBuiltinOverride &&
+                if (!allowDuplicateOverride &&
                     target.TryGetValue(featureType, out FeatureDescriptor existing))
                 {
-                    bool collidesWithBuiltin = existing != null && existing.isBuiltin && !descriptor.isBuiltin;
-                    string reason = collidesWithBuiltin
-                        ? "built-in featureType과 충돌합니다."
-                        : "이미 정의된 featureType과 중복됩니다.";
-                    throw new InvalidOperationException("feature runtime descriptor '" + featureType + "'가 " + reason);
+                    throw new InvalidOperationException("feature runtime descriptor '" + featureType + "'가 이미 정의된 featureType과 중복됩니다.");
                 }
 
                 target[featureType] = Clone(descriptor);

@@ -25,6 +25,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             FeatureAcceptedItemDefinition[] featureAcceptedItems,
             FeatureOutputItemDefinition[] featureOutputItems,
             ItemPriceDefinition[] itemPrices,
+            CurrencyDefinition[] currencies,
             PlayableObjectCatalog catalog)
         {
             var result = new RuntimeOwnedObjectDesignResolution();
@@ -41,6 +42,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 CompiledSpawnData spawn = safeSpawns[i];
                 if (spawn == null || string.IsNullOrWhiteSpace(spawn.objectId))
+                    continue;
+
+                CollectDescriptorRuntimeOwnedObjectDesigns(catalog, spawn.objectId, requiredObjectDesignKeys, result.Errors);
+
+                if (spawn.designIndex < 0)
                     continue;
 
                 if (!catalog.TryResolveGameplayPrefab(spawn.objectId.Trim(), spawn.designIndex, out GameObject prefab, out _))
@@ -87,6 +93,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             CollectAcceptedItems(featureAcceptedItems, requiredObjectDesignKeys);
             CollectOutputItems(featureOutputItems, requiredObjectDesignKeys);
             CollectPricedItems(itemPrices, requiredObjectDesignKeys);
+            CollectCurrencyVisuals(currencies, requiredObjectDesignKeys);
 
             var sortedKeys = new List<string>(requiredObjectDesignKeys);
             sortedKeys.Sort(System.StringComparer.Ordinal);
@@ -103,6 +110,75 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return result;
+        }
+
+        private static void CollectDescriptorRuntimeOwnedObjectDesigns(
+            PlayableObjectCatalog catalog,
+            string gameplayObjectId,
+            HashSet<string> requiredObjectDesignKeys,
+            List<string> errors)
+        {
+            if (!TryResolveFeatureDescriptorForGameplayObjectId(catalog, gameplayObjectId, out FeatureDescriptor descriptor) ||
+                descriptor.inputOutputSemantics == null)
+            {
+                return;
+            }
+
+            if (descriptor.inputOutputSemantics.containsCustomerSingleLine)
+            {
+                AddRequiredObjectDesign(
+                    CatalogIdentityRules.CUSTOMER_OBJECT_ID,
+                    CatalogIdentityRules.CUSTOMER_DESIGN_ID,
+                    requiredObjectDesignKeys);
+            }
+
+            if (descriptor.inputOutputSemantics.containsMoneyHandler)
+            {
+                AddRequiredObjectDesign(
+                    CatalogIdentityRules.MONEY_OBJECT_ID,
+                    CatalogIdentityRules.MONEY_DESIGN_ID,
+                    requiredObjectDesignKeys);
+            }
+        }
+
+        private static bool TryResolveFeatureDescriptorForGameplayObjectId(
+            PlayableObjectCatalog catalog,
+            string gameplayObjectId,
+            out FeatureDescriptor descriptor)
+        {
+            descriptor = null;
+            if (catalog == null || string.IsNullOrWhiteSpace(gameplayObjectId))
+                return false;
+
+            string normalizedGameplayObjectId = PlayableFeatureTypeIds.Normalize(gameplayObjectId);
+            FeatureDescriptor[] descriptors = catalog.FeatureDescriptors ?? new FeatureDescriptor[0];
+            for (int descriptorIndex = 0; descriptorIndex < descriptors.Length; descriptorIndex++)
+            {
+                FeatureDescriptor value = descriptors[descriptorIndex];
+                if (value == null)
+                    continue;
+
+                if (string.Equals(PlayableFeatureTypeIds.Normalize(value.featureType), normalizedGameplayObjectId, System.StringComparison.Ordinal))
+                {
+                    descriptor = value;
+                    return true;
+                }
+
+                FeatureCompiledGameplayRoleDescriptor[] mappings =
+                    value.compiledGameplayRoleMappings ?? new FeatureCompiledGameplayRoleDescriptor[0];
+                for (int mappingIndex = 0; mappingIndex < mappings.Length; mappingIndex++)
+                {
+                    FeatureCompiledGameplayRoleDescriptor mapping = mappings[mappingIndex];
+                    if (mapping != null &&
+                        string.Equals(PlayableFeatureTypeIds.Normalize(mapping.gameplayObjectId), normalizedGameplayObjectId, System.StringComparison.Ordinal))
+                    {
+                        descriptor = value;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static void CollectRequiredObjectDesigns(string[] entryIds, HashSet<string> requiredObjectDesignKeys, List<string> errors)
@@ -173,6 +249,28 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 AddRequiredObjectDesign(definition.item.familyId, definition.item.variantId, requiredObjectDesignKeys);
+            }
+        }
+
+        private static void CollectCurrencyVisuals(
+            CurrencyDefinition[] currencies,
+            HashSet<string> requiredObjectDesignKeys)
+        {
+            CurrencyDefinition[] safeDefinitions = currencies ?? new CurrencyDefinition[0];
+            for (int i = 0; i < safeDefinitions.Length; i++)
+            {
+                CurrencyDefinition definition = safeDefinitions[i];
+                if (definition == null)
+                    continue;
+
+                string currencyId = definition.currencyId != null ? definition.currencyId.Trim() : string.Empty;
+                if (!string.Equals(currencyId, CatalogIdentityRules.MONEY_OBJECT_ID, System.StringComparison.Ordinal))
+                    continue;
+
+                AddRequiredObjectDesign(
+                    CatalogIdentityRules.MONEY_OBJECT_ID,
+                    CatalogIdentityRules.MONEY_DESIGN_ID,
+                    requiredObjectDesignKeys);
             }
         }
     }
