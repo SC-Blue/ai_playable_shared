@@ -9,8 +9,7 @@ namespace Supercent.PlayableAI.Common.Format
         public ObjectDesignSelectionDefinition[] objectDesigns = new ObjectDesignSelectionDefinition[0];
         public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public PortableBakedSpawnData[] spawns = new PortableBakedSpawnData[0];
-        public PortableBakedPhysicsAreaDefinition[] physicsAreas = new PortableBakedPhysicsAreaDefinition[0];
-        public PortableBakedRailDefinition[] rails = new PortableBakedRailDefinition[0];
+        public PortableBakedFeatureData[] features = new PortableBakedFeatureData[0];
         public CurrencyDefinition[] currencies = new CurrencyDefinition[0];
         public ItemPriceDefinition[] itemPrices = new ItemPriceDefinition[0];
         public FeatureAcceptedItemDefinition[] featureAcceptedItems = new FeatureAcceptedItemDefinition[0];
@@ -29,23 +28,15 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PortableBakedPhysicsAreaDefinition
+    public sealed class PortableBakedFeatureData
     {
+        public string featureType;
+        public string targetId;
         public string objectId;
         public string spawnKey;
         public bool startActive = true;
         public SerializableVector3 localPosition;
-        public PhysicsAreaOptionsDefinition options = new PhysicsAreaOptionsDefinition();
-        public PhysicsAreaLayoutDefinition layout = new PhysicsAreaLayoutDefinition();
-    }
-
-    [Serializable]
-    public sealed class PortableBakedRailDefinition
-    {
-        public string objectId;
-        public string spawnKey;
-        public RailOptionsDefinition options = new RailOptionsDefinition();
-        public RailLayoutDefinition layout = new RailLayoutDefinition();
-        public RailPathDefinition path = new RailPathDefinition();
+        public string optionsJson = "{}";
+        public string layoutJson = "{}";
     }
 }

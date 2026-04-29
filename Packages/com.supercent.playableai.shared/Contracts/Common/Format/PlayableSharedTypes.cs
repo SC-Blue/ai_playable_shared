@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Supercent.PlayableAI.Common.Contracts;
 using UnityEngine;
 
@@ -55,7 +55,7 @@ namespace Supercent.PlayableAI.Common.Format
                    string.Equals(Normalize(left.variantId), Normalize(right.variantId), StringComparison.Ordinal);
         }
 
-        public static string ToStableKey(ItemRef item)
+        public static string ToItemKey(ItemRef item)
         {
             if (!IsValid(item))
                 return string.Empty;
@@ -65,13 +65,13 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static string ToDisplayString(ItemRef item)
         {
-            return ToStableKey(item);
+            return ToItemKey(item);
         }
 
-        public static bool TryParseStableKey(string stableKey, out ItemRef item)
+        public static bool TryParseItemKey(string itemKey, out ItemRef item)
         {
             item = null;
-            string normalized = Normalize(stableKey);
+            string normalized = Normalize(itemKey);
             if (string.IsNullOrEmpty(normalized))
                 return false;
 
@@ -92,9 +92,9 @@ namespace Supercent.PlayableAI.Common.Format
             return true;
         }
 
-        public static ItemRef FromStableKey(string stableKey)
+        public static ItemRef FromItemKey(string itemKey)
         {
-            return TryParseStableKey(stableKey, out ItemRef item) ? item : null;
+            return TryParseItemKey(itemKey, out ItemRef item) ? item : null;
         }
     }
 
@@ -307,20 +307,12 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class SellerRequestActionPayload
-    {
-        public string targetId;
-        public ItemRef item = new ItemRef();
-    }
-
-    [Serializable]
     public sealed class FlowActionPayloadDefinition
     {
         public CameraFocusActionPayload cameraFocus = new CameraFocusActionPayload();
         public ArrowGuideActionPayload arrowGuide = new ArrowGuideActionPayload();
         public RevealActionPayload reveal = new RevealActionPayload();
         public CustomerSpawnActionPayload customerSpawn = new CustomerSpawnActionPayload();
-        public SellerRequestActionPayload sellerRequest = new SellerRequestActionPayload();
     }
 
     [Serializable]
@@ -358,7 +350,7 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class SellerRequestableItemRuleDefinition
+    public sealed class FeatureRequeitemRefRuleDefinition
     {
         public string targetId;
         public ItemRef item = new ItemRef();

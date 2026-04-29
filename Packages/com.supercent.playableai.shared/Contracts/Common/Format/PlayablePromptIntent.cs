@@ -13,48 +13,20 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PhysicsAreaOptionsDefinition
-    {
-        public ItemRef item = new ItemRef();
-    }
-
-    [Serializable]
-    public sealed class RailOptionsDefinition
-    {
-        public ItemRef item = new ItemRef();
-        public float spawnIntervalSeconds;
-        public float travelDurationSeconds;
-        public string sinkEndpointTargetObjectId;
-    }
-
-    [Serializable]
-    public sealed class RailPathAnchorDefinition
+    public sealed class FeaturePathAnchorDefinition
     {
         public float worldX;
         public float worldZ;
     }
 
-    [Serializable]
-    public sealed class PhysicsAreaLayoutDefinition
-    {
-        public WorldBoundsDefinition realPhysicsZoneBounds = new WorldBoundsDefinition();
-        public WorldBoundsDefinition fakeSpriteZoneBounds = new WorldBoundsDefinition();
-    }
-
-    [Serializable]
-    public sealed class RailLayoutDefinition
-    {
-        public RailPathAnchorDefinition[] pathCells = new RailPathAnchorDefinition[0];
-    }
-
-    public static class RailPathElementKinds
+    public static class FeaturePathElementKinds
     {
         public const string STRAIGHT = "straight";
         public const string CORNER = "corner";
     }
 
     [Serializable]
-    public sealed class RailPathCellDefinition
+    public sealed class FeaturePathCellDefinition
     {
         public int gridX;
         public int gridZ;
@@ -63,11 +35,11 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class RailPathDefinition
+    public sealed class FeaturePathDefinition
     {
         public string sourceSide;
         public string sinkSide;
-        public RailPathCellDefinition[] cells = new RailPathCellDefinition[0];
+        public FeaturePathCellDefinition[] cells = new FeaturePathCellDefinition[0];
         public SerializableVector3[] worldPoints = new SerializableVector3[0];
     }
 
@@ -94,9 +66,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string id;
         public string role;
         public string designId;
-        public PromptIntentObjectScenarioOptions scenarioOptions;
-        public PhysicsAreaOptionsDefinition physicsAreaOptions;
-        public RailOptionsDefinition railOptions;
+        public PlayableScenarioFeatureOptions featureOptions;
     }
 
     [Serializable]
@@ -146,31 +116,6 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PromptIntentCustomerRequestCount
-    {
-        public int min;
-        public int max;
-    }
-
-    [Serializable]
-    public sealed class PromptIntentSellerRequestableItemDefinition
-    {
-        public ItemRef item = new ItemRef();
-        public PromptIntentConditionDefinition startWhen = new PromptIntentConditionDefinition();
-    }
-
-    [Serializable]
-    public sealed class PromptIntentObjectScenarioOptions
-    {
-        public PromptIntentCustomerRequestCount customerRequestCount;
-        public PromptIntentSellerRequestableItemDefinition[] requestableItems = new PromptIntentSellerRequestableItemDefinition[0];
-        public int inputCountPerConversion;
-        public float conversionIntervalSeconds;
-        public float inputItemMoveIntervalSeconds;
-        public float spawnIntervalSeconds;
-    }
-
-    [Serializable]
     public sealed class PromptIntentObjectPlacementDefinition
     {
         // Image-first placement payload.
@@ -189,12 +134,11 @@ namespace Supercent.PlayableAI.Common.Format
         public float bboxWidthPx;
         public float bboxHeightPx;
         public float bboxConfidence;
-        public PhysicsAreaLayoutDefinition physicsAreaLayout;
-        public RailLayoutDefinition railLayout;
+        public FeatureJsonPayload featureLayout;
     }
 
     [Serializable]
-    public sealed class PromptIntentScenarioOptions
+    public sealed class PromptIntentPlayerOptions
     {
         public int itemStackMaxCount;
     }
@@ -208,7 +152,7 @@ namespace Supercent.PlayableAI.Common.Format
         public PromptIntentObjectDefinition[] objects = new PromptIntentObjectDefinition[0];
         public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public PromptIntentStageDefinition[] stages = new PromptIntentStageDefinition[0];
-        public PromptIntentScenarioOptions scenarioOptions;
+        public PromptIntentPlayerOptions playerOptions;
     }
 
     [Serializable]
@@ -236,20 +180,10 @@ namespace Supercent.PlayableAI.Common.Format
         public string role;
         public string designId;
         public PlayableScenarioFeatureOptions featureOptions;
-        public ScenarioModelSellerRequestableItemDefinition[] sellerRequestableItems = new ScenarioModelSellerRequestableItemDefinition[0];
-        public PhysicsAreaOptionsDefinition physicsAreaOptions;
-        public RailOptionsDefinition railOptions;
         public bool startsPresent = true;
         public bool startsActive = true;
         public string firstPresentingStageId;
         public string firstActivatingStageId;
-    }
-
-    [Serializable]
-    public sealed class ScenarioModelSellerRequestableItemDefinition
-    {
-        public ItemRef item = new ItemRef();
-        public ScenarioModelConditionDefinition startCondition = new ScenarioModelConditionDefinition();
     }
 
     [Serializable]

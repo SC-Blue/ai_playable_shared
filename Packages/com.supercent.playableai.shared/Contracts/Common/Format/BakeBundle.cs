@@ -78,19 +78,6 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PortableDraftLayoutPhysicsAreaLayoutEntry
-    {
-        public PortableDraftLayoutPlacementBoundsEntry realPhysicsZoneBounds = new PortableDraftLayoutPlacementBoundsEntry();
-        public PortableDraftLayoutPlacementBoundsEntry fakeSpriteZoneBounds = new PortableDraftLayoutPlacementBoundsEntry();
-    }
-
-    [Serializable]
-    public sealed class PortableDraftLayoutRailLayoutEntry
-    {
-        public RailPathAnchorDefinition[] pathCells = Array.Empty<RailPathAnchorDefinition>();
-    }
-
-    [Serializable]
     public sealed class PortableDraftLayoutPlacementEntry
     {
         public string objectId = string.Empty;
@@ -101,8 +88,7 @@ namespace Supercent.PlayableAI.Common.Format
         public float worldZ;
         public bool hasResolvedYaw;
         public float resolvedYawDegrees;
-        public PortableDraftLayoutPhysicsAreaLayoutEntry physicsAreaLayout = new PortableDraftLayoutPhysicsAreaLayoutEntry();
-        public PortableDraftLayoutRailLayoutEntry railLayout = new PortableDraftLayoutRailLayoutEntry();
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
     }
 
     [Serializable]
@@ -213,20 +199,6 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
-    public sealed class PortableLayoutSpecPhysicsAreaLayoutEntry
-    {
-        public PortableLayoutSpecPlacementBoundsEntry realPhysicsZoneBounds = new PortableLayoutSpecPlacementBoundsEntry();
-        public PortableLayoutSpecPlacementBoundsEntry fakeSpriteZoneBounds = new PortableLayoutSpecPlacementBoundsEntry();
-        public int itemsPerBlock = 1;
-    }
-
-    [Serializable]
-    public sealed class PortableLayoutSpecRailLayoutEntry
-    {
-        public RailPathAnchorDefinition[] pathCells = Array.Empty<RailPathAnchorDefinition>();
-    }
-
-    [Serializable]
     public sealed class PortableLayoutSpecPlacementEntry
     {
         public string objectId = string.Empty;
@@ -254,8 +226,7 @@ namespace Supercent.PlayableAI.Common.Format
         public float bboxWidthPx;
         public float bboxHeightPx;
         public float bboxConfidence;
-        public PortableLayoutSpecPhysicsAreaLayoutEntry physicsAreaLayout = new PortableLayoutSpecPhysicsAreaLayoutEntry();
-        public PortableLayoutSpecRailLayoutEntry railLayout = new PortableLayoutSpecRailLayoutEntry();
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
     }
 
     [Serializable]

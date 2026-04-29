@@ -5,8 +5,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string CAMERA_FOCUS = "camera_focus";
         public const string ARROW_GUIDE = "arrow_guide";
         public const string REVEAL = "reveal";
-        public const string CUSTOMER_SPAWN = "customer_spawn";
-        public const string SELLER_REQUEST = "seller_request";
 
         public static string[] GetAll()
         {
@@ -15,8 +13,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                 CAMERA_FOCUS,
                 ARROW_GUIDE,
                 REVEAL,
-                CUSTOMER_SPAWN,
-                SELLER_REQUEST,
             };
         }
     }

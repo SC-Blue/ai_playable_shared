@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
@@ -26,8 +26,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         public List<FlowActionDefinition> Actions = new List<FlowActionDefinition>();
         public List<RevealRuleDefinition> EntryRevealRules = new List<RevealRuleDefinition>();
         public List<RevealRuleDefinition> CompletionRevealRules = new List<RevealRuleDefinition>();
-        public List<CustomerSpawnRuleDefinition> EntryCustomerSpawnRules = new List<CustomerSpawnRuleDefinition>();
-        public List<CustomerSpawnRuleDefinition> CompletionCustomerSpawnRules = new List<CustomerSpawnRuleDefinition>();
         public UnlockDefinition UnlockDefinition;
     }
 
@@ -75,7 +73,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (stage == null)
                     continue;
 
-                LoweredStageState loweredStage = LowerStage(stage, previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, catalog, result);
+                LoweredStageState loweredStage = LowerStage(stage, previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, result);
                 if (loweredStage == null)
                     continue;
 
@@ -86,12 +84,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             FeatureAcceptedItemDefinition[] featureAcceptedItems = BuildFeatureAcceptedItems(model, spawnKeys, result);
-            SellerRequestableItemRuleDefinition[] sellerRequestRules =
-                BuildSellerRequestableItemRules(model.objects, spawnKeys, featureAcceptedItems, result);
             ItemPriceDefinition[] itemPrices = BuildItemPrices(model.saleValues);
             CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, featureAcceptedItems, result);
-            CompiledPhysicsAreaDefinition[] physicsAreas = BuildPhysicsAreas(objects, positions, layoutSpec, result);
-            CompiledRailDefinition[] rails = BuildRails(objects, spawnKeys, layoutSpec, result);
+            FeatureJsonPayload[] featureLayouts = BuildFeatureLayouts(objects, spawnKeys, layoutSpec, result);
             ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, itemPrices, catalog, result);
             ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
             if (result.Errors.Count > 0)
@@ -105,7 +100,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     unlocks.Add(stage.UnlockDefinition);
             }
 
-            FlowBeatDefinition[] loweredFlowBeats = BuildCompiledFlowBeats(loweredStages, sellerRequestRules, result, out FlowActionDefinition[] loweredFlowActions);
+            FlowBeatDefinition[] loweredFlowBeats = BuildCompiledFlowBeats(loweredStages, result, out FlowActionDefinition[] loweredFlowActions);
 
             // IntentAuditValidator uses stage index i into model.stages; stageFirstBeatIds must align with model.stages.
             var stageFirstBeatIds = new string[stages.Length];
@@ -130,14 +125,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 objectDesigns = objectDesigns,
                 contentSelections = contentSelections,
                 spawns = spawns,
-                physicsAreas = physicsAreas,
-                rails = rails,
                 currencies = BuildCurrencies(model.currencies),
                 itemPrices = itemPrices,
                 featureAcceptedItems = featureAcceptedItems,
                 featureOutputItems = featureOutputItems,
                 playerOptions = model.playerOptions,
                 featureOptions = BuildFeatureOptions(model.objects, spawnKeys),
+                featureLayouts = featureLayouts,
                 unlocks = unlocks.ToArray(),
                 beats = loweredFlowBeats,
                 actions = loweredFlowActions,
@@ -195,7 +189,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static FlowBeatDefinition[] BuildCompiledFlowBeats(
             List<LoweredStageState> loweredStages,
-            SellerRequestableItemRuleDefinition[] sellerRequestRules,
             ScenarioModelLoweringResult result,
             out FlowActionDefinition[] compiledActions)
         {
@@ -208,7 +201,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (stage == null)
                     continue;
 
-                beats.AddRange(BuildStageBoundaryActionBeats(stage.StageId, "entry", stage.EntryRevealRules, stage.EntryCustomerSpawnRules, actions, result));
+                beats.AddRange(BuildStageBoundaryActionBeats(stage.StageId, "entry", stage.EntryRevealRules, actions, result));
 
                 List<FlowBeatDefinition> stageFlowBeats = stage.Beats ?? new List<FlowBeatDefinition>();
                 for (int beatIndex = 0; beatIndex < stageFlowBeats.Count; beatIndex++)
@@ -222,10 +215,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         actions.Add(copiedAction);
                 }
 
-                beats.AddRange(BuildStageBoundaryActionBeats(stage.StageId, "completion", stage.CompletionRevealRules, stage.CompletionCustomerSpawnRules, actions, result));
+                beats.AddRange(BuildStageBoundaryActionBeats(stage.StageId, "completion", stage.CompletionRevealRules, actions, result));
             }
 
-            AttachSellerRequestActions(beats, actions, sellerRequestRules, result);
             compiledActions = actions.ToArray();
             return beats.ToArray();
         }
@@ -234,7 +226,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             string stageId,
             string phase,
             List<RevealRuleDefinition> revealEffectRules,
-            List<CustomerSpawnRuleDefinition> customerSpawnEffectRules,
             List<FlowActionDefinition> compiledActions,
             ScenarioModelLoweringResult result)
         {
@@ -258,33 +249,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                             reveal = new RevealActionPayload
                             {
                                 targets = PostBakePlayableSettingsUtility.CopyTargets(rule.targets),
-                            },
-                        },
-                    },
-                    compiledActions,
-                    result));
-            }
-
-            CustomerSpawnRuleDefinition[] safeCustomerRules = customerSpawnEffectRules != null ? customerSpawnEffectRules.ToArray() : new CustomerSpawnRuleDefinition[0];
-            for (int i = 0; i < safeCustomerRules.Length; i++)
-            {
-                CustomerSpawnRuleDefinition rule = safeCustomerRules[i];
-                if (rule == null)
-                    continue;
-
-                beats.Add(BuildSyntheticActionBeatFromReactiveRule(
-                    BuildSyntheticFlowBeatId(stageId, phase, "customer_spawn", i),
-                    rule.startWhen,
-                    new FlowActionDefinition
-                    {
-                        id = "customer_spawn",
-                        kind = FlowActionKinds.CUSTOMER_SPAWN,
-                        payload = new FlowActionPayloadDefinition
-                        {
-                            customerSpawn = new CustomerSpawnActionPayload
-                            {
-                                targetId = IntentAuthoringUtility.Normalize(rule.targetId),
-                                customerDesignIndex = rule.customerDesignIndex,
                             },
                         },
                     },
@@ -330,151 +294,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 enterWhen = enterWhen ?? new StepConditionDefinition(),
                 completeWhen = BuildActionCompletedShowWhen(normalizedAction.id),
             };
-        }
-
-        private static void AttachSellerRequestActions(
-            List<FlowBeatDefinition> beats,
-            List<FlowActionDefinition> compiledActions,
-            SellerRequestableItemRuleDefinition[] sellerRequestRules,
-            ScenarioModelLoweringResult result)
-        {
-            List<FlowBeatDefinition> safeBeats = beats ?? new List<FlowBeatDefinition>();
-            SellerRequestableItemRuleDefinition[] safeRules = sellerRequestRules ?? new SellerRequestableItemRuleDefinition[0];
-            for (int i = 0; i < safeRules.Length; i++)
-            {
-                SellerRequestableItemRuleDefinition rule = safeRules[i];
-                if (rule == null)
-                    continue;
-
-                FlowActionDefinition action = new FlowActionDefinition
-                {
-                    id = "seller_request",
-                    kind = FlowActionKinds.SELLER_REQUEST,
-                    payload = new FlowActionPayloadDefinition
-                    {
-                        sellerRequest = new SellerRequestActionPayload
-                        {
-                            targetId = IntentAuthoringUtility.Normalize(rule.targetId),
-                            item = ItemRefUtility.Clone(rule.item),
-                        },
-                    },
-                };
-
-                if (TryAttachSellerRequestActionToMatchingBeat(safeBeats, compiledActions, rule.startWhen, action))
-                    continue;
-
-                safeBeats.Add(BuildSyntheticActionBeatFromReactiveRule(
-                    BuildSyntheticFlowBeatId("synthetic", "seller", "request", i),
-                    rule.startWhen,
-                    action,
-                    compiledActions,
-                    result));
-            }
-        }
-
-        private static bool TryAttachSellerRequestActionToMatchingBeat(
-            List<FlowBeatDefinition> beats,
-            List<FlowActionDefinition> compiledActions,
-            ReactiveConditionGroupDefinition trigger,
-            FlowActionDefinition action)
-        {
-            ReactiveConditionDefinition[] conditions = trigger != null ? trigger.conditions ?? new ReactiveConditionDefinition[0] : new ReactiveConditionDefinition[0];
-            if (conditions.Length != 1)
-                return false;
-
-            StepConditionDefinition condition = ConvertReactiveConditionToStepCondition(conditions[0]);
-            if (condition == null)
-                return false;
-
-            List<FlowBeatDefinition> safeBeats = beats ?? new List<FlowBeatDefinition>();
-            if (string.Equals(IntentAuthoringUtility.Normalize(condition.type), StepConditionRules.ALWAYS, StringComparison.Ordinal))
-            {
-                if (safeBeats.Count == 0)
-                    return false;
-
-                if (HasReactiveDelay(trigger))
-                {
-                    AppendActionToBeat(
-                        safeBeats[0],
-                        compiledActions,
-                        action,
-                        FlowActionTriggerModes.REACTIVE,
-                        PostBakePlayableSettingsUtility.CopyReactiveConditionGroup(trigger));
-                }
-                else
-                {
-                    AppendActionToBeat(safeBeats[0], compiledActions, action, FlowActionTriggerModes.ON_BEAT_ENTER, null);
-                }
-
-                return true;
-            }
-
-            for (int i = 0; i < safeBeats.Count; i++)
-            {
-                FlowBeatDefinition beat = safeBeats[i];
-                if (beat == null)
-                    continue;
-
-                if (StepConditionsEqual(beat.enterWhen, condition))
-                {
-                    if (HasReactiveDelay(trigger))
-                    {
-                        AppendActionToBeat(
-                            beat,
-                            compiledActions,
-                            action,
-                            FlowActionTriggerModes.REACTIVE,
-                            PostBakePlayableSettingsUtility.CopyReactiveConditionGroup(trigger));
-                    }
-                    else
-                    {
-                        AppendActionToBeat(beat, compiledActions, action, FlowActionTriggerModes.ON_BEAT_ENTER, null);
-                    }
-
-                    return true;
-                }
-
-                if (StepConditionsEqual(beat.completeWhen, condition))
-                {
-                    if (HasReactiveDelay(trigger))
-                    {
-                        AppendActionToBeat(
-                            beat,
-                            compiledActions,
-                            action,
-                            FlowActionTriggerModes.REACTIVE,
-                            PostBakePlayableSettingsUtility.CopyReactiveConditionGroup(trigger));
-                    }
-                    else
-                    {
-                        AppendActionToBeat(beat, compiledActions, action, FlowActionTriggerModes.ON_BEAT_COMPLETE, null);
-                    }
-
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static void AppendActionToBeat(
-            FlowBeatDefinition beat,
-            List<FlowActionDefinition> compiledActions,
-            FlowActionDefinition action,
-            string triggerMode,
-            ReactiveConditionGroupDefinition when)
-        {
-            if (beat == null || action == null)
-                return;
-
-            FlowActionDefinition copied = PostBakePlayableSettingsUtility.CopyFlowActions(new[] { action })[0] ?? new FlowActionDefinition();
-            copied.ownerBeatId = IntentAuthoringUtility.Normalize(beat.id);
-            copied.triggerMode = IntentAuthoringUtility.Normalize(triggerMode);
-            copied.when = when != null
-                ? PostBakePlayableSettingsUtility.CopyReactiveConditionGroup(when)
-                : new ReactiveConditionGroupDefinition();
-            copied.id = MakeUniqueFlowActionId(compiledActions, BuildBeatScopedFlowActionId(beat.id, copied.id, copied.kind));
-            compiledActions.Add(copied);
         }
 
         private static string BuildSyntheticFlowBeatId(string stageId, string phase, string kind, int index)
@@ -601,7 +420,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                    string.Equals(IntentAuthoringUtility.Normalize(left != null ? left.currencyId : string.Empty), IntentAuthoringUtility.Normalize(right != null ? right.currencyId : string.Empty), StringComparison.Ordinal) &&
                    string.Equals(IntentAuthoringUtility.Normalize(left != null ? left.signalId : string.Empty), IntentAuthoringUtility.Normalize(right != null ? right.signalId : string.Empty), StringComparison.Ordinal) &&
                    string.Equals(IntentAuthoringUtility.Normalize(left != null ? left.unlockerId : string.Empty), IntentAuthoringUtility.Normalize(right != null ? right.unlockerId : string.Empty), StringComparison.Ordinal) &&
-                   ItemRefUtility.ToStableKey(left != null ? left.item : null) == ItemRefUtility.ToStableKey(right != null ? right.item : null) &&
+                   ItemRefUtility.ToItemKey(left != null ? left.item : null) == ItemRefUtility.ToItemKey(right != null ? right.item : null) &&
                    (left != null ? left.amount : 0) == (right != null ? right.amount : 0) &&
                    Math.Abs((left != null ? left.seconds : 0f) - (right != null ? right.seconds : 0f)) < 0.0001f;
         }
@@ -637,7 +456,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
             Dictionary<string, ItemRef> outputItemsByTargetId,
-            PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
             string stageId = IntentAuthoringUtility.Normalize(stage.id);
@@ -679,8 +497,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             loweredStage.UnlockDefinition = BuildUnlockDefinition(stage, spawnKeys, result);
             loweredStage.EntryRevealRules.AddRange(BuildEntryRevealRules(stage, loweredStage, previousStageId, stageStatesById, spawnKeys, result));
             loweredStage.CompletionRevealRules.AddRange(BuildCompletionRevealRules(stage, loweredStage.LastBeatId, spawnKeys, result));
-            loweredStage.EntryCustomerSpawnRules.AddRange(BuildEntryCustomerSpawnRules(stage, loweredStage, previousStageId, stageStatesById, spawnKeys, catalog, result));
-            loweredStage.CompletionCustomerSpawnRules.AddRange(BuildCompletionCustomerSpawnRules(stage, loweredStage.LastBeatId, spawnKeys, catalog, result));
             return loweredStage;
         }
 
@@ -1117,9 +933,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                             ? ItemRefUtility.Clone(completionItem)
                             : null,
                         currencyId = PromptIntentCapabilityRegistry.GameplaySignalSupportsCurrencyId(completionSignalId)
-                            ? (string.Equals(completionSignalId, GameplaySignalIds.SALE_COMPLETED, StringComparison.Ordinal)
-                                ? TryResolveSaleCurrencyId(objective.item, saleValuesByItemKey)
-                                : IntentAuthoringUtility.Normalize(objective.currencyId))
+                            ? IntentAuthoringUtility.Normalize(objective.currencyId)
                             : string.Empty,
                     };
                 case StepConditionRules.TIMEOUT:
@@ -1143,24 +957,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             if (ItemRefUtility.IsValid(objective.item))
                 return objective.item;
-
-            string normalizedKind = IntentAuthoringUtility.Normalize(objective.kind);
-            if (!string.Equals(normalizedKind, PromptIntentObjectiveKinds.CONVERT_ITEM, StringComparison.Ordinal))
-                return null;
-
-            string normalizedTargetObjectId = IntentAuthoringUtility.Normalize(objective.targetObjectId);
-            string targetId = string.Empty;
-            if (spawnKeys != null)
-                spawnKeys.TryGetValue(normalizedTargetObjectId, out targetId);
-            if (string.IsNullOrEmpty(targetId) ||
-                outputItemsByTargetId == null ||
-                !outputItemsByTargetId.TryGetValue(targetId, out ItemRef outputItem) ||
-                !ItemRefUtility.IsValid(outputItem))
-            {
-                return null;
-            }
-
-            return outputItem;
+            _ = spawnKeys;
+            _ = outputItemsByTargetId;
+            return null;
         }
 
         private static Dictionary<string, ItemRef> BuildFeatureOutputItemLookup(FeatureOutputItemDefinition[] featureOutputItems)
@@ -1224,8 +1023,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
-                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1260,8 +1058,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
                     PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
-                    string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal) ||
-                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
+                    string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_ARROW, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -1301,7 +1098,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 ScenarioModelEffectDefinition effect = effects[i];
                 if (effect == null ||
-                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind) ||
                     PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                     continue;
 
@@ -1348,148 +1144,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return false;
-        }
-
-        private static List<CustomerSpawnRuleDefinition> BuildEntryCustomerSpawnRules(
-            ScenarioModelStageDefinition stage,
-            LoweredStageState loweredStage,
-            string previousStageId,
-            Dictionary<string, LoweredStageState> stageStatesById,
-            Dictionary<string, string> spawnKeys,
-            PlayableObjectCatalog catalog,
-            ScenarioModelLoweringResult result)
-        {
-            var rules = new List<CustomerSpawnRuleDefinition>();
-            ScenarioModelEffectDefinition[] effects = stage.entryEffects ?? new ScenarioModelEffectDefinition[0];
-
-            for (int i = 0; i < effects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
-                    continue;
-
-                int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
-                rules.Add(new CustomerSpawnRuleDefinition
-                {
-                    targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, "spawn_customer.targetObjectId"),
-                    customerDesignIndex = customerDesignIndex,
-                    startWhen = BuildEntryCustomerSpawnTrigger(effect, i, effects, loweredStage, previousStageId, stageStatesById, spawnKeys, result),
-                });
-            }
-
-            return rules;
-        }
-
-        private static List<CustomerSpawnRuleDefinition> BuildCompletionCustomerSpawnRules(
-            ScenarioModelStageDefinition stage,
-            string lastBeatId,
-            Dictionary<string, string> spawnKeys,
-            PlayableObjectCatalog catalog,
-            ScenarioModelLoweringResult result)
-        {
-            var rules = new List<CustomerSpawnRuleDefinition>();
-            if (string.IsNullOrEmpty(lastBeatId))
-                return rules;
-
-            ScenarioModelEffectDefinition[] effects = stage.completionEffects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < effects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
-                    continue;
-
-                int customerDesignIndex = ResolveDefaultCustomerDesignIndex(catalog, result);
-                rules.Add(new CustomerSpawnRuleDefinition
-                {
-                    targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, "spawn_customer.targetObjectId"),
-                    customerDesignIndex = customerDesignIndex,
-                    startWhen = BuildCompletionCustomerSpawnTrigger(effect, lastBeatId, result),
-                });
-            }
-
-            return rules;
-        }
-
-        private static ReactiveConditionGroupDefinition BuildEntryCustomerSpawnTrigger(
-            ScenarioModelEffectDefinition effect,
-            int spawnIndexInEntry,
-            ScenarioModelEffectDefinition[] entryEffects,
-            LoweredStageState loweredStage,
-            string previousStageId,
-            Dictionary<string, LoweredStageState> stageStatesById,
-            Dictionary<string, string> spawnKeys,
-            ScenarioModelLoweringResult result)
-        {
-            string timing = IntentAuthoringUtility.Normalize(effect != null ? effect.timing : string.Empty);
-            if (string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
-            {
-                string triggerBeatId = ResolvePreviousStageLastBeatId(loweredStage, previousStageId, stageStatesById);
-                if (!string.IsNullOrEmpty(triggerBeatId) && IsFocusBeatId(triggerBeatId))
-                    return BuildActionCompletedTrigger(BuildBeatScopedFlowActionId(triggerBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS));
-
-                if (IntentAuthoringUtility.HasEntryFocusBeforeIndex(entryEffects, spawnIndexInEntry) &&
-                    loweredStage != null &&
-                    !string.IsNullOrEmpty(loweredStage.FirstBeatId) &&
-                    IsFocusBeatId(loweredStage.FirstBeatId))
-                {
-                    return BuildActionCompletedTrigger(BuildBeatScopedFlowActionId(loweredStage.FirstBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS));
-                }
-
-                result.Errors.Add("entry spawn_customer timing 'arrival'은 이전 stage의 마지막 beat가 focus camera여야 합니다.");
-                if (result.FailureCode == PlayableFailureCode.None)
-                    result.FailureCode = PlayableFailureCode.LoweringFailed;
-            }
-
-            return BuildStageEntryReactiveTrigger(
-                loweredStage != null ? loweredStage.EnterCondition : null,
-                previousStageId,
-                stageStatesById,
-                spawnKeys,
-                result);
-        }
-
-        private static string ResolvePreviousStageLastBeatId(
-            LoweredStageState loweredStage,
-            string previousStageId,
-            Dictionary<string, LoweredStageState> stageStatesById)
-        {
-            string referencedStageId = string.Empty;
-            ScenarioModelConditionDefinition enterCondition = loweredStage != null ? loweredStage.EnterCondition : null;
-            string enterKind = IntentAuthoringUtility.Normalize(enterCondition != null ? enterCondition.kind : string.Empty);
-            if (string.Equals(enterKind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
-                referencedStageId = IntentAuthoringUtility.Normalize(enterCondition != null ? enterCondition.stageId : string.Empty);
-            else
-                referencedStageId = IntentAuthoringUtility.Normalize(previousStageId);
-
-            if (string.IsNullOrEmpty(referencedStageId) || stageStatesById == null)
-                return string.Empty;
-
-            if (!stageStatesById.TryGetValue(referencedStageId, out LoweredStageState previousStage) ||
-                previousStage == null)
-            {
-                return string.Empty;
-            }
-
-            return IntentAuthoringUtility.Normalize(previousStage.LastBeatId);
-        }
-
-        private static ReactiveConditionGroupDefinition BuildCompletionCustomerSpawnTrigger(
-            ScenarioModelEffectDefinition effect,
-            string lastBeatId,
-            ScenarioModelLoweringResult result)
-        {
-            string timing = IntentAuthoringUtility.Normalize(effect != null ? effect.timing : string.Empty);
-            if (string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
-            {
-                if (IsFocusBeatId(lastBeatId))
-                    return BuildActionCompletedTrigger(BuildBeatScopedFlowActionId(lastBeatId, string.Empty, FlowActionKinds.CAMERA_FOCUS));
-
-                result.Errors.Add("completion spawn_customer timing 'arrival'은 같은 stage의 마지막 beat가 focus camera여야 합니다.");
-                if (result.FailureCode == PlayableFailureCode.None)
-                    result.FailureCode = PlayableFailureCode.LoweringFailed;
-            }
-
-            return BuildBeatCompletedTrigger(lastBeatId);
         }
 
         private static ReactiveConditionGroupDefinition BuildStageEntryReactiveTrigger(
@@ -1623,9 +1277,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     {
                         type = StepConditionRules.GAMEPLAY_SIGNAL,
                         signalId = gameplaySignalId,
-                        targetId = PromptIntentCapabilityRegistry.GameplaySignalSupportsTargetId(gameplaySignalId)
-                            ? ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId")
-                            : string.Empty,
+                        targetId = ResolveGameplaySignalTargetId(
+                            gameplaySignalId,
+                            enterCondition.targetObjectId,
+                            spawnKeys,
+                            result,
+                            "enterWhen.targetObjectId"),
                         item = PromptIntentCapabilityRegistry.GameplaySignalSupportsItem(gameplaySignalId)
                             ? ItemRefUtility.Clone(enterCondition.item)
                             : null,
@@ -1671,9 +1328,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     {
                         type = StepConditionRules.GAMEPLAY_SIGNAL,
                         signalId = gameplaySignalId,
-                        targetId = PromptIntentCapabilityRegistry.GameplaySignalSupportsTargetId(gameplaySignalId)
-                            ? ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId")
-                            : string.Empty,
+                        targetId = ResolveGameplaySignalTargetId(
+                            gameplaySignalId,
+                            enterCondition.targetObjectId,
+                            spawnKeys,
+                            result,
+                            "enterWhen.targetObjectId"),
                         item = PromptIntentCapabilityRegistry.GameplaySignalSupportsItem(gameplaySignalId)
                             ? ItemRefUtility.Clone(enterCondition.item)
                             : null,
@@ -1701,6 +1361,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     }
                 },
             };
+        }
+
+        private static string ResolveGameplaySignalTargetId(
+            string gameplaySignalId,
+            string targetObjectId,
+            Dictionary<string, string> spawnKeys,
+            ScenarioModelLoweringResult result,
+            string label)
+        {
+            if (!PromptIntentCapabilityRegistry.GameplaySignalSupportsTargetId(gameplaySignalId))
+                return string.Empty;
+
+            string normalizedTargetObjectId = IntentAuthoringUtility.Normalize(targetObjectId);
+            if (string.IsNullOrEmpty(normalizedTargetObjectId) &&
+                !PromptIntentCapabilityRegistry.GameplaySignalRequiresTargetId(gameplaySignalId))
+            {
+                return string.Empty;
+            }
+
+            return ResolveSpawnKey(spawnKeys, normalizedTargetObjectId, result, label);
         }
 
         private static ReactiveConditionGroupDefinition BuildActionCompletedTrigger(string actionId)
@@ -1797,7 +1477,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < safeValues.Length; i++)
             {
                 ScenarioModelSaleValueDefinition value = safeValues[i];
-                string itemKey = ItemRefUtility.ToStableKey(value != null ? value.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(value != null ? value.item : null);
                 if (string.IsNullOrEmpty(itemKey))
                     continue;
 
@@ -1825,9 +1505,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
 
                 string scenarioObjectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.Equals(IntentAuthoringUtility.Normalize(value.role), PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                    continue;
-
                 if (!IntentAuthoringUtility.TryResolveCatalogObjectId(catalog, value.role, out string gameplayObjectId, out string error))
                 {
                     result.Errors.Add("objects[" + i + "]의 catalog objectId를 해석하지 못했습니다: " + error);
@@ -1953,60 +1630,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 : 0f;
         }
 
-        private static PhysicsAreaLayoutDefinition ResolvePhysicsAreaLayout(
-            LayoutSpecDocument layoutSpec,
-            string objectId,
-            ScenarioModelLoweringResult result,
-            string label)
-        {
-            if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
-                placement == null)
-            {
-                result.Errors.Add(label + " physics_area의 layoutSpec placement를 찾지 못했습니다.");
-                return new PhysicsAreaLayoutDefinition();
-            }
-
-            LayoutSpecPhysicsAreaLayoutEntry layout = placement.physicsAreaLayout;
-            bool hasRealBounds = layout != null &&
-                                 layout.realPhysicsZoneBounds != null &&
-                                 layout.realPhysicsZoneBounds.hasWorldBounds;
-            bool hasFakeBounds = layout != null &&
-                                 layout.fakeSpriteZoneBounds != null &&
-                                 layout.fakeSpriteZoneBounds.hasWorldBounds;
-            if (!hasRealBounds || !hasFakeBounds)
-            {
-                result.Errors.Add(label + " physics_area에는 layoutSpec.physicsAreaLayout.real/fake bounds가 모두 필요합니다.");
-                return new PhysicsAreaLayoutDefinition();
-            }
-
-            return LayoutSpecGeometryUtility.ToPhysicsAreaLayout(layout);
-        }
-
-        private static RailLayoutDefinition ResolveRailLayout(
-            LayoutSpecDocument layoutSpec,
-            string objectId,
-            ScenarioModelLoweringResult result,
-            string label)
-        {
-            if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
-                placement == null)
-            {
-                result.Errors.Add(label + " rail의 layoutSpec placement를 찾지 못했습니다.");
-                return new RailLayoutDefinition();
-            }
-
-            RailPathAnchorDefinition[] pathCells = placement.railLayout != null
-                ? placement.railLayout.pathCells ?? Array.Empty<RailPathAnchorDefinition>()
-                : Array.Empty<RailPathAnchorDefinition>();
-            if (pathCells.Length == 0)
-            {
-                result.Errors.Add(label + " rail에는 layoutSpec.railLayout.pathCells가 필요합니다.");
-                return new RailLayoutDefinition();
-            }
-
-            return LayoutSpecGeometryUtility.ToRailLayout(placement.railLayout);
-        }
-
         private static bool TryGetLayoutPlacement(
             LayoutSpecDocument layoutSpec,
             ScenarioModelObjectDefinition value,
@@ -2035,87 +1658,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, int> acceptedItemCountByTargetId)
         {
             return value.designId;
-        }
-
-        private static CompiledPhysicsAreaDefinition[] BuildPhysicsAreas(
-            ScenarioModelObjectDefinition[] objects,
-            Dictionary<string, SerializableVector3> positions,
-            LayoutSpecDocument layoutSpec,
-            ScenarioModelLoweringResult result)
-        {
-            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            var definitions = new List<CompiledPhysicsAreaDefinition>();
-            for (int i = 0; i < safeObjects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = safeObjects[i];
-                if (value == null || !string.Equals(IntentAuthoringUtility.Normalize(value.role), PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                    continue;
-
-                string scenarioObjectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.IsNullOrEmpty(scenarioObjectId))
-                    continue;
-
-                if (!positions.TryGetValue(scenarioObjectId, out SerializableVector3 position))
-                {
-                    result.Errors.Add("objects[" + i + "] physics_area의 position을 해석하지 못했습니다.");
-                    continue;
-                }
-
-                if (value.physicsAreaOptions == null)
-                {
-                    result.Errors.Add("objects[" + i + "] physics_area에는 physicsAreaOptions가 필요합니다.");
-                    continue;
-                }
-
-                definitions.Add(new CompiledPhysicsAreaDefinition
-                {
-                    objectId = scenarioObjectId,
-                    spawnKey = IntentAuthoringUtility.BuildSpawnKey(scenarioObjectId),
-                    startActive = value.startsPresent && value.startsActive,
-                    localPosition = position,
-                    options = CopyPhysicsAreaOptions(value.physicsAreaOptions),
-                    layout = ResolvePhysicsAreaLayout(layoutSpec, scenarioObjectId, result, "objects[" + i + "]"),
-                });
-            }
-
-            return definitions.ToArray();
-        }
-
-        private static CompiledRailDefinition[] BuildRails(
-            ScenarioModelObjectDefinition[] objects,
-            Dictionary<string, string> spawnKeys,
-            LayoutSpecDocument layoutSpec,
-            ScenarioModelLoweringResult result)
-        {
-            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            var definitions = new List<CompiledRailDefinition>();
-            for (int i = 0; i < safeObjects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = safeObjects[i];
-                if (value == null || !string.Equals(IntentAuthoringUtility.Normalize(value.role), PromptIntentObjectRoles.RAIL, StringComparison.Ordinal))
-                    continue;
-
-                string scenarioObjectId = IntentAuthoringUtility.Normalize(value.id);
-                string spawnKey = ResolveSpawnKey(spawnKeys, scenarioObjectId, result, "objects[" + i + "].id");
-                if (string.IsNullOrEmpty(spawnKey))
-                    continue;
-
-                if (value.railOptions == null)
-                {
-                    result.Errors.Add("objects[" + i + "] rail에는 railOptions가 필요합니다.");
-                    continue;
-                }
-
-                definitions.Add(new CompiledRailDefinition
-                {
-                    objectId = scenarioObjectId,
-                    spawnKey = spawnKey,
-                    options = CopyRailOptions(value.railOptions),
-                    layout = ResolveRailLayout(layoutSpec, scenarioObjectId, result, "objects[" + i + "]"),
-                });
-            }
-
-            return definitions.ToArray();
         }
 
         private static ObjectDesignSelectionDefinition[] BuildObjectDesigns(
@@ -2152,88 +1694,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return selections.ToArray();
-        }
-
-        private static PhysicsAreaOptionsDefinition CopyPhysicsAreaOptions(PhysicsAreaOptionsDefinition value)
-        {
-            if (value == null)
-                return new PhysicsAreaOptionsDefinition();
-
-            return new PhysicsAreaOptionsDefinition
-            {
-                item = ItemRefUtility.Clone(value.item),
-            };
-        }
-
-        private static RailOptionsDefinition CopyRailOptions(RailOptionsDefinition value)
-        {
-            if (value == null)
-                return new RailOptionsDefinition();
-
-            return new RailOptionsDefinition
-            {
-                item = ItemRefUtility.Clone(value.item),
-                spawnIntervalSeconds = value.spawnIntervalSeconds,
-                travelDurationSeconds = value.travelDurationSeconds,
-                sinkEndpointTargetObjectId = IntentAuthoringUtility.Normalize(value.sinkEndpointTargetObjectId),
-            };
-        }
-
-        private static PhysicsAreaLayoutDefinition CopyPhysicsAreaLayout(PhysicsAreaLayoutDefinition value)
-        {
-            if (value == null)
-                return new PhysicsAreaLayoutDefinition();
-
-            return new PhysicsAreaLayoutDefinition
-            {
-                realPhysicsZoneBounds = CopyWorldBounds(value.realPhysicsZoneBounds),
-                fakeSpriteZoneBounds = CopyWorldBounds(value.fakeSpriteZoneBounds),
-            };
-        }
-
-        private static RailLayoutDefinition CopyRailLayout(RailLayoutDefinition value)
-        {
-            if (value == null)
-                return new RailLayoutDefinition();
-
-            return new RailLayoutDefinition
-            {
-                pathCells = CopyRailPathAnchors(value.pathCells),
-            };
-        }
-
-        private static RailPathAnchorDefinition[] CopyRailPathAnchors(RailPathAnchorDefinition[] values)
-        {
-            RailPathAnchorDefinition[] safeValues = values ?? new RailPathAnchorDefinition[0];
-            var copies = new RailPathAnchorDefinition[safeValues.Length];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                RailPathAnchorDefinition value = safeValues[i];
-                copies[i] = value == null
-                    ? new RailPathAnchorDefinition()
-                    : new RailPathAnchorDefinition
-                    {
-                        worldX = value.worldX,
-                        worldZ = value.worldZ,
-                    };
-            }
-
-            return copies;
-        }
-
-        private static WorldBoundsDefinition CopyWorldBounds(WorldBoundsDefinition value)
-        {
-            if (value == null)
-                return new WorldBoundsDefinition();
-
-            return new WorldBoundsDefinition
-            {
-                hasWorldBounds = value.hasWorldBounds,
-                worldX = value.worldX,
-                worldZ = value.worldZ,
-                worldWidth = value.worldWidth,
-                worldDepth = value.worldDepth,
-            };
         }
 
         private static CurrencyDefinition[] BuildCurrencies(ScenarioModelCurrencyDefinition[] currencies)
@@ -2298,105 +1758,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return values;
         }
 
-        private static SellerRequestableItemRuleDefinition[] BuildSellerRequestableItemRules(
-            ScenarioModelObjectDefinition[] objects,
-            Dictionary<string, string> spawnKeys,
-            FeatureAcceptedItemDefinition[] featureAcceptedItems,
-            ScenarioModelLoweringResult result)
-        {
-            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            var acceptedItemKeysByTargetId = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            FeatureAcceptedItemDefinition[] safeAcceptedItems = featureAcceptedItems ?? new FeatureAcceptedItemDefinition[0];
-            for (int i = 0; i < safeAcceptedItems.Length; i++)
-            {
-                FeatureAcceptedItemDefinition acceptedItem = safeAcceptedItems[i];
-                if (acceptedItem == null)
-                    continue;
-
-                string targetId = IntentAuthoringUtility.Normalize(acceptedItem.targetId);
-                string itemKey = ItemRefUtility.ToStableKey(acceptedItem.item);
-                if (string.IsNullOrEmpty(targetId) || string.IsNullOrEmpty(itemKey))
-                    continue;
-
-                if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> itemKeys))
-                {
-                    itemKeys = new HashSet<string>(StringComparer.Ordinal);
-                    acceptedItemKeysByTargetId.Add(targetId, itemKeys);
-                }
-
-                itemKeys.Add(itemKey);
-            }
-
-            var values = new List<SellerRequestableItemRuleDefinition>();
-            for (int i = 0; i < safeObjects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = safeObjects[i];
-                if (value == null)
-                    continue;
-
-                string role = IntentAuthoringUtility.Normalize(value.role);
-                if (!string.Equals(role, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-                    continue;
-
-                string objectId = IntentAuthoringUtility.Normalize(value.id);
-                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
-                    continue;
-
-                ScenarioModelSellerRequestableItemDefinition[] requestableItems = value.sellerRequestableItems ?? new ScenarioModelSellerRequestableItemDefinition[0];
-                for (int requestIndex = 0; requestIndex < requestableItems.Length; requestIndex++)
-                {
-                    ScenarioModelSellerRequestableItemDefinition requestableItem = requestableItems[requestIndex];
-                    if (requestableItem == null)
-                        continue;
-
-                    string itemKey = ItemRefUtility.ToStableKey(requestableItem.item);
-                    if (string.IsNullOrEmpty(itemKey))
-                        continue;
-
-                    if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> acceptedItems) || !acceptedItems.Contains(itemKey))
-                    {
-                        result.Errors.Add("seller '" + objectId + "'의 requestable item '" + itemKey + "'은(는) accepted item으로 선언되어야 합니다.");
-                        continue;
-                    }
-
-                    values.Add(new SellerRequestableItemRuleDefinition
-                    {
-                        targetId = targetId,
-                        item = ItemRefUtility.Clone(requestableItem.item),
-                        startWhen = BuildRequestableItemStartWhen(requestableItem.startCondition, spawnKeys, result),
-                    });
-                }
-            }
-
-            if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
-                result.FailureCode = PlayableFailureCode.LoweringFailed;
-            return values.ToArray();
-        }
-
-        private static ReactiveConditionGroupDefinition BuildRequestableItemStartWhen(
-            ScenarioModelConditionDefinition startCondition,
-            Dictionary<string, string> spawnKeys,
-            ScenarioModelLoweringResult result)
-        {
-            string kind = IntentAuthoringUtility.Normalize(startCondition != null ? startCondition.kind : string.Empty);
-            if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
-            {
-                result.Errors.Add("seller requestable item startWhen은 stage_completed를 지원하지 않습니다.");
-                if (result.FailureCode == PlayableFailureCode.None)
-                    result.FailureCode = PlayableFailureCode.LoweringFailed;
-            }
-
-            return new ReactiveConditionGroupDefinition
-            {
-                mode = ReactiveConditionRules.MODE_ALL,
-                delaySeconds = 0f,
-                conditions = new[]
-                {
-                    BuildReactiveConditionFromStageEnter(startCondition, spawnKeys, result),
-                },
-            };
-        }
-
         private static PlayableScenarioFeatureOptionDefinition[] BuildFeatureOptions(
             ScenarioModelObjectDefinition[] objects,
             Dictionary<string, string> spawnKeys)
@@ -2409,51 +1770,81 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (value == null)
                     continue;
 
-                string role = IntentAuthoringUtility.Normalize(value.role);
-                string featureType = ResolveFeatureType(role);
-                if (!PromptIntentContractRegistry.ObjectRoleSupportsScenarioOptions(role) ||
-                    string.IsNullOrEmpty(featureType))
+                PlayableScenarioFeatureOptions sourceOptions = value.featureOptions;
+                string featureType = IntentAuthoringUtility.Normalize(sourceOptions.featureType);
+                if (string.IsNullOrEmpty(featureType))
                     continue;
 
                 string objectId = IntentAuthoringUtility.Normalize(value.id);
                 if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
                     continue;
 
-                values.Add(new PlayableScenarioFeatureOptionDefinition
+                var compiledOptions = new PlayableScenarioFeatureOptions
                 {
-                    featureId = role + ":" + targetId,
                     featureType = featureType,
                     targetId = targetId,
-                    options = value.featureOptions.NormalizeForFeatureType(featureType),
+                    optionsJson = sourceOptions.optionsJson != null ? sourceOptions.optionsJson.Trim() : string.Empty,
+                };
+
+                values.Add(new PlayableScenarioFeatureOptionDefinition
+                {
+                    featureId = featureType + ":" + targetId,
+                    featureType = featureType,
+                    targetId = targetId,
+                    options = compiledOptions,
                 });
             }
 
             return values.ToArray();
         }
 
-        private static string ResolveFeatureType(string role)
+        private static FeatureJsonPayload[] BuildFeatureLayouts(
+            ScenarioModelObjectDefinition[] objects,
+            Dictionary<string, string> spawnKeys,
+            LayoutSpecDocument layoutSpec,
+            ScenarioModelLoweringResult result)
         {
-            return PromptIntentContractRegistry.ResolveFeatureTypeForRole(IntentAuthoringUtility.Normalize(role));
-        }
-
-        private static int ResolveDefaultCustomerDesignIndex(PlayableObjectCatalog catalog, ScenarioModelLoweringResult result)
-        {
-            int designIndex = -1;
-            if (catalog != null && catalog.TryResolveGameplayDesignIndex("customer", "car", out int preferredDesignIndex))
-                designIndex = preferredDesignIndex;
-            else
+            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
+            var values = new List<FeatureJsonPayload>();
+            for (int i = 0; i < safeObjects.Length; i++)
             {
-                designIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
-                    catalog,
-                    "customer",
-                    string.Empty,
-                    result.Errors,
-                    "customer");
+                ScenarioModelObjectDefinition value = safeObjects[i];
+                if (value == null)
+                    continue;
+
+                string featureType = IntentAuthoringUtility.Normalize(value.featureOptions.featureType);
+                if (string.IsNullOrEmpty(featureType))
+                    continue;
+
+                string objectId = IntentAuthoringUtility.Normalize(value.id);
+                if (string.IsNullOrEmpty(objectId) || !spawnKeys.TryGetValue(objectId, out string targetId))
+                    continue;
+
+                if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
+                    placement == null)
+                {
+                    result.Errors.Add("objects[" + i + "] feature '" + featureType + "'의 layoutSpec placement를 찾지 못했습니다.");
+                    continue;
+                }
+
+                FeatureJsonPayload layout = placement.featureLayout ?? new FeatureJsonPayload();
+                string layoutFeatureType = IntentAuthoringUtility.Normalize(layout.featureType);
+                if (!string.IsNullOrEmpty(layoutFeatureType) &&
+                    !string.Equals(layoutFeatureType, featureType, StringComparison.Ordinal))
+                {
+                    result.Errors.Add("objects[" + i + "] featureLayout.featureType '" + layoutFeatureType + "'가 featureOptions.featureType '" + featureType + "'와 다릅니다.");
+                    continue;
+                }
+
+                values.Add(new FeatureJsonPayload
+                {
+                    featureType = featureType,
+                    targetId = targetId,
+                    json = layout.json != null ? layout.json.Trim() : string.Empty,
+                });
             }
 
-            if (designIndex < 0 && result.FailureCode == PlayableFailureCode.None)
-                result.FailureCode = PlayableFailureCode.LoweringFailed;
-            return designIndex;
+            return values.ToArray();
         }
 
         private static bool TryResolveRuntimeOwnedDesignSelection(
@@ -2502,19 +1893,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
             return false;
-        }
-
-        private static string TryResolveSaleCurrencyId(
-            ItemRef item,
-            Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByItemKey)
-        {
-            string itemKey = ItemRefUtility.ToStableKey(item);
-            if (string.IsNullOrEmpty(itemKey))
-                return string.Empty;
-
-            return saleValuesByItemKey.TryGetValue(itemKey, out ScenarioModelSaleValueDefinition value) && value != null
-                ? IntentAuthoringUtility.Normalize(value.currencyId)
-                : string.Empty;
         }
 
         private static string ResolveSpawnKey(

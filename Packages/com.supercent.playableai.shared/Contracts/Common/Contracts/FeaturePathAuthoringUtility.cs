@@ -4,8 +4,13 @@ using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.Common.Contracts
 {
-    public static class RailPathAuthoringUtility
+    public static class FeaturePathAuthoringUtility
     {
+        private const string SIDE_LEFT = "left";
+        private const string SIDE_RIGHT = "right";
+        private const string SIDE_TOP = "top";
+        private const string SIDE_BOTTOM = "bottom";
+
         private const float EPSILON = 0.0001f;
         private const float CELL_WORLD_SIZE = 1f;
         private const int TILE_SIZE_CELLS = 2;
@@ -27,7 +32,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public static bool TryBuildTrackBounds(
-            RailPathAnchorDefinition[] pathCells,
+            FeaturePathAnchorDefinition[] pathCells,
             out WorldBoundsDefinition bounds,
             out string errorMessage)
         {
@@ -65,7 +70,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public static bool TryResolveOrderedPath(
-            RailPathAnchorDefinition[] pathCells,
+            FeaturePathAnchorDefinition[] pathCells,
             WorldBoundsDefinition sinkBounds,
             out OrderedPathResult orderedPath,
             out string errorMessage)
@@ -84,7 +89,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             float distanceLast = DistanceSquaredToSink(orderedCellPath[orderedCellPath.Count - 1], sinkCenterX, sinkCenterZ);
             if (Math.Abs(distanceFirst - distanceLast) <= EPSILON)
             {
-                errorMessage = "rail terminal 두 점이 sink와 같은 거리여서 end를 결정할 수 없습니다.";
+                errorMessage = "path terminal 두 점이 sink와 같은 거리여서 end를 결정할 수 없습니다.";
                 return false;
             }
 
@@ -106,7 +111,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public static bool TryResolveConnectedPathCells(
-            RailPathAnchorDefinition[] pathCells,
+            FeaturePathAnchorDefinition[] pathCells,
             out int[][] orderedCells,
             out string errorMessage)
         {
@@ -130,18 +135,18 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public static bool TryBuildResolvedPath(
-            RailPathAnchorDefinition[] pathCells,
+            FeaturePathAnchorDefinition[] pathCells,
             WorldBoundsDefinition sinkBounds,
-            out RailPathDefinition path,
+            out FeaturePathDefinition path,
             out string errorMessage)
         {
-            path = new RailPathDefinition();
+            path = new FeaturePathDefinition();
             errorMessage = string.Empty;
             if (!TryResolveOrderedPath(pathCells, sinkBounds, out OrderedPathResult orderedPath, out errorMessage))
                 return false;
 
             int[][] orderedCells = orderedPath.OrderedCells;
-            var cells = new RailPathCellDefinition[orderedCells.Length];
+            var cells = new FeaturePathCellDefinition[orderedCells.Length];
             for (int i = 0; i < orderedCells.Length; i++)
             {
                 cells[i] = BuildPathCell(orderedCells, i);
@@ -155,7 +160,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 AppendWorldPoint(worldPoints, new SerializableVector3(DoubleCoordinateToWorld(orderedCells[i][0]), 0.75f, DoubleCoordinateToWorld(orderedCells[i][1])));
             AppendWorldPoint(worldPoints, ResolveTileSideCenter(endCell, orderedPath.SinkSide));
 
-            path = new RailPathDefinition
+            path = new FeaturePathDefinition
             {
                 sourceSide = orderedPath.StartSide,
                 sinkSide = orderedPath.SinkSide,
@@ -173,36 +178,36 @@ namespace Supercent.PlayableAI.Common.Contracts
         public static float TileWorldSize => TILE_SIZE_CELLS * CELL_WORLD_SIZE;
 
         private static bool TryBuildQuantizedCells(
-            RailPathAnchorDefinition[] pathCells,
+            FeaturePathAnchorDefinition[] pathCells,
             out List<Cell> cells,
             out string errorMessage)
         {
             cells = new List<Cell>();
             errorMessage = string.Empty;
-            RailPathAnchorDefinition[] safeCells = pathCells ?? new RailPathAnchorDefinition[0];
+            FeaturePathAnchorDefinition[] safeCells = pathCells ?? new FeaturePathAnchorDefinition[0];
             if (safeCells.Length == 0)
             {
-                errorMessage = "rail pathCells가 비어 있습니다.";
+                errorMessage = "pathCells가 비어 있습니다.";
                 return false;
             }
 
             var seen = new HashSet<Cell>();
             for (int i = 0; i < safeCells.Length; i++)
             {
-                RailPathAnchorDefinition cell = safeCells[i];
+                FeaturePathAnchorDefinition cell = safeCells[i];
                 int doubledX = QuantizeDoubleCoordinate(cell != null ? cell.worldX : 0f);
                 int doubledZ = QuantizeDoubleCoordinate(cell != null ? cell.worldZ : 0f);
                 if (Math.Abs(DoubleCoordinateToWorld(doubledX) - (cell != null ? cell.worldX : 0f)) > EPSILON ||
                     Math.Abs(DoubleCoordinateToWorld(doubledZ) - (cell != null ? cell.worldZ : 0f)) > EPSILON)
                 {
-                    errorMessage = "rail pathCells는 grid 중심 좌표만 허용합니다.";
+                    errorMessage = "pathCells는 grid 중심 좌표만 허용합니다.";
                     return false;
                 }
 
                 var quantized = new Cell(doubledX, doubledZ);
                 if (!seen.Add(quantized))
                 {
-                    errorMessage = "rail pathCells에 중복 cell이 있습니다.";
+                    errorMessage = "pathCells에 중복 cell이 있습니다.";
                     return false;
                 }
 
@@ -228,7 +233,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             errorMessage = string.Empty;
             if (quantizedCells == null || quantizedCells.Count < 2)
             {
-                errorMessage = "rail pathCells는 최소 2개가 필요합니다.";
+                errorMessage = "pathCells는 최소 2개가 필요합니다.";
                 return false;
             }
 
@@ -268,14 +273,14 @@ namespace Supercent.PlayableAI.Common.Contracts
                     continue;
 
                 errorMessage = degree == 0
-                    ? "rail pathCells에 끊긴 단일 tile이 있습니다."
-                    : "rail pathCells는 branch를 지원하지 않습니다.";
+                    ? "pathCells에 끊긴 단일 tile이 있습니다."
+                    : "pathCells는 branch를 지원하지 않습니다.";
                 return false;
             }
 
             if (terminals.Count != 2)
             {
-                errorMessage = "rail pathCells는 terminal endpoint가 정확히 2개여야 합니다.";
+                errorMessage = "pathCells는 terminal endpoint가 정확히 2개여야 합니다.";
                 return false;
             }
 
@@ -297,7 +302,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
             if (visited.Count != quantizedCells.Count)
             {
-                errorMessage = "rail pathCells가 하나의 connected path가 아닙니다.";
+                errorMessage = "pathCells가 하나의 connected path가 아닙니다.";
                 return false;
             }
 
@@ -332,7 +337,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
             if (orderedCells.Count != quantizedCells.Count)
             {
-                errorMessage = "rail pathCells 순서를 구성하지 못했습니다.";
+                errorMessage = "pathCells 순서를 구성하지 못했습니다.";
                 return false;
             }
 
@@ -344,7 +349,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             errorMessage = string.Empty;
             if (orderedCells == null || orderedCells.Count < 2)
             {
-                errorMessage = "rail pathCells는 최소 2개가 필요합니다.";
+                errorMessage = "pathCells는 최소 2개가 필요합니다.";
                 return false;
             }
 
@@ -364,7 +369,7 @@ namespace Supercent.PlayableAI.Common.Contracts
 
             if (turnCount > 1)
             {
-                errorMessage = "rail pathCells는 현재 직선 또는 ㄴ자 경로만 지원합니다.";
+                errorMessage = "pathCells는 현재 직선 또는 ㄴ자 경로만 지원합니다.";
                 return false;
             }
 
@@ -378,12 +383,12 @@ namespace Supercent.PlayableAI.Common.Contracts
             int deltaX = next[0] - first[0];
             int deltaZ = next[1] - first[1];
             if (deltaX > 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.LEFT;
+                return SIDE_LEFT;
             if (deltaX < 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.RIGHT;
+                return SIDE_RIGHT;
             if (deltaZ > 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.BOTTOM;
-            return GameplayOverlapAllowanceRules.RailEndpointSideRules.TOP;
+                return SIDE_BOTTOM;
+            return SIDE_TOP;
         }
 
         private static string ResolveSinkSide(IReadOnlyList<int[]> orderedCells)
@@ -393,25 +398,25 @@ namespace Supercent.PlayableAI.Common.Contracts
             int deltaX = last[0] - previous[0];
             int deltaZ = last[1] - previous[1];
             if (deltaX > 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.RIGHT;
+                return SIDE_RIGHT;
             if (deltaX < 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.LEFT;
+                return SIDE_LEFT;
             if (deltaZ > 0)
-                return GameplayOverlapAllowanceRules.RailEndpointSideRules.TOP;
-            return GameplayOverlapAllowanceRules.RailEndpointSideRules.BOTTOM;
+                return SIDE_TOP;
+            return SIDE_BOTTOM;
         }
 
-        private static RailPathCellDefinition BuildPathCell(IReadOnlyList<int[]> cells, int index)
+        private static FeaturePathCellDefinition BuildPathCell(IReadOnlyList<int[]> cells, int index)
         {
             int[] current = cells[index];
             if (index == 0)
             {
                 int[] next = cells[index + 1];
-                return new RailPathCellDefinition
+                return new FeaturePathCellDefinition
                 {
                     gridX = current[0],
                     gridZ = current[1],
-                    elementKind = RailPathElementKinds.STRAIGHT,
+                    elementKind = FeaturePathElementKinds.STRAIGHT,
                     rotationQuarterTurns = ResolveStraightQuarterTurns(next[0] - current[0], next[1] - current[1]),
                 };
             }
@@ -419,11 +424,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (index == cells.Count - 1)
             {
                 int[] previous = cells[index - 1];
-                return new RailPathCellDefinition
+                return new FeaturePathCellDefinition
                 {
                     gridX = current[0],
                     gridZ = current[1],
-                    elementKind = RailPathElementKinds.STRAIGHT,
+                    elementKind = FeaturePathElementKinds.STRAIGHT,
                     rotationQuarterTurns = ResolveStraightQuarterTurns(previous[0] - current[0], previous[1] - current[1]),
                 };
             }
@@ -434,20 +439,20 @@ namespace Supercent.PlayableAI.Common.Contracts
             int outgoingZ = cells[index + 1][1] - current[1];
             if (incomingX == outgoingX || incomingZ == outgoingZ)
             {
-                return new RailPathCellDefinition
+                return new FeaturePathCellDefinition
                 {
                     gridX = current[0],
                     gridZ = current[1],
-                    elementKind = RailPathElementKinds.STRAIGHT,
+                    elementKind = FeaturePathElementKinds.STRAIGHT,
                     rotationQuarterTurns = ResolveStraightQuarterTurns(incomingX, incomingZ),
                 };
             }
 
-            return new RailPathCellDefinition
+            return new FeaturePathCellDefinition
             {
                 gridX = current[0],
                 gridZ = current[1],
-                elementKind = RailPathElementKinds.CORNER,
+                elementKind = FeaturePathElementKinds.CORNER,
                 rotationQuarterTurns = ResolveCornerQuarterTurns(incomingX, incomingZ, outgoingX, outgoingZ),
             };
         }
@@ -478,11 +483,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             float centerX = DoubleCoordinateToWorld(cell.X);
             float centerZ = DoubleCoordinateToWorld(cell.Z);
-            if (string.Equals(side, GameplayOverlapAllowanceRules.RailEndpointSideRules.LEFT, StringComparison.Ordinal))
+            if (string.Equals(side, SIDE_LEFT, StringComparison.Ordinal))
                 return new SerializableVector3(centerX - HALF_TILE_WORLD_SIZE, 0.75f, centerZ);
-            if (string.Equals(side, GameplayOverlapAllowanceRules.RailEndpointSideRules.RIGHT, StringComparison.Ordinal))
+            if (string.Equals(side, SIDE_RIGHT, StringComparison.Ordinal))
                 return new SerializableVector3(centerX + HALF_TILE_WORLD_SIZE, 0.75f, centerZ);
-            if (string.Equals(side, GameplayOverlapAllowanceRules.RailEndpointSideRules.TOP, StringComparison.Ordinal))
+            if (string.Equals(side, SIDE_TOP, StringComparison.Ordinal))
                 return new SerializableVector3(centerX, 0.75f, centerZ + HALF_TILE_WORLD_SIZE);
             return new SerializableVector3(centerX, 0.75f, centerZ - HALF_TILE_WORLD_SIZE);
         }

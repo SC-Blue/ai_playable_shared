@@ -37,7 +37,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string summary = string.Empty;
         public FeatureCatalogExposure catalogExposure = new FeatureCatalogExposure();
         public FeatureObjectRoleDescriptor[] objectRoles = Array.Empty<FeatureObjectRoleDescriptor>();
-        public FeatureScenarioOptionSchema scenarioOptionSchema = new FeatureScenarioOptionSchema();
+        public FeatureOptionSchema optionSchema = new FeatureOptionSchema();
         public FeatureTargetSurfaceDescriptor[] targetSurfaces = Array.Empty<FeatureTargetSurfaceDescriptor>();
         public FeatureGameplaySignalDescriptor[] gameplaySignals = Array.Empty<FeatureGameplaySignalDescriptor>();
         public FeatureConditionDescriptor[] conditionKinds = Array.Empty<FeatureConditionDescriptor>();
@@ -63,18 +63,17 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string summary = string.Empty;
         public bool catalogBacked;
         public bool supportsDesignId;
-        public bool supportsScenarioOptions;
-        public bool supportsRailSinkTarget;
+        public bool supportsFeatureOptions;
     }
 
     [Serializable]
-    public sealed class FeatureScenarioOptionSchema
+    public sealed class FeatureOptionSchema
     {
-        public FeatureScenarioOptionFieldDescriptor[] fields = Array.Empty<FeatureScenarioOptionFieldDescriptor>();
+        public FeatureOptionFieldDescriptor[] fields = Array.Empty<FeatureOptionFieldDescriptor>();
     }
 
     [Serializable]
-    public sealed class FeatureScenarioOptionFieldDescriptor
+    public sealed class FeatureOptionFieldDescriptor
     {
         public string fieldId = string.Empty;
         public string summary = string.Empty;
@@ -182,7 +181,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string[] acceptedTargetRoles = Array.Empty<string>();
         public bool supportsCustomerFeature;
         public bool containsCustomerSingleLine;
-        public bool containsSellerFeature;
         public bool containsMoneyHandler;
     }
 
@@ -271,7 +269,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 summary = value.summary ?? string.Empty,
                 catalogExposure = Clone(value.catalogExposure),
                 objectRoles = Clone(value.objectRoles),
-                scenarioOptionSchema = Clone(value.scenarioOptionSchema),
+                optionSchema = Clone(value.optionSchema),
                 targetSurfaces = Clone(value.targetSurfaces),
                 gameplaySignals = Clone(value.gameplaySignals),
                 conditionKinds = Clone(value.conditionKinds),
@@ -308,32 +306,31 @@ namespace Supercent.PlayableAI.Common.Contracts
                     summary = value.summary ?? string.Empty,
                     catalogBacked = value.catalogBacked,
                     supportsDesignId = value.supportsDesignId,
-                    supportsScenarioOptions = value.supportsScenarioOptions,
-                    supportsRailSinkTarget = value.supportsRailSinkTarget,
+                    supportsFeatureOptions = value.supportsFeatureOptions,
                 };
             }
 
             return clones;
         }
 
-        public static FeatureScenarioOptionSchema Clone(FeatureScenarioOptionSchema value)
+        public static FeatureOptionSchema Clone(FeatureOptionSchema value)
         {
             return value == null
-                ? new FeatureScenarioOptionSchema()
-                : new FeatureScenarioOptionSchema
+                ? new FeatureOptionSchema()
+                : new FeatureOptionSchema
                 {
                     fields = Clone(value.fields),
                 };
         }
 
-        public static FeatureScenarioOptionFieldDescriptor[] Clone(FeatureScenarioOptionFieldDescriptor[] values)
+        public static FeatureOptionFieldDescriptor[] Clone(FeatureOptionFieldDescriptor[] values)
         {
-            FeatureScenarioOptionFieldDescriptor[] safeValues = values ?? Array.Empty<FeatureScenarioOptionFieldDescriptor>();
-            var clones = new FeatureScenarioOptionFieldDescriptor[safeValues.Length];
+            FeatureOptionFieldDescriptor[] safeValues = values ?? Array.Empty<FeatureOptionFieldDescriptor>();
+            var clones = new FeatureOptionFieldDescriptor[safeValues.Length];
             for (int i = 0; i < safeValues.Length; i++)
             {
-                FeatureScenarioOptionFieldDescriptor value = safeValues[i] ?? new FeatureScenarioOptionFieldDescriptor();
-                clones[i] = new FeatureScenarioOptionFieldDescriptor
+                FeatureOptionFieldDescriptor value = safeValues[i] ?? new FeatureOptionFieldDescriptor();
+                clones[i] = new FeatureOptionFieldDescriptor
                 {
                     fieldId = Normalize(value.fieldId),
                     summary = value.summary ?? string.Empty,
@@ -508,7 +505,6 @@ namespace Supercent.PlayableAI.Common.Contracts
                     acceptedTargetRoles = CloneStrings(value.acceptedTargetRoles),
                     supportsCustomerFeature = value.supportsCustomerFeature,
                     containsCustomerSingleLine = value.containsCustomerSingleLine,
-                    containsSellerFeature = value.containsSellerFeature,
                     containsMoneyHandler = value.containsMoneyHandler,
                 };
         }

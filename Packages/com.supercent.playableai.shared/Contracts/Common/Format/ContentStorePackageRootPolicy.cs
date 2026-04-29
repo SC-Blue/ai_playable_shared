@@ -102,7 +102,7 @@ namespace Supercent.PlayableAI.Common.Format
             policy.allowedZipRoots = policy.bundledRoots;
             policy.ownedRoots = policy.bundledRoots;
             policy.managedReferenceRoots = referenceRoots.ToArray();
-            policy.markerRoot = ResolveMarkerRoot(packageId, normalizedThemeId);
+            policy.markerRoot = ResolveMarkerRoot(packageId);
             return policy;
         }
 
@@ -154,32 +154,38 @@ namespace Supercent.PlayableAI.Common.Format
                 normalized.Substring(delimiterIndex);
         }
 
-        public static string ResolveMarkerRoot(string packageId, string fallbackThemeId)
+        public static string ResolveMarkerRoot(string packageId)
         {
             string normalizedPackageId = NormalizePackageId(packageId);
             if (normalizedPackageId.StartsWith("feature_runtime/", StringComparison.Ordinal))
             {
                 string featureType = ResolveRuntimeFeatureType(normalizedPackageId);
+                if (string.IsNullOrWhiteSpace(featureType))
+                    throw new InvalidOperationException("feature runtime packageId에 featureType이 필요합니다: " + normalizedPackageId);
                 return "Assets/AIPS/Features/runtime/" + featureType + "/.store_installed";
             }
 
             if (normalizedPackageId.StartsWith("shared/", StringComparison.Ordinal))
             {
-                string sharedThemeId = ResolvePackageThemeToken(normalizedPackageId, fallbackThemeId);
+                string sharedThemeId = ResolvePackageThemeToken(normalizedPackageId);
+                if (string.IsNullOrWhiteSpace(sharedThemeId))
+                    throw new InvalidOperationException("shared packageId에 themeId가 필요합니다: " + normalizedPackageId);
                 return "Assets/AIPS/Shared/" + sharedThemeId + "/.store_installed";
             }
 
-            string themeId = ResolvePackageThemeToken(normalizedPackageId, fallbackThemeId);
+            string themeId = ResolvePackageThemeToken(normalizedPackageId);
+            if (string.IsNullOrWhiteSpace(themeId))
+                throw new InvalidOperationException("content packageId에 themeId가 필요합니다: " + normalizedPackageId);
             return "Assets/AIPS/Contents/" + themeId + "/.store_installed";
         }
 
-        public static string ResolveMarkerAssetPath(string packageId, string fallbackThemeId)
+        public static string ResolveMarkerAssetPath(string packageId)
         {
             string normalizedPackageId = NormalizePackageId(packageId);
-            return ResolveMarkerRoot(normalizedPackageId, fallbackThemeId) + "/" + MakePackageIdSafe(normalizedPackageId) + ".json";
+            return ResolveMarkerRoot(normalizedPackageId) + "/" + MakePackageIdSafe(normalizedPackageId) + ".json";
         }
 
-        public static string ResolvePackageThemeToken(string packageId, string fallbackThemeId)
+        public static string ResolvePackageThemeToken(string packageId)
         {
             string normalizedPackageId = NormalizePackageId(packageId);
             string[] parts = normalizedPackageId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -187,7 +193,7 @@ namespace Supercent.PlayableAI.Common.Format
                 return ContentStoreTaxonomyRules.ResolveThemeContentPathToken(parts[1]);
             if (parts.Length >= 1 && !string.Equals(parts[0], "shared", StringComparison.Ordinal) && !string.Equals(parts[0], "feature_runtime", StringComparison.Ordinal))
                 return ContentStoreTaxonomyRules.ResolveThemeContentPathToken(parts[0]);
-            return ContentStoreTaxonomyRules.ResolveThemeContentPathToken(fallbackThemeId);
+            return string.Empty;
         }
 
         public static bool IsSharedPackageId(string packageId)

@@ -46,8 +46,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                             summary = role != null ? role.summary ?? string.Empty : string.Empty,
                             catalogBacked = role != null && role.catalogBacked,
                             supportsDesignId = role != null && role.supportsDesignId,
-                            supportsScenarioOptions = role != null && role.supportsScenarioOptions,
-                            supportsRailSinkTarget = role != null && role.supportsRailSinkTarget,
+                            supportsFeatureOptions = role != null && role.supportsFeatureOptions,
                         });
                 }
             }
@@ -55,30 +54,30 @@ namespace Supercent.PlayableAI.Common.Contracts
             return ToOrderedArray(merged, order);
         }
 
-        public static PromptIntentScenarioOptionDescriptor[] MergeScenarioOptions(PromptIntentScenarioOptionDescriptor[] builtins)
+        public static PromptIntentFeatureOptionDescriptor[] MergeFeatureOptions(PromptIntentFeatureOptionDescriptor[] builtins)
         {
-            var merged = new Dictionary<string, PromptIntentScenarioOptionDescriptor>(StringComparer.Ordinal);
+            var merged = new Dictionary<string, PromptIntentFeatureOptionDescriptor>(StringComparer.Ordinal);
             var order = new List<string>();
 
-            AddBaseDescriptors(Array.Empty<PromptIntentScenarioOptionDescriptor>(), merged, order);
+            AddBaseDescriptors(Array.Empty<PromptIntentFeatureOptionDescriptor>(), merged, order);
 
             FeatureDescriptor[] descriptors = GetEffectiveFeatureDescriptors();
             for (int i = 0; i < descriptors.Length; i++)
             {
                 FeatureDescriptor feature = descriptors[i];
                 string[] supportedRoles = ExtractFeatureRoles(feature);
-                FeatureScenarioOptionFieldDescriptor[] fields = feature.scenarioOptionSchema != null
-                    ? feature.scenarioOptionSchema.fields ?? Array.Empty<FeatureScenarioOptionFieldDescriptor>()
-                    : Array.Empty<FeatureScenarioOptionFieldDescriptor>();
+                FeatureOptionFieldDescriptor[] fields = feature.optionSchema != null
+                    ? feature.optionSchema.fields ?? Array.Empty<FeatureOptionFieldDescriptor>()
+                    : Array.Empty<FeatureOptionFieldDescriptor>();
 
                 for (int j = 0; j < fields.Length; j++)
                 {
-                    FeatureScenarioOptionFieldDescriptor field = fields[j];
+                    FeatureOptionFieldDescriptor field = fields[j];
                     string key = Normalize(field != null ? field.fieldId : string.Empty);
                     if (string.IsNullOrEmpty(key))
                         continue;
 
-                    if (merged.TryGetValue(key, out PromptIntentScenarioOptionDescriptor existing))
+                    if (merged.TryGetValue(key, out PromptIntentFeatureOptionDescriptor existing))
                     {
                         existing.summary = Prefer(field != null ? field.summary : string.Empty, existing.summary);
                         existing.supportedRoles = UnionStrings(existing.supportedRoles, supportedRoles);
@@ -90,7 +89,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                         merged,
                         order,
                         key,
-                        new PromptIntentScenarioOptionDescriptor
+                        new PromptIntentFeatureOptionDescriptor
                         {
                             value = key,
                             summary = field != null ? field.summary ?? string.Empty : string.Empty,
@@ -177,7 +176,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                             requiresCurrencyId = objective != null && objective.requiresCurrencyId,
                             requiresAmountValue = objective != null && objective.requiresAmountValue,
                             requiresSeconds = objective != null && objective.requiresSeconds,
-                            canAbsorbArrow = objective != null && objective.canAbsorbArrow,
+                            canAbsorbArrow = objective != null && (objective.canAbsorbArrow || objective.requiresAbsorbedArrow),
                         });
                 }
             }
@@ -528,17 +527,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentObjectRoleDescriptor[] safeValues = values ?? Array.Empty<PromptIntentObjectRoleDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string value = Normalize(safeValues[i] != null ? safeValues[i].value : string.Empty);
-                if (value == PromptIntentObjectRoles.GENERATOR ||
-                    value == PromptIntentObjectRoles.PROCESSOR ||
-                    value == PromptIntentObjectRoles.SELLER ||
-                    value == PromptIntentObjectRoles.RAIL ||
-                    value == PromptIntentObjectRoles.PHYSICS_AREA)
-                {
-                    continue;
-                }
-
-                filtered.Add(safeValues[i]);
+                if (safeValues[i] != null)
+                    filtered.Add(safeValues[i]);
             }
 
             return filtered.ToArray();
@@ -550,7 +540,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentConditionKindDescriptor[] safeValues = values ?? Array.Empty<PromptIntentConditionKindDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                if (!IsFeatureConditionKind(Normalize(safeValues[i] != null ? safeValues[i].value : string.Empty)))
+                if (safeValues[i] != null)
                     filtered.Add(safeValues[i]);
             }
 
@@ -563,16 +553,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentObjectiveKindDescriptor[] safeValues = values ?? Array.Empty<PromptIntentObjectiveKindDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string value = Normalize(safeValues[i] != null ? safeValues[i].value : string.Empty);
-                if (value == PromptIntentObjectiveKinds.COLLECT_ITEM ||
-                    value == PromptIntentObjectiveKinds.CONVERT_ITEM ||
-                    value == PromptIntentObjectiveKinds.SELL_ITEM ||
-                    value == PromptIntentObjectiveKinds.COLLECT_CURRENCY)
-                {
-                    continue;
-                }
-
-                filtered.Add(safeValues[i]);
+                if (safeValues[i] != null)
+                    filtered.Add(safeValues[i]);
             }
 
             return filtered.ToArray();
@@ -584,8 +566,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentEffectKindDescriptor[] safeValues = values ?? Array.Empty<PromptIntentEffectKindDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string value = Normalize(safeValues[i] != null ? safeValues[i].value : string.Empty);
-                if (value != PromptIntentEffectKinds.SPAWN_CUSTOMER)
+                if (safeValues[i] != null)
                     filtered.Add(safeValues[i]);
             }
 
@@ -598,17 +579,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentCompiledGameplayRoleDescriptor[] safeValues = values ?? Array.Empty<PromptIntentCompiledGameplayRoleDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string role = Normalize(safeValues[i] != null ? safeValues[i].role : string.Empty);
-                if (role == PromptIntentObjectRoles.GENERATOR ||
-                    role == PromptIntentObjectRoles.PROCESSOR ||
-                    role == PromptIntentObjectRoles.SELLER ||
-                    role == PromptIntentObjectRoles.RAIL ||
-                    role == PromptIntentObjectRoles.PHYSICS_AREA)
-                {
-                    continue;
-                }
-
-                filtered.Add(safeValues[i]);
+                if (safeValues[i] != null)
+                    filtered.Add(safeValues[i]);
             }
 
             return filtered.ToArray();
@@ -620,7 +592,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentConditionCapabilityDescriptor[] safeValues = values ?? Array.Empty<PromptIntentConditionCapabilityDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                if (!IsFeatureConditionKind(Normalize(safeValues[i] != null ? safeValues[i].kind : string.Empty)))
+                if (safeValues[i] != null)
                     filtered.Add(safeValues[i]);
             }
 
@@ -633,16 +605,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentObjectiveCapabilityDescriptor[] safeValues = values ?? Array.Empty<PromptIntentObjectiveCapabilityDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string value = Normalize(safeValues[i] != null ? safeValues[i].kind : string.Empty);
-                if (value == PromptIntentObjectiveKinds.COLLECT_ITEM ||
-                    value == PromptIntentObjectiveKinds.CONVERT_ITEM ||
-                    value == PromptIntentObjectiveKinds.SELL_ITEM ||
-                    value == PromptIntentObjectiveKinds.COLLECT_CURRENCY)
-                {
-                    continue;
-                }
-
-                filtered.Add(safeValues[i]);
+                if (safeValues[i] != null)
+                    filtered.Add(safeValues[i]);
             }
 
             return filtered.ToArray();
@@ -654,23 +618,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             PromptIntentEffectCapabilityDescriptor[] safeValues = values ?? Array.Empty<PromptIntentEffectCapabilityDescriptor>();
             for (int i = 0; i < safeValues.Length; i++)
             {
-                string value = Normalize(safeValues[i] != null ? safeValues[i].kind : string.Empty);
-                if (value != PromptIntentEffectKinds.SPAWN_CUSTOMER)
+                if (safeValues[i] != null)
                     filtered.Add(safeValues[i]);
             }
 
             return filtered.ToArray();
-        }
-
-        private static bool IsFeatureConditionKind(string value)
-        {
-            return value == PromptIntentConditionKinds.ITEM_GENERATED ||
-                   value == PromptIntentConditionKinds.ITEM_COLLECTED ||
-                   value == PromptIntentConditionKinds.ITEM_CONVERTED ||
-                   value == PromptIntentConditionKinds.RAIL_ITEM_ARRIVED ||
-                   value == PromptIntentConditionKinds.SALE_COMPLETED ||
-                   value == PromptIntentConditionKinds.MONEY_COLLECTED ||
-                   value == PromptIntentConditionKinds.CUSTOMER_SERVED;
         }
 
         private static string[] ExtractFeatureRoles(FeatureDescriptor descriptor)
@@ -724,7 +676,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             {
                 case PromptIntentObjectRoleDescriptor value:
                     return Normalize(value.value);
-                case PromptIntentScenarioOptionDescriptor value:
+                case PromptIntentFeatureOptionDescriptor value:
                     return Normalize(value.value);
                 case PromptIntentConditionKindDescriptor value:
                     return Normalize(value.value);
@@ -763,11 +715,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                         summary = value.summary ?? string.Empty,
                         catalogBacked = value.catalogBacked,
                         supportsDesignId = value.supportsDesignId,
-                        supportsScenarioOptions = value.supportsScenarioOptions,
-                        supportsRailSinkTarget = value.supportsRailSinkTarget,
+                        supportsFeatureOptions = value.supportsFeatureOptions,
                     };
-                case PromptIntentScenarioOptionDescriptor value:
-                    return (TDescriptor)(object)new PromptIntentScenarioOptionDescriptor
+                case PromptIntentFeatureOptionDescriptor value:
+                    return (TDescriptor)(object)new PromptIntentFeatureOptionDescriptor
                     {
                         value = Normalize(value.value),
                         summary = value.summary ?? string.Empty,

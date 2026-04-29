@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
@@ -52,15 +52,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             var objectById = BuildObjectLookup(intent.objects, result);
             var currencyById = BuildCurrencyLookup(intent.currencies, result);
-            var saleValueByItemKey = BuildSaleValueLookup(intent.saleValues, result);
+            BuildSaleValueLookup(intent.saleValues, result);
             ValidateCurrencies(intent.currencies, result);
             ValidateContentSelections(intent.contentSelections, catalog, result);
             ValidateObjects(intent.objects, objectById, currencyById, catalog, result);
             if (result.Errors.Count > 0 && result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.IntentValidationFailed;
             ValidateSaleValues(intent.saleValues, currencyById, catalog, result);
-            ValidateStages(intent.stages, objectById, currencyById, saleValueByItemKey, catalog, result);
-            ValidateFeatureItemConsistency(intent.stages, result);
+            ValidateStages(intent.stages, objectById, currencyById, catalog, result);
             return FinalizeResult(result);
         }
 
@@ -201,7 +200,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeSaleValues.Length; i++)
             {
                 PromptIntentSaleValueDefinition value = safeSaleValues[i];
-                string itemKey = ItemRefUtility.ToStableKey(value != null ? value.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(value != null ? value.item : null);
                 if (string.IsNullOrEmpty(itemKey))
                     continue;
 
@@ -240,42 +239,20 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (string.Equals(role, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal))
                     playerCount++;
 
-                if (string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
+                if (!IntentAuthoringUtility.TryResolveCatalogObjectId(catalog, role, out string gameplayObjectId, out string error))
                 {
-                    if (!string.IsNullOrEmpty(Normalize(value.designId)))
-                        Fail(result, "objects[" + i + "].designId는 physics_area에서 사용할 수 없습니다.");
-
-                    ValidatePhysicsAreaObject(value, objectById, catalog, "objects[" + i + "]", result);
-                }
-                else
-                {
-                    if (!IntentAuthoringUtility.TryResolveCatalogObjectId(catalog, role, out string gameplayObjectId, out string error))
-                    {
-                        Fail(result, "objects[" + i + "]를 catalog objectId로 해석하지 못했습니다: " + error);
-                        continue;
-                    }
-
-                    int resolvedDesignIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
-                        catalog,
-                        gameplayObjectId,
-                        value.designId,
-                        result.Errors,
-                        "objects[" + i + "]");
-                    if (resolvedDesignIndex < 0 && result.FailureCode == PlayableFailureCode.None)
-                        result.FailureCode = PlayableFailureCode.IntentValidationFailed;
-
-                    if (string.Equals(role, PromptIntentObjectRoles.RAIL, StringComparison.Ordinal))
-                        ValidateRailObject(value, objectById, catalog, "objects[" + i + "]", result);
+                    Fail(result, "objects[" + i + "]를 catalog objectId로 해석하지 못했습니다: " + error);
+                    continue;
                 }
 
-                ValidateObjectScenarioOptions(
-                    value.scenarioOptions,
-                    role,
-                    "objects[" + i + "].scenarioOptions",
-                    objectById,
-                    currencyById,
+                int resolvedDesignIndex = IntentAuthoringUtility.ResolveGameplayDesignIndex(
                     catalog,
-                    result);
+                    gameplayObjectId,
+                    value.designId,
+                    result.Errors,
+                    "objects[" + i + "]");
+                if (resolvedDesignIndex < 0 && result.FailureCode == PlayableFailureCode.None)
+                    result.FailureCode = PlayableFailureCode.IntentValidationFailed;
             }
 
             if (playerCount == 0)
@@ -297,7 +274,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (value == null)
                     continue;
 
-                string itemKey = ItemRefUtility.ToStableKey(value.item);
+                string itemKey = ItemRefUtility.ToItemKey(value.item);
                 string currencyId = Normalize(value.currencyId);
                 if (!string.IsNullOrEmpty(currencyId) && !currencyById.ContainsKey(currencyId))
                     Fail(result, "saleValues[" + i + "].currencyId '" + currencyId + "'가 currencies[]에 존재하지 않습니다.");
@@ -311,7 +288,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             PromptIntentStageDefinition[] stages,
             Dictionary<string, PromptIntentObjectDefinition> objectById,
             Dictionary<string, PromptIntentCurrencyDefinition> currencyById,
-            Dictionary<string, PromptIntentSaleValueDefinition> saleValueByItemKey,
             PlayableObjectCatalog catalog,
             PromptIntentSemanticValidationResult result)
         {
@@ -324,9 +300,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 ValidateCondition(stage.enterWhen, "stages[" + i + "].enterWhen", i, safeStages, objectById, currencyById, catalog, result);
                 ValidateEffects(stage.onEnter, "stages[" + i + "].onEnter", objectById, result);
-                ValidateObjectives(stage.objectives, "stages[" + i + "].objectives", objectById, currencyById, saleValueByItemKey, catalog, result);
+                ValidateObjectives(stage.objectives, "stages[" + i + "].objectives", objectById, currencyById, catalog, result);
                 ValidateEffects(stage.onComplete, "stages[" + i + "].onComplete", objectById, result);
-                ValidateSpawnCustomerTiming(stage, i, safeStages, result);
                 ValidateShowArrowTiming(stage, i, result);
 
                 int focusCameraCount = CountEffects(stage.onEnter, PromptIntentEffectKinds.FOCUS_CAMERA);
@@ -429,67 +404,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 string timing = Normalize(effect.timing);
                 if (!string.IsNullOrEmpty(timing) && !PromptIntentEffectKinds.SupportsExplicitTiming(kind))
-                    Fail(result, label + "[" + i + "].timing은 spawn_customer, show_arrow 또는 show_guide_arrow에서만 사용할 수 있습니다.");
-            }
-        }
-
-        private static void ValidateSpawnCustomerTiming(
-            PromptIntentStageDefinition stage,
-            int stageIndex,
-            PromptIntentStageDefinition[] allStages,
-            PromptIntentSemanticValidationResult result)
-        {
-            if (stage == null)
-                return;
-
-            bool completionFocusAsLastBeat = HasCompletionFocusAsLastBeat(stage);
-            bool previousStageFocusAsLastBeat = HasPreviousStageFocusAsLastBeat(stageIndex, stage, allStages);
-
-            ValidateSpawnCustomerTimingGroup(
-                stage.onEnter,
-                "stages[" + stageIndex + "].onEnter",
-                requireExplicitTiming: previousStageFocusAsLastBeat,
-                allowArrivalTiming: previousStageFocusAsLastBeat,
-                result: result);
-
-            ValidateSpawnCustomerTimingGroup(
-                stage.onComplete,
-                "stages[" + stageIndex + "].onComplete",
-                requireExplicitTiming: completionFocusAsLastBeat,
-                allowArrivalTiming: completionFocusAsLastBeat,
-                result: result);
-        }
-
-        private static void ValidateSpawnCustomerTimingGroup(
-            PromptIntentEffectDefinition[] effects,
-            string label,
-            bool requireExplicitTiming,
-            bool allowArrivalTiming,
-            PromptIntentSemanticValidationResult result)
-        {
-            PromptIntentEffectDefinition[] safeEffects = effects ?? new PromptIntentEffectDefinition[0];
-            for (int i = 0; i < safeEffects.Length; i++)
-            {
-                PromptIntentEffectDefinition effect = safeEffects[i];
-                if (effect == null ||
-                    !string.Equals(Normalize(effect.kind), PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                string timing = Normalize(effect.timing);
-                if (requireExplicitTiming && string.IsNullOrEmpty(timing))
-                {
-                    Fail(result, label + "[" + i + "].timing이 필요합니다. camera focus와 이어지는 spawn_customer는 arrival/completed를 명시해야 합니다.");
-                    continue;
-                }
-
-                if (string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal) &&
-                    !allowArrivalTiming &&
-                    !IntentAuthoringUtility.HasEntryFocusBeforeIndex(safeEffects, i))
-                {
-                    Fail(result, label + "[" + i + "].timing 'arrival'은 focus camera arrival context가 있을 때만 사용할 수 있습니다.");
-                }
+                    Fail(result, label + "[" + i + "].timing은 explicit timing을 지원하는 effect kind에서만 사용할 수 있습니다.");
             }
         }
 
@@ -757,7 +672,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             string label,
             Dictionary<string, PromptIntentObjectDefinition> objectById,
             Dictionary<string, PromptIntentCurrencyDefinition> currencyById,
-            Dictionary<string, PromptIntentSaleValueDefinition> saleValueByItemKey,
             PlayableObjectCatalog catalog,
             PromptIntentSemanticValidationResult result)
         {
@@ -796,247 +710,23 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     result);
             }
 
-            switch (kind)
+            if (PromptIntentContractRegistry.ObjectiveRequiresCurrencyId(kind) ||
+                (!string.IsNullOrWhiteSpace(value.currencyId) && PromptIntentContractRegistry.ObjectiveSupportsCurrencyId(kind)))
             {
-                case PromptIntentObjectiveKinds.UNLOCK_OBJECT:
-                    ValidateCurrencyReference(value.currencyId, objectiveLabel + ".currencyId", currencyById, result);
-                    break;
-                case PromptIntentObjectiveKinds.COLLECT_ITEM:
-                    ValidateItemReference(value.item, objectiveLabel + ".item", catalog, result);
-                    break;
-                case PromptIntentObjectiveKinds.CONVERT_ITEM:
-                    ValidateItemReference(value.inputItem, objectiveLabel + ".inputItem", catalog, result);
-                    break;
-                case PromptIntentObjectiveKinds.SELL_ITEM:
-                    ValidateItemReference(value.item, objectiveLabel + ".item", catalog, result);
-                    string itemKey = ItemRefUtility.ToStableKey(value.item);
-                    if (!string.IsNullOrEmpty(itemKey) && !saleValueByItemKey.ContainsKey(itemKey))
-                        Fail(result, objectiveLabel + ".item '" + itemKey + "'에 대한 saleValues[] entry가 필요합니다.");
-                    break;
-                case PromptIntentObjectiveKinds.COLLECT_CURRENCY:
-                    ValidateCurrencyReference(value.currencyId, objectiveLabel + ".currencyId", currencyById, result);
-                    break;
-            }
-        }
-        }
-
-        private static void ValidateFeatureItemConsistency(
-            PromptIntentStageDefinition[] stages,
-            PromptIntentSemanticValidationResult result)
-        {
-            var processorInputItemByTargetObjectId = new Dictionary<string, string>(StringComparer.Ordinal);
-            PromptIntentStageDefinition[] safeStages = stages ?? new PromptIntentStageDefinition[0];
-            for (int stageIndex = 0; stageIndex < safeStages.Length; stageIndex++)
-            {
-                PromptIntentStageDefinition stage = safeStages[stageIndex];
-                PromptIntentObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new PromptIntentObjectiveDefinition[0] : new PromptIntentObjectiveDefinition[0];
-                for (int objectiveIndex = 0; objectiveIndex < objectives.Length; objectiveIndex++)
-                {
-                    PromptIntentObjectiveDefinition objective = objectives[objectiveIndex];
-                    if (objective == null)
-                        continue;
-
-                    string kind = Normalize(objective.kind);
-                    if (string.Equals(kind, PromptIntentObjectiveKinds.SELL_ITEM, StringComparison.Ordinal))
-                        continue;
-
-                    if (!string.Equals(kind, PromptIntentObjectiveKinds.CONVERT_ITEM, StringComparison.Ordinal))
-                        continue;
-
-                    ItemRef inputItem = objective.inputItem;
-                    string inputItemKey = ItemRefUtility.ToStableKey(inputItem);
-                    if (string.IsNullOrEmpty(inputItemKey))
-                    {
-                        Fail(result, "stages[" + stageIndex + "].objectives[" + objectiveIndex + "]의 convert_item에는 inputItem이 필요합니다.");
-                        continue;
-                    }
-
-                    RegisterFeatureItemConsistency(
-                        processorInputItemByTargetObjectId,
-                        Normalize(objective.targetObjectId),
-                        inputItemKey,
-                        "stages[" + stageIndex + "].objectives[" + objectiveIndex + "]",
-                        "processor",
-                        result);
-                }
-            }
-        }
-
-        private static void RegisterFeatureItemConsistency(
-            Dictionary<string, string> itemByTargetObjectId,
-            string targetObjectId,
-            string itemId,
-            string label,
-            string roleLabel,
-            PromptIntentSemanticValidationResult result)
-        {
-            if (string.IsNullOrEmpty(targetObjectId) || string.IsNullOrEmpty(itemId))
-                return;
-
-            if (itemByTargetObjectId.TryGetValue(targetObjectId, out string existingItemId))
-            {
-                if (!string.Equals(existingItemId, itemId, StringComparison.Ordinal))
-                {
-                    Fail(result, label + "는 같은 " + roleLabel + " '" + targetObjectId + "'에 대해 서로 다른 itemId('" + existingItemId + "', '" + itemId + "')를 사용할 수 없습니다.");
-                }
-                return;
+                ValidateCurrencyReference(value.currencyId, objectiveLabel + ".currencyId", currencyById, result);
             }
 
-            itemByTargetObjectId.Add(targetObjectId, itemId);
-        }
-
-        private static void ValidateObjectScenarioOptions(
-            PromptIntentObjectScenarioOptions value,
-            string role,
-            string label,
-            Dictionary<string, PromptIntentObjectDefinition> objectById,
-            Dictionary<string, PromptIntentCurrencyDefinition> currencyById,
-            PlayableObjectCatalog catalog,
-            PromptIntentSemanticValidationResult result)
-        {
-            if (value == null)
-                return;
-
-            bool hasCustomerRequestCount = value.customerRequestCount != null;
-            bool hasRequestableItems = value.requestableItems != null && value.requestableItems.Length > 0;
-            bool hasInputCountPerConversion = value.inputCountPerConversion > 0;
-            bool hasConversionInterval = value.conversionIntervalSeconds > 0f;
-            bool hasInputItemMoveInterval = value.inputItemMoveIntervalSeconds > 0f;
-            bool hasSpawnInterval = value.spawnIntervalSeconds > 0f;
-
-            if (hasCustomerRequestCount && !FeatureScenarioOptionRules.SupportsCustomerRequestCount(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            if (hasRequestableItems && !string.Equals(Normalize(role), PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            if (hasInputCountPerConversion && !FeatureScenarioOptionRules.SupportsInputCountPerConversion(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            if (hasConversionInterval && !FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            if (hasInputItemMoveInterval && !FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            if (hasSpawnInterval && !FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
-                Fail(result, label + "는 " + Normalize(role) + " role에서 " + FeatureScenarioOptionRules.DescribeSupportedPromptScenarioOptions(role));
-
-            PromptIntentSellerRequestableItemDefinition[] requestableItems = value.requestableItems ?? new PromptIntentSellerRequestableItemDefinition[0];
-            for (int i = 0; i < requestableItems.Length; i++)
+            if (PromptIntentContractRegistry.ObjectiveRequiresItem(kind) ||
+                (!ItemRefUtility.IsEmpty(value.item) && PromptIntentContractRegistry.ObjectiveSupportsItem(kind)))
             {
-                PromptIntentSellerRequestableItemDefinition requestableItem = requestableItems[i];
-                if (requestableItem == null)
-                    continue;
-
-                string requestableLabel = label + ".requestableItems[" + i + "]";
-                ValidateItemReference(requestableItem.item, requestableLabel + ".item", catalog, result);
-                ValidateSellerRequestableItemCondition(
-                    requestableItem.startWhen,
-                    requestableLabel + ".startWhen",
-                    objectById,
-                    currencyById,
-                    catalog,
-                    result);
-            }
-        }
-
-        private static void ValidateSellerRequestableItemCondition(
-            PromptIntentConditionDefinition value,
-            string label,
-            Dictionary<string, PromptIntentObjectDefinition> objectById,
-            Dictionary<string, PromptIntentCurrencyDefinition> currencyById,
-            PlayableObjectCatalog catalog,
-            PromptIntentSemanticValidationResult result)
-        {
-            if (value == null)
-            {
-                Fail(result, label + "가 필요합니다. 항상 주문 가능 항목도 startWhen.kind = 'start'로 명시해야 합니다.");
-                return;
+                ValidateItemReference(value.item, objectiveLabel + ".item", catalog, result);
             }
 
-            string kind = Normalize(value.kind);
-            if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
+            if (PromptIntentContractRegistry.ObjectiveRequiresInputItem(kind) ||
+                (!ItemRefUtility.IsEmpty(value.inputItem) && PromptIntentContractRegistry.ObjectiveSupportsInputItem(kind)))
             {
-                Fail(result, label + ".kind는 requestableItems에서 stage_completed를 지원하지 않습니다.");
-                return;
+                ValidateItemReference(value.inputItem, objectiveLabel + ".inputItem", catalog, result);
             }
-
-            ValidateCondition(
-                value,
-                label,
-                -1,
-                new PromptIntentStageDefinition[0],
-                objectById,
-                currencyById,
-                catalog,
-                result);
-        }
-
-        private static void ValidatePhysicsAreaObject(
-            PromptIntentObjectDefinition value,
-            Dictionary<string, PromptIntentObjectDefinition> objectById,
-            PlayableObjectCatalog catalog,
-            string label,
-            PromptIntentSemanticValidationResult result)
-        {
-            _ = objectById;
-            if (value == null)
-                return;
-
-            if (value.physicsAreaOptions == null)
-            {
-                Fail(result, label + ".physicsAreaOptions가 필요합니다.");
-                return;
-            }
-
-            ValidateItemReference(value.physicsAreaOptions.item, label + ".physicsAreaOptions.item", catalog, result);
-        }
-
-        private static void ValidateRailObject(
-            PromptIntentObjectDefinition value,
-            Dictionary<string, PromptIntentObjectDefinition> objectById,
-            PlayableObjectCatalog catalog,
-            string label,
-            PromptIntentSemanticValidationResult result)
-        {
-            if (value == null)
-                return;
-
-            if (value.railOptions == null)
-            {
-                Fail(result, label + ".railOptions가 필요합니다.");
-                return;
-            }
-
-            ValidateItemReference(value.railOptions.item, label + ".railOptions.item", catalog, result);
-            ValidateRailSinkEndpointTargetReference(
-                value.railOptions.sinkEndpointTargetObjectId,
-                label + ".railOptions.sinkEndpointTargetObjectId",
-                objectById,
-                result);
-        }
-
-        private static void ValidateRailSinkEndpointTargetReference(
-            string objectId,
-            string label,
-            Dictionary<string, PromptIntentObjectDefinition> objectById,
-            PromptIntentSemanticValidationResult result)
-        {
-            string normalizedObjectId = Normalize(objectId);
-            if (string.IsNullOrEmpty(normalizedObjectId))
-                return;
-
-            if (!objectById.TryGetValue(normalizedObjectId, out PromptIntentObjectDefinition value) || value == null)
-            {
-                Fail(result, label + " '" + normalizedObjectId + "'가 objects[]에 존재하지 않습니다.");
-                return;
-            }
-
-            string role = Normalize(value.role);
-            if (!PromptIntentObjectRoles.IsRailSinkTargetRoleSupported(role))
-            {
-                Fail(result, label + " '" + normalizedObjectId + "'는 processor/seller여야 합니다.");
             }
         }
 

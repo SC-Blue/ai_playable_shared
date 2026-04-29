@@ -38,8 +38,7 @@ namespace PlayableAI.AuthoringCore
                     resolvedYawDegrees = entry.resolvedYawDegrees,
                     solverPlacementSource = "draft_layout",
                     orientationReason = entry.hasResolvedYaw ? "draft_layout" : string.Empty,
-                    physicsAreaLayout = TranslatePhysicsAreaLayout(entry),
-                    railLayout = TranslateRailLayout(entry),
+                    featureLayout = CopyFeatureJsonPayload(entry.featureLayout),
                 });
             }
 
@@ -215,54 +214,14 @@ namespace PlayableAI.AuthoringCore
             return false;
         }
 
-        private static LayoutSpecPhysicsAreaLayoutEntry TranslatePhysicsAreaLayout(DraftLayoutPlacementEntry placement)
+        private static FeatureJsonPayload CopyFeatureJsonPayload(FeatureJsonPayload source)
         {
-            DraftLayoutPhysicsAreaLayoutEntry source = placement != null ? placement.physicsAreaLayout ?? new DraftLayoutPhysicsAreaLayoutEntry() : new DraftLayoutPhysicsAreaLayoutEntry();
-            return new LayoutSpecPhysicsAreaLayoutEntry
+            source ??= new FeatureJsonPayload();
+            return new FeatureJsonPayload
             {
-                realPhysicsZoneBounds = TranslatePlacementBounds(source.realPhysicsZoneBounds),
-                fakeSpriteZoneBounds = TranslatePlacementBounds(source.fakeSpriteZoneBounds),
-            };
-        }
-
-        private static LayoutSpecRailLayoutEntry TranslateRailLayout(DraftLayoutPlacementEntry placement)
-        {
-            DraftLayoutRailLayoutEntry source = placement != null ? placement.railLayout ?? new DraftLayoutRailLayoutEntry() : new DraftLayoutRailLayoutEntry();
-            return new LayoutSpecRailLayoutEntry
-            {
-                pathCells = CloneRailPathAnchors(source.pathCells),
-            };
-        }
-
-        private static RailPathAnchorDefinition[] CloneRailPathAnchors(RailPathAnchorDefinition[] source)
-        {
-            RailPathAnchorDefinition[] safeSource = source ?? Array.Empty<RailPathAnchorDefinition>();
-            var translated = new RailPathAnchorDefinition[safeSource.Length];
-            for (int i = 0; i < safeSource.Length; i++)
-            {
-                RailPathAnchorDefinition entry = safeSource[i];
-                translated[i] = entry == null
-                    ? new RailPathAnchorDefinition()
-                    : new RailPathAnchorDefinition
-                    {
-                        worldX = entry.worldX,
-                        worldZ = entry.worldZ,
-                    };
-            }
-
-            return translated;
-        }
-
-        private static LayoutSpecPlacementBoundsEntry TranslatePlacementBounds(DraftLayoutPlacementBoundsEntry source)
-        {
-            source ??= new DraftLayoutPlacementBoundsEntry();
-            return new LayoutSpecPlacementBoundsEntry
-            {
-                hasWorldBounds = source.hasWorldBounds,
-                worldX = source.worldX,
-                worldZ = source.worldZ,
-                worldWidth = source.worldWidth,
-                worldDepth = source.worldDepth,
+                featureType = Normalize(source.featureType),
+                targetId = Normalize(source.targetId),
+                json = source.json != null ? source.json.Trim() : string.Empty,
             };
         }
 
@@ -402,115 +361,6 @@ namespace PlayableAI.AuthoringCore
                 return 1;
 
             return Math.Max(1, (int)Math.Round(worldSpan / IntentAuthoringUtility.LAYOUT_SPACING, MidpointRounding.AwayFromZero));
-        }
-
-        private static PromptIntentObjectScenarioOptions CreateSanitizedScenarioOptions(
-            string role,
-            PromptIntentObjectScenarioOptions source)
-        {
-            if (source == null)
-                return null;
-
-            string normalizedRole = Normalize(role);
-            var sanitized = new PromptIntentObjectScenarioOptions();
-            bool hasAnyValue = false;
-
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal) &&
-                source.customerRequestCount != null &&
-                source.customerRequestCount.min > 0 &&
-                source.customerRequestCount.max > 0)
-            {
-                sanitized.customerRequestCount = new PromptIntentCustomerRequestCount
-                {
-                    min = source.customerRequestCount.min,
-                    max = source.customerRequestCount.max,
-                };
-                hasAnyValue = true;
-            }
-
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-            {
-                PromptIntentSellerRequestableItemDefinition[] requestableItems = source.requestableItems ?? Array.Empty<PromptIntentSellerRequestableItemDefinition>();
-                if (requestableItems.Length > 0)
-                {
-                    var sanitizedItems = new List<PromptIntentSellerRequestableItemDefinition>();
-                    for (int i = 0; i < requestableItems.Length; i++)
-                    {
-                        PromptIntentSellerRequestableItemDefinition requestableItem = requestableItems[i];
-                        if (requestableItem == null)
-                            continue;
-
-                        sanitizedItems.Add(new PromptIntentSellerRequestableItemDefinition
-                        {
-                            item = ItemRefUtility.Clone(requestableItem.item),
-                            startWhen = CloneCondition(requestableItem.startWhen),
-                        });
-                    }
-
-                    if (sanitizedItems.Count > 0)
-                    {
-                        sanitized.requestableItems = sanitizedItems.ToArray();
-                        hasAnyValue = true;
-                    }
-                }
-            }
-
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.PROCESSOR, StringComparison.Ordinal))
-            {
-                if (source.inputCountPerConversion > 0)
-                {
-                    sanitized.inputCountPerConversion = source.inputCountPerConversion;
-                    hasAnyValue = true;
-                }
-
-                if (source.conversionIntervalSeconds > 0f)
-                {
-                    sanitized.conversionIntervalSeconds = source.conversionIntervalSeconds;
-                    hasAnyValue = true;
-                }
-
-                if (source.inputItemMoveIntervalSeconds > 0f)
-                {
-                    sanitized.inputItemMoveIntervalSeconds = source.inputItemMoveIntervalSeconds;
-                    hasAnyValue = true;
-                }
-            }
-
-            if (string.Equals(normalizedRole, PromptIntentObjectRoles.GENERATOR, StringComparison.Ordinal) &&
-                source.spawnIntervalSeconds > 0f)
-            {
-                sanitized.spawnIntervalSeconds = source.spawnIntervalSeconds;
-                hasAnyValue = true;
-            }
-
-            return hasAnyValue ? sanitized : null;
-        }
-
-        private static PromptIntentConditionDefinition CloneCondition(PromptIntentConditionDefinition source)
-        {
-            source ??= new PromptIntentConditionDefinition();
-            return new PromptIntentConditionDefinition
-            {
-                kind = source.kind,
-                stageId = source.stageId,
-                targetObjectId = source.targetObjectId,
-                item = ItemRefUtility.Clone(source.item),
-                currencyId = source.currencyId,
-                amountValue = source.amountValue,
-            };
-        }
-
-        private static WorldBoundsDefinition TranslateWorldBounds(DraftLayoutPlacementBoundsEntry source)
-        {
-            source ??= new DraftLayoutPlacementBoundsEntry();
-            return new WorldBoundsDefinition
-            {
-                hasWorldBounds = source.hasWorldBounds,
-                worldX = source.worldX,
-                worldZ = source.worldZ,
-                worldWidth = source.worldWidth,
-                worldDepth = source.worldDepth,
-            };
         }
 
         private static string Normalize(string value)

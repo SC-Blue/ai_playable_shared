@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Supercent.PlayableAI.Common.Contracts;
@@ -6,11 +6,12 @@ using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.Generation.Editor.Compile
 {
+#pragma warning disable 0649
     public static class IntentAuthoringUtility
     {
         private sealed class GameplayResolutionGuidance
         {
-            public bool IsStableKey;
+            public bool IsItemKey;
             public string SuggestedObjectId = string.Empty;
             public string SuggestedDesignId = string.Empty;
             public string[] AvailableObjectIds = new string[0];
@@ -117,7 +118,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         public static bool IsCatalogBackedRole(string role)
         {
-            return Normalize(role) != PromptIntentObjectRoles.PHYSICS_AREA;
+            return !string.IsNullOrEmpty(Normalize(role));
         }
 
         public static bool TryResolveUniqueCatalogObjectIdByCategory(PlayableObjectCatalog catalog, string category, out string objectId, out string error)
@@ -226,11 +227,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             var guidance = new GameplayResolutionGuidance();
             guidance.AvailableDesignIds = TryGetAvailableDesignIdValues(catalog, normalizedObjectId);
 
-            if (ItemRefUtility.TryParseStableKey(normalizedObjectId, out ItemRef stableItem) && stableItem != null)
+            if (ItemRefUtility.TryParseItemKey(normalizedObjectId, out ItemRef itemRef) && itemRef != null)
             {
-                guidance.IsStableKey = true;
-                guidance.SuggestedObjectId = Normalize(stableItem.familyId);
-                guidance.SuggestedDesignId = Normalize(stableItem.variantId);
+                guidance.IsItemKey = true;
+                guidance.SuggestedObjectId = Normalize(itemRef.familyId);
+                guidance.SuggestedDesignId = Normalize(itemRef.variantId);
                 guidance.AvailableObjectIds = BuildGameplayObjectIdCandidates(catalog, guidance.SuggestedObjectId);
                 if (guidance.AvailableObjectIds.Length == 0 && !string.IsNullOrEmpty(guidance.SuggestedObjectId))
                     guidance.AvailableObjectIds = new[] { guidance.SuggestedObjectId };
@@ -259,8 +260,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return " -> 수정 가이드: catalog의 objectId와 designId를 확인해서 수정하세요.";
 
             var segments = new List<string>();
-            if (guidance.IsStableKey)
-                segments.Add("이 값은 item stable key입니다");
+            if (guidance.IsItemKey)
+                segments.Add("이 값은 item entry id입니다");
 
             string recommendedChange = BuildRecommendedChange(guidance);
             if (!string.IsNullOrEmpty(recommendedChange))
@@ -411,43 +412,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         entry.HasWorldPosition ? entry.WorldZ : entry.GridZ * LAYOUT_SPACING));
             }
 
-            int nextMainGridX = 0;
-            string[] mainRoles =
-            {
-                PromptIntentObjectRoles.GENERATOR,
-                PromptIntentObjectRoles.PROCESSOR,
-                PromptIntentObjectRoles.SELLER,
-            };
-
-            for (int roleIndex = 0; roleIndex < mainRoles.Length; roleIndex++)
-            {
-                string role = mainRoles[roleIndex];
-                for (int i = 0; i < safeObjects.Length; i++)
-                {
-                    ScenarioModelObjectDefinition value = safeObjects[i];
-                    string objectId = Normalize(value != null ? value.id : string.Empty);
-                    if (string.IsNullOrEmpty(objectId) ||
-                        Normalize(value.role) != role ||
-                        positions.ContainsKey(objectId))
-                    {
-                        continue;
-                    }
-
-                    ResolveObjectFootprintOrDefault(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells);
-                    TryPlaceWithoutOverlap(
-                        positions,
-                        occupiedCells,
-                        objectId,
-                        nextMainGridX,
-                        0,
-                        widthCells,
-                        depthCells,
-                        errors,
-                        "objects[" + i + "] auto-placement(main)");
-                    nextMainGridX += widthCells;
-                }
-            }
-
             SerializableVector3 basePlayerCenter = ResolveBasePlayerCenter(safeObjects, positions);
             int basePlayerGridX = WorldToGridCoordinate(basePlayerCenter.x);
             int basePlayerGridZ = WorldToGridCoordinate(basePlayerCenter.z);
@@ -478,7 +442,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 nextPlayerOffsetCells -= widthCells;
             }
 
-            int nextUnlockGridX = nextMainGridX;
+            int nextUnlockGridX = 0;
             int unlockGridZ = WorldToGridCoordinate(UNLOCK_PAD_ROW_Z);
             for (int i = 0; i < safeObjects.Length; i++)
             {
@@ -889,16 +853,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             centerOffsetZ = 0f;
             error = string.Empty;
 
-            string normalizedRole = Normalize(role);
-            if (normalizedRole == PromptIntentObjectRoles.PHYSICS_AREA)
-                return TryResolvePhysicsAreaFootprint(placement, out widthCells, out depthCells, out error);
-
-            if (normalizedRole == PromptIntentObjectRoles.RAIL &&
-                TryResolveRailTrackFootprint(placement, out widthCells, out depthCells, out error))
-            {
-                return true;
-            }
-
             if (!TryResolveCatalogObjectId(catalog, role, out string gameplayObjectId, out error))
                 return false;
 
@@ -943,118 +897,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return false;
 
             string role = Normalize(roleValue);
-            if (role == PromptIntentObjectRoles.PHYSICS_AREA || role == PromptIntentObjectRoles.RAIL)
-                return false;
-
             if (placement.hasResolvedYaw)
                 return IsQuarterTurnOddYaw(placement.resolvedYawDegrees);
             return false;
-        }
-
-        private static bool TryResolvePhysicsAreaFootprint(
-            PromptIntentObjectPlacementDefinition placement,
-            out int widthCells,
-            out int depthCells,
-            out string error)
-        {
-            widthCells = 0;
-            depthCells = 0;
-            error = string.Empty;
-            if (IsEffectivelyEmptyPlacement(placement))
-            {
-                widthCells = 1;
-                depthCells = 1;
-                return true;
-            }
-
-            if (placement.physicsAreaLayout == null)
-            {
-                error = "physics_area는 placement.physicsAreaLayout이 필요합니다.";
-                return false;
-            }
-
-            WorldBoundsDefinition real = placement.physicsAreaLayout.realPhysicsZoneBounds;
-            WorldBoundsDefinition fake = placement.physicsAreaLayout.fakeSpriteZoneBounds;
-            if (!HasWorldBounds(real) || !HasWorldBounds(fake))
-            {
-                error = "physics_area는 real/fake zone world bounds가 모두 필요합니다.";
-                return false;
-            }
-
-            float minX = System.Math.Min(real.worldX - real.worldWidth * 0.5f, fake.worldX - fake.worldWidth * 0.5f);
-            float maxX = System.Math.Max(real.worldX + real.worldWidth * 0.5f, fake.worldX + fake.worldWidth * 0.5f);
-            float minZ = System.Math.Min(real.worldZ - real.worldDepth * 0.5f, fake.worldZ - fake.worldDepth * 0.5f);
-            float maxZ = System.Math.Max(real.worldZ + real.worldDepth * 0.5f, fake.worldZ + fake.worldDepth * 0.5f);
-            widthCells = ResolveWorldSizeToCells(maxX - minX);
-            depthCells = ResolveWorldSizeToCells(maxZ - minZ);
-            return true;
-        }
-
-        private static bool TryResolveRailTrackFootprint(
-            PromptIntentObjectPlacementDefinition placement,
-            out int widthCells,
-            out int depthCells,
-            out string error)
-        {
-            widthCells = 0;
-            depthCells = 0;
-            error = string.Empty;
-            if (IsEffectivelyEmptyPlacement(placement))
-            {
-                widthCells = 1;
-                depthCells = 1;
-                return true;
-            }
-
-            RailPathAnchorDefinition[] pathCells = placement.railLayout != null
-                ? placement.railLayout.pathCells ?? new RailPathAnchorDefinition[0]
-                : new RailPathAnchorDefinition[0];
-            if (!RailPathAuthoringUtility.TryBuildTrackBounds(pathCells, out WorldBoundsDefinition trackBounds, out _))
-            {
-                error = "rail은 placement.railLayout.pathCells가 필요합니다.";
-                return false;
-            }
-
-            widthCells = ResolveWorldSizeToCells(trackBounds.worldWidth);
-            depthCells = ResolveWorldSizeToCells(trackBounds.worldDepth);
-            return true;
-        }
-
-        private static bool IsEffectivelyEmptyPlacement(PromptIntentObjectPlacementDefinition placement)
-        {
-            if (placement == null)
-                return true;
-
-            return !placement.hasWorldPosition &&
-                   !placement.hasResolvedYaw &&
-                   string.IsNullOrWhiteSpace(Normalize(placement.solverPlacementSource)) &&
-                   string.IsNullOrWhiteSpace(Normalize(placement.orientationReason)) &&
-                   System.Math.Abs(placement.anchorDeltaCellsX) <= 0.0001f &&
-                   System.Math.Abs(placement.anchorDeltaCellsZ) <= 0.0001f &&
-                   !placement.hasImageBounds &&
-                   System.Math.Abs(placement.centerPxX) <= 0.0001f &&
-                   System.Math.Abs(placement.centerPxY) <= 0.0001f &&
-                   System.Math.Abs(placement.bboxWidthPx) <= 0.0001f &&
-                   System.Math.Abs(placement.bboxHeightPx) <= 0.0001f &&
-                   System.Math.Abs(placement.bboxConfidence) <= 0.0001f &&
-                   placement.physicsAreaLayout == null &&
-                   placement.railLayout == null;
-        }
-
-        private static int ResolveWorldSizeToCells(float worldSize)
-        {
-            if (worldSize <= 0f)
-                return 1;
-
-            return System.Math.Max(1, (int)System.Math.Round(worldSize / LAYOUT_SPACING, System.MidpointRounding.AwayFromZero));
-        }
-
-        private static bool HasWorldBounds(WorldBoundsDefinition bounds)
-        {
-            return bounds != null &&
-                   bounds.hasWorldBounds &&
-                   bounds.worldWidth > 0f &&
-                   bounds.worldDepth > 0f;
         }
 
         private static HashSet<string> ResolveUnlockTargetReferenceIds(
@@ -1159,34 +1004,23 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         continue;
 
                     string kind = Normalize(objective.kind);
-                    if (string.Equals(kind, PromptIntentObjectiveKinds.SELL_ITEM, System.StringComparison.Ordinal))
-                    {
-                        RegisterFeatureItem(
-                            itemsByTargetId,
-                            ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "sell_item.targetObjectId"),
-                            objective.item,
-                            "seller",
-                            errors);
-                        continue;
-                    }
-
-                    if (!string.Equals(kind, PromptIntentObjectiveKinds.CONVERT_ITEM, System.StringComparison.Ordinal))
+                    bool usesItem = PromptIntentContractRegistry.ObjectiveRequiresItem(kind);
+                    bool usesInputItem = PromptIntentContractRegistry.ObjectiveRequiresInputItem(kind);
+                    if (!usesItem && !usesInputItem)
                         continue;
 
-                    ItemRef inputItem = objective.inputItem;
-                    if (!ItemRefUtility.IsValid(inputItem))
+                    ItemRef acceptedItem = usesInputItem ? objective.inputItem : objective.item;
+                    if (!ItemRefUtility.IsValid(acceptedItem))
                     {
                         if (errors != null)
-                            errors.Add("stages[" + stageIndex + "].objectives[" + objectiveIndex + "]의 convert_item에는 inputItem이 필요합니다.");
+                            errors.Add("stages[" + stageIndex + "].objectives[" + objectiveIndex + "]의 " + kind + "에는 " + (usesInputItem ? "inputItem" : "item") + "이 필요합니다.");
                         continue;
                     }
 
                     RegisterFeatureItem(
                         itemsByTargetId,
-                        ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId"),
-                        inputItem,
-                        "processor",
-                        errors);
+                        ResolveTargetId(spawnKeys, objective.targetObjectId, errors, kind + ".targetObjectId"),
+                        acceptedItem);
                 }
             }
 
@@ -1218,114 +1052,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, string> spawnKeys,
             List<string> errors)
         {
-            var outputItemByTargetId = new Dictionary<string, ItemRef>(System.StringComparer.Ordinal);
-            var requiredProcessorOutputLabelsByTargetId = new Dictionary<string, string>(System.StringComparer.Ordinal);
-            if (model == null)
-                return new FeatureOutputItemDefinition[0];
-
-            var roleByObjectId = new Dictionary<string, string>(System.StringComparer.Ordinal);
-            ScenarioModelObjectDefinition[] objects = model.objects ?? new ScenarioModelObjectDefinition[0];
-            for (int objectIndex = 0; objectIndex < objects.Length; objectIndex++)
-            {
-                ScenarioModelObjectDefinition value = objects[objectIndex];
-                if (value == null || string.IsNullOrWhiteSpace(value.id))
-                    continue;
-
-                roleByObjectId[Normalize(value.id)] = Normalize(value.role);
-            }
-
-            ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];
-            for (int stageIndex = 0; stageIndex < stages.Length; stageIndex++)
-            {
-                ScenarioModelStageDefinition stage = stages[stageIndex];
-                ScenarioModelObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new ScenarioModelObjectiveDefinition[0] : new ScenarioModelObjectiveDefinition[0];
-                for (int objectiveIndex = 0; objectiveIndex < objectives.Length; objectiveIndex++)
-                {
-                    ScenarioModelObjectiveDefinition objective = objectives[objectiveIndex];
-                    if (objective == null)
-                        continue;
-
-                    string kind = Normalize(objective.kind);
-                    if (string.Equals(kind, PromptIntentObjectiveKinds.CONVERT_ITEM, System.StringComparison.Ordinal))
-                    {
-                        string targetId = ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "convert_item.targetObjectId");
-                        if (string.IsNullOrEmpty(targetId))
-                            continue;
-
-                        string requirementLabel = "stages[" + stageIndex + "].objectives[" + objectiveIndex + "]";
-                        if (!requiredProcessorOutputLabelsByTargetId.ContainsKey(targetId))
-                            requiredProcessorOutputLabelsByTargetId.Add(targetId, requirementLabel);
-                        continue;
-                    }
-
-                    if (!string.Equals(kind, PromptIntentObjectiveKinds.COLLECT_ITEM, System.StringComparison.Ordinal))
-                        continue;
-
-                    string normalizedTargetObjectId = Normalize(objective.targetObjectId);
-                    if (!roleByObjectId.TryGetValue(normalizedTargetObjectId, out string targetRole) ||
-                        !string.Equals(targetRole, PromptIntentObjectRoles.PROCESSOR, System.StringComparison.Ordinal))
-                        continue;
-
-                    ItemRef outputItem = objective.item;
-                    if (!ItemRefUtility.IsValid(outputItem))
-                        continue;
-
-                    string processorTargetId = ResolveTargetId(spawnKeys, objective.targetObjectId, errors, "collect_item.targetObjectId");
-                    if (string.IsNullOrEmpty(processorTargetId))
-                        continue;
-
-                    if (outputItemByTargetId.TryGetValue(processorTargetId, out ItemRef existingOutputItem))
-                    {
-                        if (!ItemRefUtility.Equals(existingOutputItem, outputItem) && errors != null)
-                        {
-                            errors.Add(
-                                "processor collect_item.targetObjectId '" + processorTargetId + "'에는 단일 output item만 허용됩니다: '" +
-                                ItemRefUtility.ToStableKey(existingOutputItem) + "' vs '" + ItemRefUtility.ToStableKey(outputItem) + "'.");
-                        }
-
-                        continue;
-                    }
-
-                    outputItemByTargetId.Add(processorTargetId, ItemRefUtility.Clone(outputItem));
-                }
-            }
-
-            foreach (KeyValuePair<string, string> pair in requiredProcessorOutputLabelsByTargetId)
-            {
-                if (outputItemByTargetId.ContainsKey(pair.Key))
-                    continue;
-
-                if (errors != null)
-                {
-                    errors.Add(
-                        pair.Value +
-                        "의 convert_item output은 같은 processor를 대상으로 한 collect_item objective에서 추론되어야 합니다.");
-                }
-            }
-
-            var definitions = new FeatureOutputItemDefinition[outputItemByTargetId.Count];
-            int writeIndex = 0;
-            foreach (KeyValuePair<string, ItemRef> pair in outputItemByTargetId)
-            {
-                definitions[writeIndex++] = new FeatureOutputItemDefinition
-                {
-                    targetId = pair.Key,
-                    item = ItemRefUtility.Clone(pair.Value),
-                };
-            }
-
-            return definitions;
+            _ = model;
+            _ = spawnKeys;
+            _ = errors;
+            return new FeatureOutputItemDefinition[0];
         }
-
         private static void RegisterFeatureItem(
             Dictionary<string, List<ItemRef>> itemsByTargetId,
             string targetId,
-            ItemRef item,
-            string roleLabel,
-            List<string> errors)
+            ItemRef item)
         {
             string normalizedTargetId = Normalize(targetId);
-            string itemKey = ItemRefUtility.ToStableKey(item);
+            string itemKey = ItemRefUtility.ToItemKey(item);
             if (string.IsNullOrEmpty(normalizedTargetId) || string.IsNullOrEmpty(itemKey))
                 return;
 
@@ -1339,18 +1077,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 if (ItemRefUtility.Equals(items[i], item))
                     return;
-            }
-
-            if (string.Equals(roleLabel, "processor", System.StringComparison.Ordinal) &&
-                items.Count > 0)
-            {
-                if (errors != null)
-                {
-                    errors.Add(
-                        roleLabel + " '" + normalizedTargetId + "'에 서로 다른 item('" +
-                        ItemRefUtility.ToDisplayString(items[0]) + "', '" + itemKey + "')가 매핑되어 있습니다.");
-                }
-                return;
             }
 
             items.Add(ItemRefUtility.Clone(item));

@@ -58,12 +58,7 @@ namespace Supercent.PlayableAI.Common.Format
     public static class GameplayRoleIds
     {
         public const string PLAYER = "player";
-        public const string GENERATOR = "generator";
-        public const string PROCESSOR = "processor";
-        public const string SELLER = "seller";
         public const string UNLOCK_PAD = "unlock_pad";
-        public const string PHYSICS_AREA = "physics_area";
-        public const string RAIL = "rail";
         public const string CUSTOMER = "customer";
         public const string ITEM = "item";
     }
@@ -98,7 +93,7 @@ namespace Supercent.PlayableAI.Common.Format
 
     public static class CatalogIdentityRules
     {
-        public const char STABLE_ENTRY_DELIMITER = '/';
+        public const char ENTRY_ID_DELIMITER = '/';
         public const string MONEY_OBJECT_ID = "money";
         public const string MONEY_DESIGN_ID = "money_pile";
         public const string CUSTOMER_OBJECT_ID = "customer";
@@ -117,33 +112,33 @@ namespace Supercent.PlayableAI.Common.Format
             return Normalize(value);
         }
 
-        public static string BuildStableEntryId(string objectId, string designId)
+        public static string BuildEntryId(string objectId, string designId)
         {
             string normalizedObjectId = Normalize(objectId);
             string normalizedDesignId = Normalize(designId);
             if (string.IsNullOrEmpty(normalizedObjectId) || string.IsNullOrEmpty(normalizedDesignId))
                 return string.Empty;
 
-            return normalizedObjectId + CatalogIdentityRules.STABLE_ENTRY_DELIMITER + normalizedDesignId;
+            return normalizedObjectId + CatalogIdentityRules.ENTRY_ID_DELIMITER + normalizedDesignId;
         }
 
-        public static bool IsStableEntryId(string value)
+        public static bool IsEntryId(string value)
         {
             string normalized = Normalize(value);
-            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER);
+            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.ENTRY_ID_DELIMITER);
             return delimiterIndex > 0 && delimiterIndex < normalized.Length - 1;
         }
 
-        public static bool TrySplitStableEntryId(string stableEntryId, out string objectId, out string designId)
+        public static bool TrySplitEntryId(string entryId, out string objectId, out string designId)
         {
             objectId = string.Empty;
             designId = string.Empty;
 
-            string normalized = Normalize(stableEntryId);
+            string normalized = Normalize(entryId);
             if (string.IsNullOrEmpty(normalized))
                 return false;
 
-            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER);
+            int delimiterIndex = normalized.IndexOf(CatalogIdentityRules.ENTRY_ID_DELIMITER);
             if (delimiterIndex <= 0 || delimiterIndex >= normalized.Length - 1)
                 return false;
 
@@ -154,7 +149,7 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static string BuildObjectDesignSelectionKey(string objectId, string designId)
         {
-            return BuildStableEntryId(objectId, designId);
+            return BuildEntryId(objectId, designId);
         }
 
         public static bool ValidateObjectId(string objectId, out string errorMessage)
@@ -166,7 +161,7 @@ namespace Supercent.PlayableAI.Common.Format
                 return false;
             }
 
-            if (normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER) >= 0)
+            if (normalized.IndexOf(CatalogIdentityRules.ENTRY_ID_DELIMITER) >= 0)
             {
                 errorMessage = "objectId '" + normalized + "'에는 '/'가 포함되면 안 됩니다.";
                 return false;
@@ -191,7 +186,7 @@ namespace Supercent.PlayableAI.Common.Format
                 return false;
             }
 
-            if (normalized.IndexOf(CatalogIdentityRules.STABLE_ENTRY_DELIMITER) >= 0)
+            if (normalized.IndexOf(CatalogIdentityRules.ENTRY_ID_DELIMITER) >= 0)
             {
                 errorMessage = "designId '" + normalized + "'에는 '/'가 포함되면 안 됩니다.";
                 return false;
@@ -210,7 +205,7 @@ namespace Supercent.PlayableAI.Common.Format
         public static bool ValidateCatalogEntryIdentity(
             string objectId,
             string designId,
-            string stableEntryId,
+            string entryId,
             out string errorMessage)
         {
             if (!ValidateObjectId(objectId, out errorMessage))
@@ -219,12 +214,12 @@ namespace Supercent.PlayableAI.Common.Format
             if (!ValidateDesignId(designId, out errorMessage))
                 return false;
 
-            string expectedStableEntryId = BuildStableEntryId(objectId, designId);
-            string normalizedStableEntryId = Normalize(stableEntryId);
-            if (!string.IsNullOrEmpty(normalizedStableEntryId) &&
-                !string.Equals(expectedStableEntryId, normalizedStableEntryId, StringComparison.Ordinal))
+            string expectedEntryId = BuildEntryId(objectId, designId);
+            string normalizedEntryId = Normalize(entryId);
+            if (!string.IsNullOrEmpty(normalizedEntryId) &&
+                !string.Equals(expectedEntryId, normalizedEntryId, StringComparison.Ordinal))
             {
-                errorMessage = "stableEntryId '" + normalizedStableEntryId + "'가 canonical identity '" + expectedStableEntryId + "'와 일치하지 않습니다.";
+                errorMessage = "entryId '" + normalizedEntryId + "'가 canonical identity '" + expectedEntryId + "'와 일치하지 않습니다.";
                 return false;
             }
 
@@ -334,7 +329,7 @@ namespace Supercent.PlayableAI.Common.Format
     [Serializable]
     public sealed class GeneratedContentCatalogEntry
     {
-        public string stableEntryId = string.Empty;
+        public string entryId = string.Empty;
         public string contentId = string.Empty;
         public string objectId = string.Empty;
         public string designId = string.Empty;

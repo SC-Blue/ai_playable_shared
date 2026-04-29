@@ -33,7 +33,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 return CopyFailure(result, shapeValidation.FailureCode, shapeValidation.Errors);
 
             ValidateUnsupportedLifecyclePatterns(json, result);
-            ValidateExplicitScenarioOptionZeros(json, result);
+            ValidateExplicitPlayerOptionZeros(json, result);
             try
             {
                 result.Contract = JsonUtility.FromJson<PlayablePromptIntent>(json);
@@ -54,7 +54,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateObjects(result.Contract.objects, catalog, result);
             ValidateContentSelections(result.Contract.contentSelections, result);
             ValidateStages(result.Contract.stages, result);
-            ValidateScenarioOptions(result.Contract.scenarioOptions, result);
+            ValidatePlayerOptions(result.Contract.playerOptions, result);
 
             result.IsValid = result.Errors.Count == 0;
             result.Message = result.IsValid ? "유효합니다." : result.Errors[0];
@@ -143,16 +143,61 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 if (value.designId != null && string.IsNullOrEmpty(Normalize(value.designId)))
                     Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].designId가 비어 있습니다. 생략하거나 유효한 designId를 사용해야 합니다.");
-                if (string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal) &&
-                    !string.IsNullOrEmpty(Normalize(value.designId)))
+                ValidateObjectFeatureOptions(value.featureOptions, role, objectId, "objects[" + i + "].featureOptions", result);
+            }
+        }
+
+        private static void ValidateObjectFeatureOptions(
+            PlayableScenarioFeatureOptions value,
+            string role,
+            string objectId,
+            string label,
+            PromptIntentJsonValidationResult result)
+        {
+            string featureType = Normalize(value.featureType);
+            string targetId = Normalize(value.targetId);
+            string optionsJson = Normalize(value.optionsJson);
+            bool isCoreObject = IsCoreObjectRole(role);
+
+            if (isCoreObject)
+            {
+                if (!string.IsNullOrEmpty(featureType) ||
+                    !string.IsNullOrEmpty(targetId) ||
+                    !string.IsNullOrEmpty(optionsJson))
                 {
-                    Fail(result, PlayableFailureCode.InvalidValue, "objects[" + i + "].designId는 physics_area에서 사용할 수 없습니다.");
+                    Fail(result, PlayableFailureCode.InvalidValue, label + "는 core object role '" + role + "'에서 사용할 수 없습니다.");
                 }
 
-                ValidateObjectScenarioOptions(value.scenarioOptions, role, "objects[" + i + "].scenarioOptions", result);
-                ValidatePhysicsAreaOptions(value.physicsAreaOptions, role, "objects[" + i + "].physicsAreaOptions", result);
-                ValidateRailOptions(value.railOptions, role, "objects[" + i + "].railOptions", result);
+                return;
             }
+
+            if (string.IsNullOrEmpty(featureType))
+                Fail(result, PlayableFailureCode.MissingRequiredField, label + ".featureType이 필요합니다.");
+            else if (!string.Equals(featureType, role, StringComparison.Ordinal))
+                Fail(result, PlayableFailureCode.InvalidValue, label + ".featureType는 objects[].role과 일치해야 합니다.");
+
+            if (string.IsNullOrEmpty(targetId))
+                Fail(result, PlayableFailureCode.MissingRequiredField, label + ".targetId가 필요합니다.");
+            else if (!string.Equals(targetId, objectId, StringComparison.Ordinal))
+                Fail(result, PlayableFailureCode.InvalidValue, label + ".targetId는 objects[].id와 일치해야 합니다.");
+
+            if (string.IsNullOrEmpty(optionsJson))
+                Fail(result, PlayableFailureCode.MissingRequiredField, label + ".optionsJson이 필요합니다.");
+            else if (!LooksLikeJsonObject(optionsJson))
+                Fail(result, PlayableFailureCode.InvalidValue, label + ".optionsJson은 JSON object 문자열이어야 합니다.");
+        }
+
+        private static bool LooksLikeJsonObject(string value)
+        {
+            string normalized = Normalize(value);
+            return normalized.Length >= 2 && normalized[0] == '{' && normalized[normalized.Length - 1] == '}';
+        }
+
+        private static bool IsCoreObjectRole(string role)
+        {
+            string normalized = Normalize(role);
+            return string.Equals(normalized, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal) ||
+                   string.Equals(normalized, PromptIntentObjectRoles.UNLOCK_PAD, StringComparison.Ordinal);
         }
 
         private static bool IsSupportedObjectRole(string role, PlayableObjectCatalog catalog)
@@ -315,125 +360,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void ValidateScenarioOptions(PromptIntentScenarioOptions value, PromptIntentJsonValidationResult result)
+        private static void ValidatePlayerOptions(PromptIntentPlayerOptions value, PromptIntentJsonValidationResult result)
         {
             if (value == null)
                 return;
 
             if (value.itemStackMaxCount != 0 && value.itemStackMaxCount < 1)
-                Fail(result, PlayableFailureCode.InvalidValue, "scenarioOptions.itemStackMaxCount는 1 이상이어야 합니다.");
+                Fail(result, PlayableFailureCode.InvalidValue, "playerOptions.itemStackMaxCount는 1 이상이어야 합니다.");
         }
 
-        private static void ValidateObjectScenarioOptions(
-            PromptIntentObjectScenarioOptions value,
-            string role,
-            string label,
-            PromptIntentJsonValidationResult result)
+        private static void ValidateExplicitPlayerOptionZeros(string json, PromptIntentJsonValidationResult result)
         {
-            if (value == null)
-                return;
-
-            if (value.customerRequestCount != null)
-            {
-                if (value.customerRequestCount.min <= 0)
-                    Fail(result, PlayableFailureCode.InvalidValue, label + ".customerRequestCount.min은 1 이상이어야 합니다.");
-                if (value.customerRequestCount.max <= 0)
-                    Fail(result, PlayableFailureCode.InvalidValue, label + ".customerRequestCount.max는 1 이상이어야 합니다.");
-                if (value.customerRequestCount.min > 0 &&
-                    value.customerRequestCount.max > 0 &&
-                    value.customerRequestCount.min > value.customerRequestCount.max)
-                {
-                    Fail(result, PlayableFailureCode.InvalidValue, label + ".customerRequestCount.min은 max보다 클 수 없습니다.");
-                }
-            }
-
-            PromptIntentSellerRequestableItemDefinition[] requestableItems = value.requestableItems ?? new PromptIntentSellerRequestableItemDefinition[0];
-            for (int i = 0; i < requestableItems.Length; i++)
-            {
-                PromptIntentSellerRequestableItemDefinition requestableItem = requestableItems[i];
-                string requestableLabel = label + ".requestableItems[" + i + "]";
-                if (requestableItem == null)
-                {
-                    Fail(result, PlayableFailureCode.InvalidValue, requestableLabel + "가 null입니다.");
-                    continue;
-                }
-
-                if (!string.Equals(role, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-                {
-                    Fail(result, PlayableFailureCode.InvalidValue, requestableLabel + "는 seller role에서만 사용할 수 있습니다.");
-                    continue;
-                }
-
-                ValidateItemRef(requestableItem.item, requestableLabel + ".item", result, required: true);
-                ValidateSellerRequestableItemCondition(requestableItem.startWhen, requestableLabel + ".startWhen", result);
-            }
-
-            if (value.inputCountPerConversion != 0 && value.inputCountPerConversion < 1)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".inputCountPerConversion은 1 이상이어야 합니다.");
-            if (value.conversionIntervalSeconds != 0f && value.conversionIntervalSeconds <= 0f)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".conversionIntervalSeconds는 0보다 커야 합니다.");
-            if (value.inputItemMoveIntervalSeconds != 0f && value.inputItemMoveIntervalSeconds <= 0f)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".inputItemMoveIntervalSeconds는 0보다 커야 합니다.");
-            if (value.spawnIntervalSeconds != 0f && value.spawnIntervalSeconds <= 0f)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".spawnIntervalSeconds는 0보다 커야 합니다.");
-        }
-
-        private static void ValidateExplicitScenarioOptionZeros(string json, PromptIntentJsonValidationResult result)
-        {
-            if (HasExplicitZeroValue(json, "inputCountPerConversion"))
-                Fail(result, PlayableFailureCode.InvalidValue, "objects[].scenarioOptions.inputCountPerConversion에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
-            if (HasExplicitZeroValue(json, "conversionIntervalSeconds"))
-                Fail(result, PlayableFailureCode.InvalidValue, "objects[].scenarioOptions.conversionIntervalSeconds에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
-            if (HasExplicitZeroValue(json, "inputItemMoveIntervalSeconds"))
-                Fail(result, PlayableFailureCode.InvalidValue, "objects[].scenarioOptions.inputItemMoveIntervalSeconds에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
-            if (HasExplicitZeroValue(json, "spawnIntervalSeconds"))
-                Fail(result, PlayableFailureCode.InvalidValue, "objects[].scenarioOptions.spawnIntervalSeconds에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
-            if (HasExplicitZeroValue(json, "travelDurationSeconds"))
-                Fail(result, PlayableFailureCode.InvalidValue, "objects[].railOptions.travelDurationSeconds에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
             if (HasExplicitZeroValue(json, "itemStackMaxCount"))
-                Fail(result, PlayableFailureCode.InvalidValue, "scenarioOptions.itemStackMaxCount에 0을 명시할 수 없습니다. 생략하면 기본값을 사용합니다.");
-        }
-
-        private static void ValidatePhysicsAreaOptions(
-            PhysicsAreaOptionsDefinition value,
-            string role,
-            string label,
-            PromptIntentJsonValidationResult result)
-        {
-            if (!string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                return;
-
-            if (value == null)
-            {
-                Fail(result, PlayableFailureCode.MissingRequiredField, label + "가 필요합니다.");
-                return;
-            }
-
-            ValidateItemRef(value.item, label + ".item", result, required: true);
-        }
-
-        private static void ValidateRailOptions(
-            RailOptionsDefinition value,
-            string role,
-            string label,
-            PromptIntentJsonValidationResult result)
-        {
-            if (!string.Equals(role, PromptIntentObjectRoles.RAIL, StringComparison.Ordinal))
-                return;
-
-            if (value == null)
-            {
-                Fail(result, PlayableFailureCode.MissingRequiredField, label + "가 필요합니다.");
-                return;
-            }
-
-            ValidateItemRef(value.item, label + ".item", result, required: true);
-            if (value.spawnIntervalSeconds != 0f && value.spawnIntervalSeconds <= 0f)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".spawnIntervalSeconds는 0보다 커야 합니다.");
-            if (value.travelDurationSeconds != 0f && value.travelDurationSeconds <= 0f)
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".travelDurationSeconds는 0보다 커야 합니다.");
-            if (string.IsNullOrEmpty(Normalize(value.sinkEndpointTargetObjectId)))
-                Fail(result, PlayableFailureCode.MissingRequiredField, label + ".sinkEndpointTargetObjectId는 필수입니다.");
+                Fail(result, PlayableFailureCode.InvalidValue, "playerOptions.itemStackMaxCount에 0을 명시할 수 없습니다.");
         }
 
         private static bool HasExplicitZeroValue(string json, string propertyName)
@@ -512,27 +451,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 Fail(result, PlayableFailureCode.InvalidValue, label + ".amountValue는 kind '" + kind + "'에서 허용되지 않습니다.");
             }
-        }
-
-        private static void ValidateSellerRequestableItemCondition(
-            PromptIntentConditionDefinition value,
-            string label,
-            PromptIntentJsonValidationResult result)
-        {
-            if (value == null)
-            {
-                Fail(result, PlayableFailureCode.MissingRequiredField, label + "가 필요합니다.");
-                return;
-            }
-
-            string kind = Normalize(value.kind);
-            if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
-            {
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".kind는 requestableItems에서 stage_completed를 지원하지 않습니다.");
-                return;
-            }
-
-            ValidateCondition(value, label, result);
         }
 
         private static void ValidateObjective(PromptIntentObjectiveDefinition value, string label, PromptIntentJsonValidationResult result)
@@ -694,7 +612,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (!string.IsNullOrEmpty(timing) && !PromptIntentEffectTimingKinds.IsSupported(timing))
                 Fail(result, PlayableFailureCode.InvalidValue, label + ".timing '" + timing + "'은(는) 지원되지 않습니다.");
             if (!string.IsNullOrEmpty(timing) && !PromptIntentEffectKinds.SupportsExplicitTiming(kind))
-                Fail(result, PlayableFailureCode.InvalidValue, label + ".timing은 kind 'spawn_customer' 또는 'show_arrow'에서만 사용할 수 있습니다.");
+                Fail(result, PlayableFailureCode.InvalidValue, label + ".timing은 explicit timing을 지원하는 effect kind에서만 사용할 수 있습니다.");
             if (PromptIntentEffectKinds.RequiresEventKey(kind) && string.IsNullOrEmpty(eventKey))
                 Fail(result, PlayableFailureCode.MissingRequiredField, label + ".eventKey는 kind '" + kind + "'에서 필수입니다.");
             if (!string.IsNullOrEmpty(eventKey) && !PromptIntentEffectKinds.SupportsEventKey(kind))
@@ -866,21 +784,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             SaleValue,
             ScenarioObject,
             ContentSelection,
-            PhysicsAreaOptions,
-            RailOptions,
-            PhysicsAreaLayout,
-            RailLayout,
-            RailPathAnchor,
+            FeatureOptions,
+            FeatureLayout,
             WorldBounds,
             Stage,
             Condition,
             Objective,
             Effect,
             ItemRef,
-            RootScenarioOptions,
-            ObjectScenarioOptions,
-            CustomerRequestCount,
-            SellerRequestableItem,
+            RootPlayerOptions,
         }
 
         private enum JsonValueContract
@@ -890,21 +802,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             SaleValueArray,
             ObjectArray,
             ContentSelectionArray,
-            PhysicsAreaOptionsObject,
-            RailOptionsObject,
-            PhysicsAreaLayoutObject,
-            RailLayoutObject,
-            RailPathAnchorArray,
+            FeatureOptionsObject,
+            FeatureLayoutObject,
             WorldBoundsObject,
             StageArray,
             ConditionObject,
             ObjectiveArray,
             EffectArray,
             ItemRefObject,
-            RootScenarioOptionsObject,
-            ObjectScenarioOptionsObject,
-            CustomerRequestCountObject,
-            SellerRequestableItemArray,
+            RootPlayerOptionsObject,
         }
 
         public static PromptIntentJsonShapeValidationResult Validate(string json)
@@ -1079,25 +985,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         if (Peek() == '[')
                             return ValidateArray(JsonObjectSchema.ContentSelection, label);
                         return SkipValue();
-                    case JsonValueContract.PhysicsAreaOptionsObject:
+                    case JsonValueContract.FeatureOptionsObject:
                         if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.PhysicsAreaOptions, label);
+                            return ValidateObject(JsonObjectSchema.FeatureOptions, label);
                         return SkipValue();
-                    case JsonValueContract.RailOptionsObject:
+                    case JsonValueContract.FeatureLayoutObject:
                         if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.RailOptions, label);
-                        return SkipValue();
-                    case JsonValueContract.PhysicsAreaLayoutObject:
-                        if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.PhysicsAreaLayout, label);
-                        return SkipValue();
-                    case JsonValueContract.RailLayoutObject:
-                        if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.RailLayout, label);
-                        return SkipValue();
-                    case JsonValueContract.RailPathAnchorArray:
-                        if (Peek() == '[')
-                            return ValidateArray(JsonObjectSchema.RailPathAnchor, label);
+                            return ValidateObject(JsonObjectSchema.FeatureLayout, label);
                         return SkipValue();
                     case JsonValueContract.WorldBoundsObject:
                         if (Peek() == '{')
@@ -1123,21 +1017,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                         if (Peek() == '{')
                             return ValidateObject(JsonObjectSchema.ItemRef, label);
                         return SkipValue();
-                    case JsonValueContract.RootScenarioOptionsObject:
+                    case JsonValueContract.RootPlayerOptionsObject:
                         if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.RootScenarioOptions, label);
-                        return SkipValue();
-                    case JsonValueContract.ObjectScenarioOptionsObject:
-                        if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.ObjectScenarioOptions, label);
-                        return SkipValue();
-                    case JsonValueContract.CustomerRequestCountObject:
-                        if (Peek() == '{')
-                            return ValidateObject(JsonObjectSchema.CustomerRequestCount, label);
-                        return SkipValue();
-                    case JsonValueContract.SellerRequestableItemArray:
-                        if (Peek() == '[')
-                            return ValidateArray(JsonObjectSchema.SellerRequestableItem, label);
+                            return ValidateObject(JsonObjectSchema.RootPlayerOptions, label);
                         return SkipValue();
                     default:
                         return SkipValue();
@@ -1370,8 +1252,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                             case "stages":
                                 contract = JsonValueContract.StageArray;
                                 return true;
-                            case "scenarioOptions":
-                                contract = JsonValueContract.RootScenarioOptionsObject;
+                            case "playerOptions":
+                                contract = JsonValueContract.RootPlayerOptionsObject;
                                 return true;
                             default:
                                 return false;
@@ -1397,39 +1279,22 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                             case "role":
                             case "designId":
                                 return true;
-                            case "scenarioOptions":
-                                contract = JsonValueContract.ObjectScenarioOptionsObject;
-                                return true;
-                            case "physicsAreaOptions":
-                                contract = JsonValueContract.PhysicsAreaOptionsObject;
-                                return true;
-                            case "railOptions":
-                                contract = JsonValueContract.RailOptionsObject;
+                            case "featureOptions":
+                                contract = JsonValueContract.FeatureOptionsObject;
                                 return true;
                             default:
                                 return false;
                         }
+                    case JsonObjectSchema.FeatureOptions:
+                        return key == "featureType" ||
+                               key == "targetId" ||
+                               key == "optionsJson";
+                    case JsonObjectSchema.FeatureLayout:
+                        return key == "featureType" ||
+                               key == "targetId" ||
+                               key == "json";
                     case JsonObjectSchema.ContentSelection:
                         return key == "objectId" || key == "designId";
-                    case JsonObjectSchema.PhysicsAreaLayout:
-                        switch (key)
-                        {
-                            case "realPhysicsZoneBounds":
-                            case "fakeSpriteZoneBounds":
-                                contract = JsonValueContract.WorldBoundsObject;
-                                return true;
-                            default:
-                                return false;
-                        }
-                    case JsonObjectSchema.RailLayout:
-                        if (key == "pathCells")
-                        {
-                            contract = JsonValueContract.RailPathAnchorArray;
-                            return true;
-                        }
-                        return false;
-                    case JsonObjectSchema.RailPathAnchor:
-                        return key == "worldX" || key == "worldZ";
                     case JsonObjectSchema.WorldBounds:
                         return key == "hasWorldBounds" ||
                                key == "worldX" ||
@@ -1480,37 +1345,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                                ResolveItemRefContract(key, out contract);
                     case JsonObjectSchema.ItemRef:
                         return key == "familyId" || key == "variantId";
-                    case JsonObjectSchema.RootScenarioOptions:
+                    case JsonObjectSchema.RootPlayerOptions:
                         return key == "itemStackMaxCount";
-                    case JsonObjectSchema.ObjectScenarioOptions:
-                        switch (key)
-                        {
-                            case "customerRequestCount":
-                                contract = JsonValueContract.CustomerRequestCountObject;
-                                return true;
-                            case "requestableItems":
-                                contract = JsonValueContract.SellerRequestableItemArray;
-                                return true;
-                            case "inputCountPerConversion":
-                            case "conversionIntervalSeconds":
-                            case "inputItemMoveIntervalSeconds":
-                            case "spawnIntervalSeconds":
-                                return true;
-                            default:
-                                return false;
-                        }
-                    case JsonObjectSchema.PhysicsAreaOptions:
-                        return ResolveItemRefContract(key, out contract);
-                    case JsonObjectSchema.RailOptions:
-                        return key == "spawnIntervalSeconds" ||
-                               key == "travelDurationSeconds" ||
-                               key == "sinkEndpointTargetObjectId" ||
-                               ResolveItemRefContract(key, out contract);
-                    case JsonObjectSchema.CustomerRequestCount:
-                        return key == "min" || key == "max";
-                    case JsonObjectSchema.SellerRequestableItem:
-                        return ResolveItemRefContract(key, out contract) ||
-                               ResolveStartWhenContract(key, out contract);
                     default:
                         return false;
                 }

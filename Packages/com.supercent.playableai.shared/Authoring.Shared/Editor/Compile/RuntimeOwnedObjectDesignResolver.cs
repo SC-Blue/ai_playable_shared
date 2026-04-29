@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
 using Supercent.PlayableAI.Common.Format;
@@ -55,7 +55,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
-                CollectRequiredObjectDesigns(metadata.generatedItemStableKeys, requiredObjectDesignKeys, result.Errors);
+                CollectRequiredObjectDesigns(metadata.generatedItemKeys, requiredObjectDesignKeys, result.Errors);
 
                 if (metadata.containsCustomerSingleLine)
                     AddRequiredObjectDesign(
@@ -63,11 +63,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         CatalogIdentityRules.CUSTOMER_DESIGN_ID,
                         requiredObjectDesignKeys);
 
-                if (metadata.containsSellerFeature)
-                    AddRequiredObjectDesign(
-                        CatalogIdentityRules.MONEY_OBJECT_ID,
-                        CatalogIdentityRules.MONEY_DESIGN_ID,
-                        requiredObjectDesignKeys);
             }
 
             IReadOnlyList<EditorBasedCatalog.Entry> editorEntries = catalog.EditorBased.GetEntries();
@@ -97,7 +92,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             sortedKeys.Sort(System.StringComparer.Ordinal);
             for (int i = 0; i < sortedKeys.Count; i++)
             {
-                if (!ContentCatalogTokenUtility.TrySplitStableEntryId(sortedKeys[i], out string objectId, out string designId))
+                if (!ContentCatalogTokenUtility.TrySplitEntryId(sortedKeys[i], out string objectId, out string designId))
                     continue;
 
                 result.RequiredObjectDesigns.Add(new RuntimeOwnedObjectDesignSelection
@@ -110,18 +105,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return result;
         }
 
-        private static void CollectRequiredObjectDesigns(string[] stableEntryIds, HashSet<string> requiredObjectDesignKeys, List<string> errors)
+        private static void CollectRequiredObjectDesigns(string[] entryIds, HashSet<string> requiredObjectDesignKeys, List<string> errors)
         {
-            string[] safeStableEntryIds = stableEntryIds ?? new string[0];
-            for (int i = 0; i < safeStableEntryIds.Length; i++)
+            string[] safeEntryIds = entryIds ?? new string[0];
+            for (int i = 0; i < safeEntryIds.Length; i++)
             {
-                string stableEntryId = safeStableEntryIds[i] != null ? safeStableEntryIds[i].Trim() : string.Empty;
-                if (string.IsNullOrEmpty(stableEntryId))
+                string entryId = safeEntryIds[i] != null ? safeEntryIds[i].Trim() : string.Empty;
+                if (string.IsNullOrEmpty(entryId))
                     continue;
 
-                if (!ContentCatalogTokenUtility.TrySplitStableEntryId(stableEntryId, out string objectId, out string designId))
+                if (!ContentCatalogTokenUtility.TrySplitEntryId(entryId, out string objectId, out string designId))
                 {
-                    errors.Add("generatedItemStableKeys[" + i + "] '" + stableEntryId + "'는 canonical stableEntryId 형식이어야 합니다.");
+                    errors.Add("generatedItemKeys[" + i + "] '" + entryId + "'는 canonical entryId 형식이어야 합니다.");
                     continue;
                 }
 
@@ -131,9 +126,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static void AddRequiredObjectDesign(string objectId, string designId, HashSet<string> requiredObjectDesignKeys)
         {
-            string stableEntryId = ContentCatalogTokenUtility.BuildStableEntryId(objectId, designId);
-            if (!string.IsNullOrEmpty(stableEntryId))
-                requiredObjectDesignKeys.Add(stableEntryId);
+            string entryId = ContentCatalogTokenUtility.BuildEntryId(objectId, designId);
+            if (!string.IsNullOrEmpty(entryId))
+                requiredObjectDesignKeys.Add(entryId);
         }
 
         private static void CollectAcceptedItems(

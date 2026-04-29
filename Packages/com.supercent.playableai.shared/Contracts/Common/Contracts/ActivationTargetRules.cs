@@ -34,19 +34,6 @@ namespace Supercent.PlayableAI.Common.Contracts
 
     public static class GameplayOverlapAllowanceRules
     {
-        public static class RailEndpointSideRules
-        {
-            public const string LEFT = PromptIntentContractRegistry.RAIL_ENDPOINT_SIDE_LEFT;
-            public const string RIGHT = PromptIntentContractRegistry.RAIL_ENDPOINT_SIDE_RIGHT;
-            public const string TOP = PromptIntentContractRegistry.RAIL_ENDPOINT_SIDE_TOP;
-            public const string BOTTOM = PromptIntentContractRegistry.RAIL_ENDPOINT_SIDE_BOTTOM;
-
-            public static bool IsSupported(string side)
-            {
-                return PromptIntentContractRegistry.IsSupportedRailEndpointSide(side);
-            }
-        }
-
         public static Dictionary<string, HashSet<string>> BuildUnlockTargetReferenceLookup(PromptIntentStageDefinition[] stages)
         {
             var lookup = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);

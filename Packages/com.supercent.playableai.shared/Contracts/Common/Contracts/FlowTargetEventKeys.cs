@@ -5,10 +5,6 @@ namespace Supercent.PlayableAI.Common.Contracts
     public static class FlowTargetEventKeys
     {
         public const string ROOT = "root";
-        public const string GET_ITEM = "get_item";
-        public const string DROP_ITEM = "drop_item";
-        public const string SELL_ITEM = "sell_item";
-        public const string COLLECT_MONEY = "collect_money";
 
         public static string[] GetSupportedKeys()
         {

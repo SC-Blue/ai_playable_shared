@@ -47,7 +47,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 objects = objects,
                 contentSelections = CopyContentSelections(intent.contentSelections),
                 stages = stages,
-                playerOptions = BuildPlayerOptions(intent.scenarioOptions),
+                playerOptions = BuildPlayerOptions(intent.playerOptions),
             };
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
@@ -169,41 +169,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         id = Normalize(value.id),
                         role = Normalize(value.role),
                         designId = Normalize(value.designId),
-                        featureOptions = BuildObjectFeatureOptions(value.scenarioOptions, value.role),
-                        sellerRequestableItems = BuildSellerRequestableItems(value.scenarioOptions, currencyById, result),
-                        physicsAreaOptions = CopyPhysicsAreaOptions(value.physicsAreaOptions),
-                        railOptions = BuildRailOptions(value.railOptions),
+                        featureOptions = CopyObjectFeatureOptions(value.featureOptions),
                         startsPresent = true,
                         startsActive = true,
                         firstPresentingStageId = string.Empty,
                         firstActivatingStageId = string.Empty,
-                    };
-            }
-
-            return values;
-        }
-
-        private static ScenarioModelSellerRequestableItemDefinition[] BuildSellerRequestableItems(
-            PromptIntentObjectScenarioOptions scenarioOptions,
-            Dictionary<string, PromptIntentCurrencyDefinition> currencies,
-            ScenarioModelBuildResult result)
-        {
-            PromptIntentSellerRequestableItemDefinition[] safeValues =
-                scenarioOptions != null ? scenarioOptions.requestableItems ?? new PromptIntentSellerRequestableItemDefinition[0] : new PromptIntentSellerRequestableItemDefinition[0];
-            var values = new ScenarioModelSellerRequestableItemDefinition[safeValues.Length];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                PromptIntentSellerRequestableItemDefinition value = safeValues[i];
-                values[i] = value == null
-                    ? null
-                    : new ScenarioModelSellerRequestableItemDefinition
-                    {
-                        item = ItemRefUtility.Clone(value.item),
-                        startCondition = BuildCondition(
-                            value.startWhen,
-                            currencies,
-                            result,
-                            "objects[].scenarioOptions.requestableItems[" + i + "].startWhen"),
                     };
             }
 
@@ -359,14 +329,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return values.ToArray();
         }
 
-        private static PlayableScenarioPlayerOptions BuildPlayerOptions(PromptIntentScenarioOptions scenarioOptions)
+        private static PlayableScenarioPlayerOptions BuildPlayerOptions(PromptIntentPlayerOptions playerOptions)
         {
             PlayableScenarioPlayerOptions options = PortableScenarioTuningDefaults.CreatePlayerOptions();
-            if (scenarioOptions == null)
+            if (playerOptions == null)
                 return options;
 
-            if (scenarioOptions.itemStackMaxCount > 0)
-                options.itemStacker.maxCount = scenarioOptions.itemStackMaxCount;
+            if (playerOptions.itemStackMaxCount > 0)
+                options.itemStacker.maxCount = playerOptions.itemStackMaxCount;
 
             return options;
         }
@@ -394,79 +364,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return copied;
         }
 
-        private static PlayableScenarioFeatureOptions BuildObjectFeatureOptions(
-            PromptIntentObjectScenarioOptions scenarioOptions,
-            string role)
+        private static PlayableScenarioFeatureOptions CopyObjectFeatureOptions(
+            PlayableScenarioFeatureOptions featureOptions)
         {
-            PlayableScenarioFeatureOptions options = FeatureScenarioOptionRules.CreateRoleDefaultFeatureOptions(role);
-            ClearUnsupportedFeatureScenarioOptions(role, ref options);
-            if (scenarioOptions == null)
-                return options;
-
-            if (scenarioOptions.customerRequestCount != null)
-            {
-                options.customerReqMin = scenarioOptions.customerRequestCount.min;
-                options.customerReqMax = scenarioOptions.customerRequestCount.max;
-            }
-
-            if (scenarioOptions.inputCountPerConversion > 0)
-                options.inputCountPerConversion = scenarioOptions.inputCountPerConversion;
-            if (scenarioOptions.conversionIntervalSeconds > 0f)
-                options.conversionInterval = scenarioOptions.conversionIntervalSeconds;
-            if (scenarioOptions.inputItemMoveIntervalSeconds > 0f)
-                options.inputItemMoveInterval = scenarioOptions.inputItemMoveIntervalSeconds;
-            if (scenarioOptions.spawnIntervalSeconds > 0f)
-                options.spawnInterval = scenarioOptions.spawnIntervalSeconds;
-
+            PlayableScenarioFeatureOptions options = featureOptions;
+            options.featureType = Normalize(options.featureType);
+            options.targetId = Normalize(options.targetId);
+            options.optionsJson = options.optionsJson != null ? options.optionsJson.Trim() : string.Empty;
             return options;
-        }
-
-        private static void ClearUnsupportedFeatureScenarioOptions(
-            string role,
-            ref PlayableScenarioFeatureOptions options)
-        {
-            if (!FeatureScenarioOptionRules.SupportsCustomerRequestCount(role))
-            {
-                options.customerReqMin = 0;
-                options.customerReqMax = 0;
-            }
-
-            if (!FeatureScenarioOptionRules.SupportsInputCountPerConversion(role))
-                options.inputCountPerConversion = 0;
-
-            if (!FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(role))
-                options.conversionInterval = 0f;
-
-            if (!FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(role))
-                options.inputItemMoveInterval = 0f;
-
-            if (!FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(role))
-                options.spawnInterval = 0f;
-        }
-
-        private static PhysicsAreaOptionsDefinition CopyPhysicsAreaOptions(PhysicsAreaOptionsDefinition value)
-        {
-            if (value == null)
-                return null;
-
-            return new PhysicsAreaOptionsDefinition
-            {
-                item = ItemRefUtility.Clone(value.item),
-            };
-        }
-
-        private static RailOptionsDefinition BuildRailOptions(RailOptionsDefinition value)
-        {
-            if (value == null)
-                return null;
-
-            return new RailOptionsDefinition
-            {
-                item = ItemRefUtility.Clone(value.item),
-                spawnIntervalSeconds = value.spawnIntervalSeconds > 0f ? value.spawnIntervalSeconds : PortableScenarioTuningDefaults.RailSpawnIntervalSeconds,
-                travelDurationSeconds = value.travelDurationSeconds > 0f ? value.travelDurationSeconds : PortableScenarioTuningDefaults.RailTravelDurationSeconds,
-                sinkEndpointTargetObjectId = Normalize(value.sinkEndpointTargetObjectId),
-            };
         }
 
         private static PromptIntentObjectPlacementDefinition CopyPlacement(PromptIntentObjectPlacementDefinition value)
@@ -491,71 +396,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 bboxWidthPx = value.bboxWidthPx,
                 bboxHeightPx = value.bboxHeightPx,
                 bboxConfidence = value.bboxConfidence,
-                physicsAreaLayout = CopyPhysicsAreaLayout(value.physicsAreaLayout),
-                railLayout = CopyRailLayout(value.railLayout),
+                featureLayout = CopyFeatureJsonPayload(value.featureLayout),
             };
         }
 
-        private static PhysicsAreaLayoutDefinition CopyPhysicsAreaLayout(PhysicsAreaLayoutDefinition value)
+        private static FeatureJsonPayload CopyFeatureJsonPayload(FeatureJsonPayload value)
         {
             if (value == null)
                 return null;
 
-            return new PhysicsAreaLayoutDefinition
+            return new FeatureJsonPayload
             {
-                realPhysicsZoneBounds = CopyWorldBounds(value.realPhysicsZoneBounds),
-                fakeSpriteZoneBounds = CopyWorldBounds(value.fakeSpriteZoneBounds),
+                featureType = Normalize(value.featureType),
+                targetId = Normalize(value.targetId),
+                json = value.json != null ? value.json.Trim() : string.Empty,
             };
-        }
-
-        private static RailLayoutDefinition CopyRailLayout(RailLayoutDefinition value)
-        {
-            if (value == null)
-                return null;
-
-            return new RailLayoutDefinition
-            {
-                pathCells = CopyRailPathAnchors(value.pathCells),
-            };
-        }
-
-        private static RailPathAnchorDefinition[] CopyRailPathAnchors(RailPathAnchorDefinition[] values)
-        {
-            RailPathAnchorDefinition[] safeValues = values ?? new RailPathAnchorDefinition[0];
-            var copies = new RailPathAnchorDefinition[safeValues.Length];
-            for (int i = 0; i < safeValues.Length; i++)
-            {
-                RailPathAnchorDefinition value = safeValues[i];
-                copies[i] = value == null
-                    ? new RailPathAnchorDefinition()
-                    : new RailPathAnchorDefinition
-                    {
-                        worldX = value.worldX,
-                        worldZ = value.worldZ,
-                    };
-            }
-
-            return copies;
-        }
-
-        private static WorldBoundsDefinition CopyWorldBounds(WorldBoundsDefinition value)
-        {
-            if (value == null)
-                return null;
-
-            return new WorldBoundsDefinition
-            {
-                hasWorldBounds = value.hasWorldBounds,
-                worldX = value.worldX,
-                worldZ = value.worldZ,
-                worldWidth = value.worldWidth,
-                worldDepth = value.worldDepth,
-            };
-        }
-
-        private static PlayableScenarioFeatureOptions CreateRoleDefaultFeatureOptions(string role)
-        {
-            return FeatureScenarioOptionRules.CreateRoleDefaultFeatureOptions(role);
         }
 
         private static void ApplyArrowAbsorption(
@@ -751,8 +606,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         {
             public const int PlayerItemStackMaxCount = 10;
             public const float PlayerItemStackPopIntervalSeconds = 0f;
-            public const float RailSpawnIntervalSeconds = 1f;
-            public const float RailTravelDurationSeconds = 1f;
 
             public static PlayableScenarioPlayerOptions CreatePlayerOptions()
             {

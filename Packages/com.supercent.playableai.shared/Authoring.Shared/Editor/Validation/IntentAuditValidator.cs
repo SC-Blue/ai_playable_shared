@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
@@ -53,9 +53,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateSpawnStartState(model.objects, plan.spawns, result);
             if (layoutSpec != null)
                 ValidateSpawnPositions(model.objects, plan.spawns, layoutSpec, result);
-            ValidatePhysicsAreaStartState(model.objects, plan.physicsAreas, result);
-            if (layoutSpec != null)
-                ValidatePhysicsAreaPositions(model.objects, plan.physicsAreas, layoutSpec, result);
             ValidateArrowAbsorption(model.stages, plan.beats, plan.actions, result);
             ValidateFirstBeatGating(model.stages, plan.beats, result);
             ValidateIntroBeatSequencing(model.stages, plan.beats, plan.actions, result);
@@ -385,43 +382,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "stages[" + i + "]의 entry reveal/system action effect가 previous stage last beat의 beat_completed로 lowering되지 않았습니다.");
                 }
 
-                if (HasEntryArrivalSpawnCustomer(stage.entryEffects))
-                {
-                    var acceptableActionIds = new List<string>();
-                    if (!string.IsNullOrEmpty(previousBeatId) && IsFocusBeatId(previousBeatId))
-                    {
-                        string actionId = GetPrimaryOwnedActionId(actions, previousBeatId, FlowActionKinds.CAMERA_FOCUS);
-                        if (!string.IsNullOrEmpty(actionId))
-                            acceptableActionIds.Add(actionId);
-                    }
-                    if (HasEntryFocusBeforeSpawnCustomerArrival(stage.entryEffects) &&
-                        stageFirstBeatIds != null &&
-                        i < stageFirstBeatIds.Length &&
-                        !string.IsNullOrEmpty(stageFirstBeatIds[i]) &&
-                        IsFocusBeatId(stageFirstBeatIds[i]))
-                    {
-                        string actionId = GetPrimaryOwnedActionId(actions, stageFirstBeatIds[i], FlowActionKinds.CAMERA_FOCUS);
-                        if (!string.IsNullOrEmpty(actionId))
-                            acceptableActionIds.Add(actionId);
-                    }
-
-                    List<string> expectedTargetIds = BuildEntrySpawnCustomerTargetIds(
-                        stage.entryEffects,
-                        PromptIntentEffectTimingKinds.ARRIVAL);
-
-                    if (acceptableActionIds.Count == 0 ||
-                        expectedTargetIds.Count == 0 ||
-                        !HasCustomerSpawnActionBeatForTargets(safeBeats, actions, acceptableActionIds, expectedTargetIds, StepConditionRules.ACTION_COMPLETED))
-                    {
-                        Fail(result, "stages[" + i + "]의 entry spawn_customer arrival timing이 이전 focus camera action 완료 기준으로 lowering되지 않았습니다.");
-                    }
-                }
-
-                if (HasEntryCompletedSpawnCustomer(stage.entryEffects) &&
-                    !HasActionBeatWithEnterWhen(safeBeats, actions, FlowActionKinds.CUSTOMER_SPAWN, StepConditionRules.BEAT_COMPLETED, previousBeatId))
-                {
-                    Fail(result, "stages[" + i + "]의 entry spawn_customer completed timing이 previous stage last beat의 beat_completed로 lowering되지 않았습니다.");
-                }
             }
         }
 
@@ -478,25 +438,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "stages[" + i + "]의 unlock stage completion effect가 final beat의 beat_completed로 lowering되지 않았습니다.");
                 }
 
-                var completionFocusActionIds = new List<string>();
-                if (IsFocusBeatId(lastBeatId))
-                {
-                    string actionId = GetPrimaryOwnedActionId(actions, lastBeatId, FlowActionKinds.CAMERA_FOCUS);
-                    if (!string.IsNullOrEmpty(actionId))
-                        completionFocusActionIds.Add(actionId);
-                }
-
-                if (HasCompletionArrivalSpawnCustomer(stage.completionEffects) &&
-                    !HasCustomerSpawnActionBeatForTargets(safeBeats, actions, completionFocusActionIds, CollectCompletionSpawnCustomerTargetIds(stage.completionEffects), StepConditionRules.ACTION_COMPLETED))
-                {
-                    Fail(result, "stages[" + i + "]의 unlock stage completion spawn_customer arrival timing이 final focus camera action 완료 기준으로 lowering되지 않았습니다.");
-                }
-
-                if (HasCompletionCompletedSpawnCustomer(stage.completionEffects) &&
-                    !HasActionBeatWithEnterWhen(safeBeats, actions, FlowActionKinds.CUSTOMER_SPAWN, StepConditionRules.BEAT_COMPLETED, lastBeatId))
-                {
-                    Fail(result, "stages[" + i + "]의 unlock stage completion spawn_customer completed timing이 final beat의 beat_completed로 lowering되지 않았습니다.");
-                }
             }
         }
 
@@ -561,50 +502,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             return false;
         }
 
-        private static bool HasCustomerSpawnActionBeatForTargets(
-            FlowBeatDefinition[] beats,
-            FlowActionDefinition[] actions,
-            IEnumerable<string> acceptableTriggerIds,
-            IEnumerable<string> expectedTargetIds,
-            string conditionType)
-        {
-            var acceptableTriggerSet = new HashSet<string>(acceptableTriggerIds ?? new string[0], StringComparer.Ordinal);
-            var expectedTargetSet = new HashSet<string>(expectedTargetIds ?? new string[0], StringComparer.Ordinal);
-            if (acceptableTriggerSet.Count == 0 || expectedTargetSet.Count == 0)
-                return false;
-
-            var actualTargetSet = new HashSet<string>(StringComparer.Ordinal);
-            FlowBeatDefinition[] safeBeats = beats ?? new FlowBeatDefinition[0];
-            for (int i = 0; i < safeBeats.Length; i++)
-            {
-                FlowBeatDefinition beat = safeBeats[i];
-                if (beat == null || beat.enterWhen == null)
-                    continue;
-
-                if (!string.Equals(beat.enterWhen.type, conditionType, StringComparison.Ordinal) ||
-                    !acceptableTriggerSet.Contains(beat.enterWhen.targetId ?? string.Empty))
-                {
-                    continue;
-                }
-
-                FlowActionDefinition[] ownedActions = GetOwnedActions(actions, beat.id);
-                for (int actionIndex = 0; actionIndex < ownedActions.Length; actionIndex++)
-                {
-                    FlowActionDefinition action = ownedActions[actionIndex];
-                    if (action == null || !string.Equals(action.kind, FlowActionKinds.CUSTOMER_SPAWN, StringComparison.Ordinal))
-                        continue;
-
-                    string targetId = action.payload != null && action.payload.customerSpawn != null && action.payload.customerSpawn.targetId != null
-                        ? action.payload.customerSpawn.targetId.Trim()
-                        : string.Empty;
-                    if (!string.IsNullOrEmpty(targetId))
-                        actualTargetSet.Add(targetId);
-                }
-            }
-
-            return actualTargetSet.SetEquals(expectedTargetSet);
-        }
-
         private static bool HasOwnedAction(FlowActionDefinition[] actions, string ownerBeatId, string actionKind)
         {
             return TryGetOwnedAction(actions, ownerBeatId, actionKind, out _);
@@ -656,24 +553,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             return values.ToArray();
-        }
-
-        private static IEnumerable<string> CollectCompletionSpawnCustomerTargetIds(ScenarioModelEffectDefinition[] completionEffects)
-        {
-            var values = new List<string>();
-            ScenarioModelEffectDefinition[] safeEffects = completionEffects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < safeEffects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = safeEffects[i];
-                if (effect == null || !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
-                    continue;
-
-                string targetId = effect.targetObjectId != null ? effect.targetObjectId.Trim() : string.Empty;
-                if (!string.IsNullOrEmpty(targetId))
-                    values.Add(IntentAuthoringUtility.BuildSpawnKey(targetId));
-            }
-
-            return values;
         }
 
         private static void ValidateFeatureAcceptedItems(
@@ -730,7 +609,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeItemPrices.Length; i++)
             {
                 ItemPriceDefinition value = safeItemPrices[i];
-                string itemKey = ItemRefUtility.ToStableKey(value != null ? value.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(value != null ? value.item : null);
                 if (value == null || string.IsNullOrWhiteSpace(itemKey))
                     continue;
 
@@ -741,7 +620,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeSaleValues.Length; i++)
             {
                 ScenarioModelSaleValueDefinition value = safeSaleValues[i];
-                string itemKey = ItemRefUtility.ToStableKey(value != null ? value.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(value != null ? value.item : null);
                 if (value == null || string.IsNullOrWhiteSpace(itemKey))
                     continue;
 
@@ -863,137 +742,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
         }
 
-        private static void ValidatePhysicsAreaStartState(
-            ScenarioModelObjectDefinition[] objects,
-            CompiledPhysicsAreaDefinition[] physicsAreas,
-            IntentAuditValidationResult result)
-        {
-            var physicsAreaBySpawnKey = new Dictionary<string, CompiledPhysicsAreaDefinition>(StringComparer.Ordinal);
-            CompiledPhysicsAreaDefinition[] safePhysicsAreas = physicsAreas ?? new CompiledPhysicsAreaDefinition[0];
-            for (int i = 0; i < safePhysicsAreas.Length; i++)
-            {
-                CompiledPhysicsAreaDefinition value = safePhysicsAreas[i];
-                if (value == null || string.IsNullOrWhiteSpace(value.spawnKey))
-                    continue;
-
-                physicsAreaBySpawnKey[value.spawnKey.Trim()] = value;
-            }
-
-            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            for (int i = 0; i < safeObjects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = safeObjects[i];
-                string objectId = IntentAuthoringUtility.Normalize(value != null ? value.id : string.Empty);
-                if (string.IsNullOrEmpty(objectId) ||
-                    !string.Equals(IntentAuthoringUtility.Normalize(value != null ? value.role : string.Empty), PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                string spawnKey = IntentAuthoringUtility.BuildSpawnKey(objectId);
-                if (!physicsAreaBySpawnKey.TryGetValue(spawnKey, out CompiledPhysicsAreaDefinition definition) || definition == null)
-                    continue;
-
-                bool expectedStartActive = value.startsPresent && value.startsActive;
-                if (definition.startActive != expectedStartActive)
-                    Fail(result, "objects[" + i + "] physics_area lifecycle이 compiled physicsAreas.startActive에 올바르게 lowering되지 않았습니다.");
-            }
-        }
-
-        private static void ValidatePhysicsAreaPositions(
-            ScenarioModelObjectDefinition[] objects,
-            CompiledPhysicsAreaDefinition[] physicsAreas,
-            LayoutSpecDocument layoutSpec,
-            IntentAuditValidationResult result)
-        {
-            var physicsAreaBySpawnKey = new Dictionary<string, CompiledPhysicsAreaDefinition>(StringComparer.Ordinal);
-            CompiledPhysicsAreaDefinition[] safePhysicsAreas = physicsAreas ?? new CompiledPhysicsAreaDefinition[0];
-            for (int i = 0; i < safePhysicsAreas.Length; i++)
-            {
-                CompiledPhysicsAreaDefinition value = safePhysicsAreas[i];
-                if (value == null || string.IsNullOrWhiteSpace(value.spawnKey))
-                    continue;
-
-                physicsAreaBySpawnKey[value.spawnKey.Trim()] = value;
-            }
-
-            ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            for (int i = 0; i < safeObjects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = safeObjects[i];
-                string objectId = IntentAuthoringUtility.Normalize(value != null ? value.id : string.Empty);
-                if (string.IsNullOrEmpty(objectId) ||
-                    !string.Equals(IntentAuthoringUtility.Normalize(value != null ? value.role : string.Empty), PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                string spawnKey = IntentAuthoringUtility.BuildSpawnKey(objectId);
-                if (!physicsAreaBySpawnKey.TryGetValue(spawnKey, out CompiledPhysicsAreaDefinition definition) || definition == null)
-                    continue;
-
-                if (!LayoutSpecGeometryUtility.TryGetPlacement(layoutSpec, objectId, out LayoutSpecPlacementEntry placement) ||
-                    placement == null ||
-                    !placement.hasWorldPosition)
-                {
-                    Fail(result, "layoutSpec.placements에 physics_area '" + objectId + "'의 world position이 없습니다.");
-                    continue;
-                }
-
-                if (definition.localPosition.x != placement.worldX || definition.localPosition.z != placement.worldZ)
-                    Fail(result, "objects[" + i + "] physics_area placement가 compiled physicsAreas.localPosition에 올바르게 lowering되지 않았습니다.");
-            }
-        }
-
-        private static List<string> BuildEntrySpawnCustomerTargetIds(
-            ScenarioModelEffectDefinition[] entryEffects,
-            string timing)
-        {
-            var targetIds = new List<string>();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            string normalizedTiming = timing != null ? timing.Trim() : string.Empty;
-            ScenarioModelEffectDefinition[] effects = entryEffects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < effects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null ||
-                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
-                {
-                    continue;
-                }
-
-                string effectTiming = effect.timing != null ? effect.timing.Trim() : string.Empty;
-                if (!string.Equals(effectTiming, normalizedTiming, StringComparison.Ordinal))
-                    continue;
-
-                string targetId = BuildUnlockerId(effect.targetObjectId);
-                if (string.IsNullOrEmpty(targetId) || !seen.Add(targetId))
-                    continue;
-
-                targetIds.Add(targetId);
-            }
-
-            return targetIds;
-        }
-
-        private static bool HasEntryFocusBeforeSpawnCustomerArrival(ScenarioModelEffectDefinition[] entryEffects)
-        {
-            ScenarioModelEffectDefinition[] effects = entryEffects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < effects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = effects[i];
-                if (effect == null ||
-                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind != null ? effect.kind.Trim() : string.Empty))
-                    continue;
-                string timing = effect.timing != null ? effect.timing.Trim() : string.Empty;
-                if (!string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal))
-                    continue;
-                if (IntentAuthoringUtility.HasEntryFocusBeforeIndex(effects, i))
-                    return true;
-            }
-            return false;
-        }
-
         private static bool HasRevealOrSystemActionEffect(ScenarioModelEffectDefinition[] effects)
         {
             ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
@@ -1052,8 +800,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             {
                 ScenarioModelEffectDefinition effect = safeEffects[i];
                 if (effect == null ||
-                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind) ||
-                    PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
+                    PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
                 {
                     continue;
                 }
@@ -1218,7 +965,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 string role = IntentAuthoringUtility.Normalize(value.role);
                 string featureType = PromptIntentContractRegistry.ResolveFeatureTypeForRole(role);
-                if (!PromptIntentContractRegistry.ObjectRoleSupportsScenarioOptions(role) ||
+                if (!PromptIntentContractRegistry.ObjectRoleSupportsFeatureOptions(role) ||
                     string.IsNullOrEmpty(featureType))
                     continue;
 
@@ -1250,20 +997,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static bool FeatureOptionsEqual(PlayableScenarioFeatureOptions expected, PlayableScenarioFeatureOptions actual)
         {
-            return expected.conversionInterval == actual.conversionInterval &&
-                   expected.inputCountPerConversion == actual.inputCountPerConversion &&
-                   expected.inputItemMoveInterval == actual.inputItemMoveInterval &&
-                   expected.playerDropInterval == actual.playerDropInterval &&
-                   expected.playerGetItemInterval == actual.playerGetItemInterval &&
-                   expected.spawnInterval == actual.spawnInterval &&
-                   expected.customerSellingInterval == actual.customerSellingInterval &&
-                   expected.costPerMoneyPile == actual.costPerMoneyPile &&
-                   expected.customerReqMin == actual.customerReqMin &&
-                   expected.customerReqMax == actual.customerReqMax &&
-                   expected.itemStacker.maxCount == actual.itemStacker.maxCount &&
-                   expected.itemStacker.popIntervalSeconds == actual.itemStacker.popIntervalSeconds &&
-                   expected.moneyStacker.maxCount == actual.moneyStacker.maxCount &&
-                   expected.moneyStacker.popIntervalSeconds == actual.moneyStacker.popIntervalSeconds;
+            return string.Equals(NormalizeFeatureOptionValue(expected.featureType), NormalizeFeatureOptionValue(actual.featureType), StringComparison.Ordinal) &&
+                   string.Equals(NormalizeFeatureOptionValue(expected.targetId), NormalizeFeatureOptionValue(actual.targetId), StringComparison.Ordinal) &&
+                   string.Equals(NormalizeJson(expected.optionsJson), NormalizeJson(actual.optionsJson), StringComparison.Ordinal);
+        }
+
+        private static string NormalizeFeatureOptionValue(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        private static string NormalizeJson(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "{}" : value.Trim();
         }
 
         private static HashSet<string> BuildFeatureAcceptedItemKeySet(FeatureAcceptedItemDefinition[] definitions)
@@ -1273,7 +1019,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
                 FeatureAcceptedItemDefinition definition = safeDefinitions[i];
-                string itemKey = ItemRefUtility.ToStableKey(definition != null ? definition.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(definition != null ? definition.item : null);
                 if (definition == null ||
                     string.IsNullOrWhiteSpace(definition.targetId) ||
                     string.IsNullOrWhiteSpace(itemKey))
@@ -1294,7 +1040,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             for (int i = 0; i < safeDefinitions.Length; i++)
             {
                 FeatureOutputItemDefinition definition = safeDefinitions[i];
-                string itemKey = ItemRefUtility.ToStableKey(definition != null ? definition.item : null);
+                string itemKey = ItemRefUtility.ToItemKey(definition != null ? definition.item : null);
                 if (definition == null ||
                     string.IsNullOrWhiteSpace(definition.targetId) ||
                     string.IsNullOrWhiteSpace(itemKey))
@@ -1498,50 +1244,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             bool matchesAction = !string.IsNullOrEmpty(actionTargetId) && HasActionCompletedEnterWhen(beatById, beatId, actionTargetId);
             bool matchesBeat = !string.IsNullOrEmpty(beatTargetId) && HasBeatCompletedEnterWhen(beatById, beatId, beatTargetId);
             return matchesAction || matchesBeat;
-        }
-
-        private static bool HasEntryArrivalSpawnCustomer(ScenarioModelEffectDefinition[] effects)
-        {
-            return CountSpawnCustomerWithTiming(effects, PromptIntentEffectTimingKinds.ARRIVAL) > 0;
-        }
-
-        private static bool HasEntryCompletedSpawnCustomer(ScenarioModelEffectDefinition[] effects)
-        {
-            return CountSpawnCustomerWithTiming(effects, PromptIntentEffectTimingKinds.COMPLETED) > 0 ||
-                CountSpawnCustomerWithTiming(effects, string.Empty) > 0;
-        }
-
-        private static bool HasCompletionArrivalSpawnCustomer(ScenarioModelEffectDefinition[] effects)
-        {
-            return CountSpawnCustomerWithTiming(effects, PromptIntentEffectTimingKinds.ARRIVAL) > 0;
-        }
-
-        private static bool HasCompletionCompletedSpawnCustomer(ScenarioModelEffectDefinition[] effects)
-        {
-            return CountSpawnCustomerWithTiming(effects, PromptIntentEffectTimingKinds.COMPLETED) > 0 ||
-                CountSpawnCustomerWithTiming(effects, string.Empty) > 0;
-        }
-
-        private static int CountSpawnCustomerWithTiming(ScenarioModelEffectDefinition[] effects, string timing)
-        {
-            int count = 0;
-            string normalizedTiming = timing != null ? timing.Trim() : string.Empty;
-            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < safeEffects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = safeEffects[i];
-                if (effect == null ||
-                    !PromptIntentCapabilityRegistry.IsCustomerSpawnEffectKind(effect.kind))
-                {
-                    continue;
-                }
-
-                string effectTiming = effect.timing != null ? effect.timing.Trim() : string.Empty;
-                if (string.Equals(effectTiming, normalizedTiming, StringComparison.Ordinal))
-                    count++;
-            }
-
-            return count;
         }
 
         private static IntentAuditValidationResult FinalizeResult(IntentAuditValidationResult result)

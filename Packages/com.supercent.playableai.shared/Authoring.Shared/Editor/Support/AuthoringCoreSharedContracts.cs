@@ -71,21 +71,6 @@ namespace Supercent.PlayableAI.AuthoringCore
         public const float OUTER_ROAD_MIN_FLOOR_CLEARANCE_CELLS = 1f;
         private const float BOUNDARY_TIE_EPSILON = 0.0001f;
 
-        public static bool UsesFloorBoundaryInwardFacingRuleForObjectId(string objectId)
-        {
-            string normalizedObjectId = Normalize(objectId);
-            return string.Equals(normalizedObjectId, "converter", StringComparison.Ordinal) ||
-                   string.Equals(normalizedObjectId, "processor", StringComparison.Ordinal) ||
-                   string.Equals(normalizedObjectId, "seller", StringComparison.Ordinal);
-        }
-
-        public static bool UsesFloorBoundaryInwardFacingRuleForRole(string role)
-        {
-            string normalizedRole = Normalize(role);
-            return string.Equals(normalizedRole, "processor", StringComparison.Ordinal) ||
-                   string.Equals(normalizedRole, "seller", StringComparison.Ordinal);
-        }
-
         public static float ResolveFloorBoundaryInwardFacingYaw(
             float positionX,
             float positionZ,
@@ -655,19 +640,6 @@ namespace Supercent.PlayableAI.AuthoringCore
     }
 
     [Serializable]
-    public sealed class LayoutSpecPhysicsAreaLayoutEntry
-    {
-        public LayoutSpecPlacementBoundsEntry realPhysicsZoneBounds = new LayoutSpecPlacementBoundsEntry();
-        public LayoutSpecPlacementBoundsEntry fakeSpriteZoneBounds = new LayoutSpecPlacementBoundsEntry();
-    }
-
-    [Serializable]
-    public sealed class LayoutSpecRailLayoutEntry
-    {
-        public RailPathAnchorDefinition[] pathCells = new RailPathAnchorDefinition[0];
-    }
-
-    [Serializable]
     public sealed class LayoutSpecPlacementEntry
     {
         public string objectId = string.Empty;
@@ -696,8 +668,7 @@ namespace Supercent.PlayableAI.AuthoringCore
         public float bboxWidthPx;
         public float bboxHeightPx;
         public float bboxConfidence;
-        public LayoutSpecPhysicsAreaLayoutEntry physicsAreaLayout = new LayoutSpecPhysicsAreaLayoutEntry();
-        public LayoutSpecRailLayoutEntry railLayout = new LayoutSpecRailLayoutEntry();
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
     }
 
     [Serializable]
@@ -878,38 +849,6 @@ namespace Supercent.PlayableAI.AuthoringCore
                 return false;
 
             return BuildPlacementLookup(layoutSpec).TryGetValue(Normalize(objectId), out placement);
-        }
-
-        public static PhysicsAreaLayoutDefinition ToPhysicsAreaLayout(LayoutSpecPhysicsAreaLayoutEntry layout)
-        {
-            return new PhysicsAreaLayoutDefinition
-            {
-                realPhysicsZoneBounds = ToWorldBounds(layout != null ? layout.realPhysicsZoneBounds : null),
-                fakeSpriteZoneBounds = ToWorldBounds(layout != null ? layout.fakeSpriteZoneBounds : null),
-            };
-        }
-
-        public static RailLayoutDefinition ToRailLayout(LayoutSpecRailLayoutEntry layout)
-        {
-            LayoutSpecRailLayoutEntry safeLayout = layout ?? new LayoutSpecRailLayoutEntry();
-            RailPathAnchorDefinition[] safePathCells = safeLayout.pathCells ?? Array.Empty<RailPathAnchorDefinition>();
-            var pathCells = new RailPathAnchorDefinition[safePathCells.Length];
-            for (int i = 0; i < safePathCells.Length; i++)
-            {
-                RailPathAnchorDefinition value = safePathCells[i];
-                pathCells[i] = value == null
-                    ? new RailPathAnchorDefinition()
-                    : new RailPathAnchorDefinition
-                    {
-                        worldX = value.worldX,
-                        worldZ = value.worldZ,
-                    };
-            }
-
-            return new RailLayoutDefinition
-            {
-                pathCells = pathCells,
-            };
         }
 
         private static WorldBoundsDefinition ToWorldBounds(LayoutSpecPlacementBoundsEntry bounds)

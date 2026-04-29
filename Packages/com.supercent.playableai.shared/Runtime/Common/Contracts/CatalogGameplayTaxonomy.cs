@@ -9,11 +9,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string SourceCategoryCharacter = CatalogCategoryIds.CHARACTER;
         public const string SourceCategoryItem = CatalogCategoryIds.ITEM;
 
-        public const string RoleGenerator = GameplayRoleIds.GENERATOR;
-        public const string RoleProcessor = GameplayRoleIds.PROCESSOR;
-        public const string RoleSeller = GameplayRoleIds.SELLER;
         public const string RoleUnlockPad = GameplayRoleIds.UNLOCK_PAD;
-        public const string RoleRail = GameplayRoleIds.RAIL;
         public const string RoleItem = GameplayRoleIds.ITEM;
         public const string RolePlayer = GameplayRoleIds.PLAYER;
         public const string RoleCustomer = GameplayRoleIds.CUSTOMER;
@@ -45,9 +41,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             string normalizedCategory = Normalize(sourceCategory);
             string normalizedObjectId = Normalize(objectId);
             string normalizedAssetPath = NormalizePath(assetPath);
-            string normalizedDesignMode = Normalize(designMode);
-            string normalizedPlacementMode = Normalize(placementMode);
-
             if (string.Equals(normalizedCategory, SourceCategoryItem, System.StringComparison.Ordinal))
             {
                 role = RoleItem;
@@ -86,29 +79,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (!string.Equals(normalizedCategory, SourceCategoryFeature, System.StringComparison.Ordinal))
                 return false;
 
-            if (string.Equals(normalizedDesignMode, DesignModeIds.ASSEMBLED_PATH, System.StringComparison.Ordinal) ||
-                string.Equals(normalizedPlacementMode, PlacementModeIds.PATH, System.StringComparison.Ordinal) ||
-                string.Equals(normalizedObjectId, RoleRail, System.StringComparison.Ordinal))
+            if (PromptIntentContractRegistry.IsSupportedObjectRole(normalizedObjectId) &&
+                !string.Equals(normalizedObjectId, RolePlayer, System.StringComparison.Ordinal) &&
+                !string.Equals(normalizedObjectId, RoleUnlockPad, System.StringComparison.Ordinal))
             {
-                role = RoleRail;
-                return true;
-            }
-
-            if (string.Equals(normalizedObjectId, RoleGenerator, System.StringComparison.Ordinal))
-            {
-                role = RoleGenerator;
-                return true;
-            }
-
-            if (string.Equals(normalizedObjectId, "converter", System.StringComparison.Ordinal))
-            {
-                role = RoleProcessor;
-                return true;
-            }
-
-            if (string.Equals(normalizedObjectId, RoleSeller, System.StringComparison.Ordinal))
-            {
-                role = RoleSeller;
+                role = normalizedObjectId;
                 return true;
             }
 
@@ -119,11 +94,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             switch (Normalize(role))
             {
-                case RoleGenerator:
-                case RoleProcessor:
-                case RoleSeller:
-                case RoleRail:
-                    return GameplayCatalog.FEATURE_CATEGORY;
                 case RoleUnlockPad:
                     return GameplayCatalog.UNLOCKER_CATEGORY;
                 case RoleItem:
@@ -133,7 +103,12 @@ namespace Supercent.PlayableAI.Common.Contracts
                 case RoleCustomer:
                     return GameplayCatalog.CUSTOMER_CATEGORY;
                 default:
-                    return string.Empty;
+                    string normalizedRole = Normalize(role);
+                    return PromptIntentContractRegistry.IsSupportedObjectRole(normalizedRole) &&
+                           !string.Equals(normalizedRole, RolePlayer, System.StringComparison.Ordinal) &&
+                           !string.Equals(normalizedRole, RoleUnlockPad, System.StringComparison.Ordinal)
+                        ? GameplayCatalog.FEATURE_CATEGORY
+                        : string.Empty;
             }
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Supercent.PlayableAI.Common.Format;
@@ -541,25 +541,18 @@ namespace Supercent.PlayableAI.Common.Contracts
     [System.Serializable]
     public sealed class GameplayCatalog
     {
-        public const string GENERATORS_ARRAY_PATH = "_gameplayCatalog._generators";
-        public const string RAILS_ARRAY_PATH = "_gameplayCatalog._rails";
-        public const string CONVERTERS_ARRAY_PATH = "_gameplayCatalog._converters";
-        public const string SELLERS_ARRAY_PATH = "_gameplayCatalog._sellers";
+        public const string FEATURE_ENTRIES_ARRAY_PATH = "_gameplayCatalog._featureEntries";
         public const string UNLOCKERS_ARRAY_PATH = "_gameplayCatalog._unlockers";
         public const string ITEMS_ARRAY_PATH = "_gameplayCatalog._items";
         public const string PLAYER_MODELS_ARRAY_PATH = "_gameplayCatalog._playerModels";
         public const string CUSTOMERS_ARRAY_PATH = "_gameplayCatalog._customers";
-        public const string CUSTOM_FEATURES_ARRAY_PATH = "_gameplayCatalog._customFeatures";
         public const string FEATURE_CATEGORY = "feature";
         public const string UNLOCKER_CATEGORY = "unlocker";
         public const string ITEM_CATEGORY = "item";
         public const string PLAYER_MODEL_CATEGORY = "playermodel";
         public const string CUSTOMER_CATEGORY = "customer";
 
-        [SerializeField] private GameplayCatalogEntry[] _generators = new GameplayCatalogEntry[0];
-        [SerializeField] private GameplayCatalogEntry[] _rails = new GameplayCatalogEntry[0];
-        [SerializeField] private GameplayCatalogEntry[] _converters = new GameplayCatalogEntry[0];
-        [SerializeField] private GameplayCatalogEntry[] _sellers = new GameplayCatalogEntry[0];
+        [SerializeField] private GameplayCatalogEntry[] _featureEntries = new GameplayCatalogEntry[0];
 
         [SerializeField] private GameplayCatalogEntry[] _unlockers = new GameplayCatalogEntry[0];
 
@@ -568,20 +561,15 @@ namespace Supercent.PlayableAI.Common.Contracts
         [SerializeField] private GameplayCatalogEntry[] _playerModels = new GameplayCatalogEntry[0];
 
         [SerializeField] private GameplayCatalogEntry[] _customers = new GameplayCatalogEntry[0];
-        [SerializeField] private GameplayCatalogEntry[] _customFeatures = new GameplayCatalogEntry[0];
 
         public IReadOnlyList<GameplayCatalogEntry> GetGameplayEntries()
         {
             var list = new List<GameplayCatalogEntry>();
-            AddGameplayEntries(list, _generators);
-            AddGameplayEntries(list, _rails);
-            AddGameplayEntries(list, _converters);
-            AddGameplayEntries(list, _sellers);
+            AddGameplayEntries(list, _featureEntries);
             AddGameplayEntries(list, _unlockers);
             AddGameplayEntries(list, _items);
             AddGameplayEntries(list, _playerModels);
             AddGameplayEntries(list, _customers);
-            AddGameplayEntries(list, _customFeatures);
             return list;
         }
 
@@ -589,15 +577,11 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             return new GameplayCatalogSectionDefinition[]
             {
-                CreateSection(GENERATORS_ARRAY_PATH, "생성기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _generators),
-                CreateSection(RAILS_ARRAY_PATH, "레일", FEATURE_CATEGORY, GameplayDesignMode.AssembledPath, _rails),
-                CreateSection(CONVERTERS_ARRAY_PATH, "변환기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _converters),
-                CreateSection(SELLERS_ARRAY_PATH, "판매기", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _sellers),
+                CreateSection(FEATURE_ENTRIES_ARRAY_PATH, "Feature", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _featureEntries),
                 CreateSection(UNLOCKERS_ARRAY_PATH, "언락 패드", UNLOCKER_CATEGORY, GameplayDesignMode.SinglePrefab, _unlockers),
                 CreateSection(ITEMS_ARRAY_PATH, "아이템", ITEM_CATEGORY, GameplayDesignMode.SinglePrefab, _items),
                 CreateSection(PLAYER_MODELS_ARRAY_PATH, "플레이어 모델", PLAYER_MODEL_CATEGORY, GameplayDesignMode.SinglePrefab, _playerModels),
                 CreateSection(CUSTOMERS_ARRAY_PATH, "손님", CUSTOMER_CATEGORY, GameplayDesignMode.SinglePrefab, _customers),
-                CreateSection(CUSTOM_FEATURES_ARRAY_PATH, "커스텀 Feature", FEATURE_CATEGORY, GameplayDesignMode.SinglePrefab, _customFeatures),
             };
         }
 
@@ -608,15 +592,11 @@ namespace Supercent.PlayableAI.Common.Contracts
                 return false;
 
             string normalized = objectId.Trim();
-            return TryFindGameplayEntry(normalized, _generators, out entry) ||
-                   TryFindGameplayEntry(normalized, _rails, out entry) ||
-                   TryFindGameplayEntry(normalized, _converters, out entry) ||
-                   TryFindGameplayEntry(normalized, _sellers, out entry) ||
+            return TryFindGameplayEntry(normalized, _featureEntries, out entry) ||
                    TryFindGameplayEntry(normalized, _unlockers, out entry) ||
                    TryFindGameplayEntry(normalized, _items, out entry) ||
                    TryFindGameplayEntry(normalized, _playerModels, out entry) ||
-                   TryFindGameplayEntry(normalized, _customers, out entry) ||
-                   TryFindGameplayEntry(normalized, _customFeatures, out entry);
+                   TryFindGameplayEntry(normalized, _customers, out entry);
         }
 
         public bool TryResolveGameplayPrefab(string objectId, int requestedDesignIndex, out GameObject prefab, out int resolvedDesignIndex)
@@ -643,7 +623,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             return TryResolveDesign(entry.designs, requestedDesignIndex, out design, out resolvedDesignIndex);
         }
 
-        public bool TryResolveRailPrefabSet(
+        public bool TryResolveFeaturePathPrefabSet(
             string objectId,
             int requestedDesignIndex,
             out GameObject prefab,
@@ -701,25 +681,17 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public void SetRoleArrays(
-            GameplayCatalogEntry[] generators,
-            GameplayCatalogEntry[] rails,
-            GameplayCatalogEntry[] converters,
-            GameplayCatalogEntry[] sellers,
+            GameplayCatalogEntry[] featureEntries,
             GameplayCatalogEntry[] unlockers,
             GameplayCatalogEntry[] items,
             GameplayCatalogEntry[] playerModels,
-            GameplayCatalogEntry[] customers,
-            GameplayCatalogEntry[] customFeatures = null)
+            GameplayCatalogEntry[] customers)
         {
-            _generators = generators ?? new GameplayCatalogEntry[0];
-            _rails = rails ?? new GameplayCatalogEntry[0];
-            _converters = converters ?? new GameplayCatalogEntry[0];
-            _sellers = sellers ?? new GameplayCatalogEntry[0];
+            _featureEntries = featureEntries ?? new GameplayCatalogEntry[0];
             _unlockers = unlockers ?? new GameplayCatalogEntry[0];
             _items = items ?? new GameplayCatalogEntry[0];
             _playerModels = playerModels ?? new GameplayCatalogEntry[0];
             _customers = customers ?? new GameplayCatalogEntry[0];
-            _customFeatures = customFeatures ?? new GameplayCatalogEntry[0];
         }
 
         private static GameplayCatalogSectionDefinition CreateSection(string arrayPath, string label, string expectedCategory, GameplayDesignMode designMode, GameplayCatalogEntry[] entries)
@@ -1247,7 +1219,7 @@ namespace Supercent.PlayableAI.Common.Contracts
     [CreateAssetMenu(fileName = "playable_object_catalog", menuName = "AIPS/Settings/Object Catalog (오브젝트 카탈로그)")]
     public sealed class PlayableObjectCatalog : ScriptableObject
     {
-        [Tooltip("스캔 루트. 예: Assets/Supercent/PlayableAI/Concepts/PizzaReady/Prefabs")]
+        [Tooltip("스캔 루트. 예: Assets/AIPS/Contents/pizza_ready")]
         [SerializeField] private string _prefabsRootPath = string.Empty;
 
         [Tooltip("에디터/시스템용 (Core, UI). 생성 시 먼저 인스턴스화합니다.")]
@@ -1368,7 +1340,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             return Gameplay.TryResolveGameplayPrefab(objectId, requestedDesignIndex, out prefab, out resolvedDesignIndex);
         }
 
-        public bool TryResolveRailPrefabSet(
+        public bool TryResolveFeaturePathPrefabSet(
             string objectId,
             int requestedDesignIndex,
             out GameObject prefab,
@@ -1376,7 +1348,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             out GameObject cornerPrefab,
             out int resolvedDesignIndex)
         {
-            return Gameplay.TryResolveRailPrefabSet(
+            return Gameplay.TryResolveFeaturePathPrefabSet(
                 objectId,
                 requestedDesignIndex,
                 out prefab,
@@ -1450,12 +1422,12 @@ namespace Supercent.PlayableAI.Common.Contracts
             return Environment.TryGetEnvironmentEntry(objectId, out _);
         }
 
-        public bool IsSupportedItemStableKey(string itemStableKey)
+        public bool IsSupportedItemKey(string itemKey)
         {
-            if (!Gameplay.TryGetGameplayEntry(itemStableKey, out GameplayCatalogEntry entry) || entry == null)
+            if (!Gameplay.TryGetGameplayEntry(itemKey, out GameplayCatalogEntry entry) || entry == null)
                 return false;
 
-            string normalizedObjectId = itemStableKey != null ? itemStableKey.Trim() : string.Empty;
+            string normalizedObjectId = itemKey != null ? itemKey.Trim() : string.Empty;
             return string.Equals(entry.category, GameplayCatalog.ITEM_CATEGORY, System.StringComparison.Ordinal) &&
                    !string.Equals(normalizedObjectId, "money", System.StringComparison.Ordinal);
         }
@@ -1669,20 +1641,16 @@ namespace Supercent.PlayableAI.Common.Contracts
         }
 
         public void SetGameplayRoleArrays(
-            GameplayCatalogEntry[] generators,
-            GameplayCatalogEntry[] rails,
-            GameplayCatalogEntry[] converters,
-            GameplayCatalogEntry[] sellers,
+            GameplayCatalogEntry[] featureEntries,
             GameplayCatalogEntry[] unlockers,
             GameplayCatalogEntry[] items,
             GameplayCatalogEntry[] playerModels,
-            GameplayCatalogEntry[] customers,
-            GameplayCatalogEntry[] customFeatures = null)
+            GameplayCatalogEntry[] customers)
         {
             if (_gameplayCatalog == null)
                 _gameplayCatalog = new GameplayCatalog();
 
-            _gameplayCatalog.SetRoleArrays(generators, rails, converters, sellers, unlockers, items, playerModels, customers, customFeatures);
+            _gameplayCatalog.SetRoleArrays(featureEntries, unlockers, items, playerModels, customers);
         }
 
         public void SetEnvironmentRoleArrays(EnvironmentCatalogEntry[] walls, EnvironmentCatalogEntry[] fences, EnvironmentCatalogEntry[] roads)
@@ -1942,15 +1910,15 @@ namespace Supercent.PlayableAI.Common.Contracts
                 {
                     AssembledPathDesignAssets assets = design.assembledPathAssets ?? new AssembledPathDesignAssets();
                     if (design.prefab == null)
-                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 rail prefab(root controller)이 필요합니다.");
+                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 assembled path root prefab이 필요합니다.");
                     if (assets.straightPrefab == null)
-                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 rail straightPrefab이 필요합니다.");
+                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 assembled path straightPrefab이 필요합니다.");
                     else
-                        ValidateRailTilePrefab(sectionPath, entryIndex, designIndex, designLabel + ".assembledPathAssets.straightPrefab", assets.straightPrefab, result);
+                        ValidateAssembledPathTilePrefab(sectionPath, entryIndex, designIndex, designLabel + ".assembledPathAssets.straightPrefab", assets.straightPrefab, result);
                     if (assets.cornerPrefab == null)
-                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 rail cornerPrefab이 필요합니다.");
+                        AddError(result, sectionPath, entryIndex, designIndex, designLabel + "에는 assembled path cornerPrefab이 필요합니다.");
                     else
-                        ValidateRailTilePrefab(sectionPath, entryIndex, designIndex, designLabel + ".assembledPathAssets.cornerPrefab", assets.cornerPrefab, result);
+                        ValidateAssembledPathTilePrefab(sectionPath, entryIndex, designIndex, designLabel + ".assembledPathAssets.cornerPrefab", assets.cornerPrefab, result);
                 }
             }
 
@@ -2202,7 +2170,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             }
         }
 
-        private static void ValidateRailTilePrefab(
+        private static void ValidateAssembledPathTilePrefab(
             string sectionPath,
             int entryIndex,
             int designIndex,

@@ -36,17 +36,6 @@ namespace PlayableAI.AuthoringCore
         public float worldDepth;
     }
 
-    public sealed class DraftLayoutPhysicsAreaLayoutEntry
-    {
-        public DraftLayoutPlacementBoundsEntry realPhysicsZoneBounds = new DraftLayoutPlacementBoundsEntry();
-        public DraftLayoutPlacementBoundsEntry fakeSpriteZoneBounds = new DraftLayoutPlacementBoundsEntry();
-    }
-
-    public sealed class DraftLayoutRailLayoutEntry
-    {
-        public RailPathAnchorDefinition[] pathCells = Array.Empty<RailPathAnchorDefinition>();
-    }
-
     public sealed class DraftLayoutPlacementEntry
     {
         public string objectId = string.Empty;
@@ -57,8 +46,7 @@ namespace PlayableAI.AuthoringCore
         public float worldZ;
         public bool hasResolvedYaw;
         public float resolvedYawDegrees;
-        public DraftLayoutPhysicsAreaLayoutEntry physicsAreaLayout = new DraftLayoutPhysicsAreaLayoutEntry();
-        public DraftLayoutRailLayoutEntry railLayout = new DraftLayoutRailLayoutEntry();
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
     }
 
     public sealed class DraftLayoutPlayerStartEntry

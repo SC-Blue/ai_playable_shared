@@ -9,7 +9,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string FOCUS_CAMERA = "focus_camera";
         public const string SHOW_ARROW = "show_arrow";
         public const string SHOW_GUIDE_ARROW = "show_guide_arrow";
-        public const string SPAWN_CUSTOMER = "spawn_customer";
         public const string REVEAL_ENDCARD = "reveal_endcard";
         public const string END_GAME = "end_game";
         public const string HIDE_GUIDE = "hide_guide";

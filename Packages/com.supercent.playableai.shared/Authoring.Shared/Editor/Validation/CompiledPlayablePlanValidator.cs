@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.AuthoringCore;
 using Supercent.PlayableAI.Common.Contracts;
@@ -21,29 +21,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
     public static class CompiledPlayablePlanValidator
     {
-        private sealed class GameplaySpawnFootprintBounds
-        {
-            public string ReferenceId = string.Empty;
-            public string SceneObjectId = string.Empty;
-            public string SpawnKey = string.Empty;
-            public string ObjectId = string.Empty;
-            public string Role = string.Empty;
-            public string SinkEndpointTargetObjectId = string.Empty;
-            public string LaneId = string.Empty;
-            public bool HasLaneOrder;
-            public int LaneOrder;
-            public bool HasMinGapToNextCells;
-            public float MinGapToNextCells;
-            public float CenterX;
-            public float CenterZ;
-            public bool HasResolvedYaw;
-            public float ResolvedYawDegrees;
-            public float MinX;
-            public float MaxX;
-            public float MinZ;
-            public float MaxZ;
-        }
-
         private struct EnvironmentCellCoordinate
         {
             public int X;
@@ -60,7 +37,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private const float ENVIRONMENT_COORD_UNIT = 0.5f;
         private const float ENVIRONMENT_TILE_ALIGNMENT_TOLERANCE_RATIO = 0.05f;
         private const float ENVIRONMENT_TILE_ALIGNMENT_MIN_TOLERANCE = 0.01f;
-        private const float MAX_IMAGE_LAYOUT_PADDING_PER_SIDE = 4f;
 
         public static CompiledPlayablePlanValidationResult Validate(
             CompiledPlayablePlan plan,
@@ -87,7 +63,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateCatalogFeatureAvailability(plan, catalog, result);
                 ValidateObjectDesignSelections(plan.objectDesigns, catalog, result);
                 ValidateContentSelections(plan.contentSelections, catalog, result);
-                Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns, plan.physicsAreas);
+                Dictionary<string, CompiledSpawnData> spawnLookup = BuildSpawnLookup(plan.spawns);
 
                 ValidateCurrencies(plan.currencies, result);
                 Dictionary<string, int> currencyUnits = BuildCurrencyUnitLookup(plan.currencies);
@@ -98,17 +74,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateFeatureOutputItems(plan.spawns, plan.featureOutputItems, spawnLookup, catalog, result);
                 ValidatePlayerOptions(plan.playerOptions, result);
                 ValidateFeatureOptions(plan.featureOptions, spawnLookup, result);
-                ValidateCompiledFlowBeats(plan.beats, plan.actions, plan.featureAcceptedItems, spawnLookup, catalog, currencyUnits, result);
+                ValidateFeatureLayouts(plan.featureLayouts, spawnLookup, catalog, result);
+                ValidateCompiledFlowBeats(plan.beats, plan.actions, spawnLookup, catalog, currencyUnits, result);
                 HashSet<string> declaredSourceImageIds = ValidateSourceImages(layoutSpec, result);
                 ValidateCustomerPaths(layoutSpec, spawnLookup, catalog, result);
                 ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
                 ValidatePlacementSpatialSemantics(layoutSpec, result);
-                HashSet<string> physicsAreaObjectIds = ValidatePhysicsAreas(plan.physicsAreas, catalog, result);
-                ValidateRails(plan.rails, spawnLookup, physicsAreaObjectIds, catalog, result);
                 ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.itemPrices, objectDesignLookup, catalog, result);
                 ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
-                ValidateImageLayoutPadding(plan.spawns, plan.physicsAreas, plan.rails, catalog, layoutSpec, result);
-                ValidateDeclaredLaneRelationships(plan.spawns, plan.physicsAreas, plan.rails, plan.unlocks, catalog, layoutSpec, result);
             }
             finally
             {
@@ -144,11 +117,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "featureOptions[" + i + "].featureType '" + featureType + "'는 현재 catalog에 없는 feature입니다.");
             }
 
-            if ((plan.rails ?? new CompiledRailDefinition[0]).Length > 0 && !catalog.IsSupportedFeatureType(PlayableFeatureTypeIds.Rail))
-                Fail(result, "compiled plan이 rail 데이터를 포함하지만 현재 catalog는 rail feature를 지원하지 않습니다.");
-
-            if ((plan.physicsAreas ?? new CompiledPhysicsAreaDefinition[0]).Length > 0 && !catalog.IsSupportedFeatureType(PlayableFeatureTypeIds.PhysicsArea))
-                Fail(result, "compiled plan이 physics_area 데이터를 포함하지만 현재 catalog는 physics_area feature를 지원하지 않습니다.");
         }
 
         private static bool HasFeatureDescriptorAuthority(PlayableObjectCatalog catalog)
@@ -159,7 +127,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidateCompiledFlowBeats(
             FlowBeatDefinition[] beats,
             FlowActionDefinition[] actions,
-            FeatureAcceptedItemDefinition[] acceptedItems,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             Dictionary<string, int> currencyUnits,
@@ -196,11 +163,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, completeWhenError);
             }
 
-            var acceptedItemKeysByTargetId = BuildAcceptedItemKeysByTargetId(acceptedItems);
             HashSet<string> actionIds = ValidateCompiledFlowActions(
                 actions,
                 seenBeatIds,
-                acceptedItemKeysByTargetId,
                 spawnLookup,
                 catalog,
                 currencyUnits,
@@ -220,7 +185,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static HashSet<string> ValidateCompiledFlowActions(
             FlowActionDefinition[] actions,
             HashSet<string> beatIds,
-            Dictionary<string, HashSet<string>> acceptedItemKeysByTargetId,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             Dictionary<string, int> currencyUnits,
@@ -281,7 +245,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateCompiledFlowActionPayload(
                     action,
                     actionLabel,
-                    acceptedItemKeysByTargetId,
                     spawnLookup,
                     catalog,
                     result);
@@ -293,12 +256,17 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         private static void ValidateCompiledFlowActionPayload(
             FlowActionDefinition action,
             string label,
-            Dictionary<string, HashSet<string>> acceptedItemKeysByTargetId,
             Dictionary<string, CompiledSpawnData> spawnLookup,
             PlayableObjectCatalog catalog,
             CompiledPlayablePlanValidationResult result)
         {
             string kind = action.kind != null ? action.kind.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(kind))
+            {
+                Fail(result, label + ".kind가 필요합니다.");
+                return;
+            }
+
             FlowActionPayloadDefinition payload = action.payload ?? new FlowActionPayloadDefinition();
             switch (kind)
             {
@@ -310,9 +278,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
 
                     if (!IsEmptyArrowGuidePayload(payload.arrowGuide) ||
-                        !IsEmptyRevealPayload(payload.reveal) ||
-                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
-                        !IsEmptySellerRequestPayload(payload.sellerRequest))
+                        !IsEmptyRevealPayload(payload.reveal))
                     {
                         Fail(result, label + "에는 camera focus 외 payload가 함께 들어있습니다.");
                     }
@@ -328,9 +294,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
 
                     if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyRevealPayload(payload.reveal) ||
-                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
-                        !IsEmptySellerRequestPayload(payload.sellerRequest))
+                        !IsEmptyRevealPayload(payload.reveal))
                     {
                         Fail(result, label + "에는 arrow guide 외 payload가 함께 들어있습니다.");
                     }
@@ -340,9 +304,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 case FlowActionKinds.REVEAL:
                     if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyArrowGuidePayload(payload.arrowGuide) ||
-                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
-                        !IsEmptySellerRequestPayload(payload.sellerRequest))
+                        !IsEmptyArrowGuidePayload(payload.arrowGuide))
                     {
                         Fail(result, label + "에는 reveal 외 payload가 함께 들어있습니다.");
                     }
@@ -377,71 +339,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
                     break;
 
-                case FlowActionKinds.CUSTOMER_SPAWN:
-                    if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyArrowGuidePayload(payload.arrowGuide) ||
-                        !IsEmptyRevealPayload(payload.reveal) ||
-                        !IsEmptySellerRequestPayload(payload.sellerRequest))
-                    {
-                        Fail(result, label + "에는 customer spawn 외 payload가 함께 들어있습니다.");
-                    }
-
-                    if (payload.customerSpawn == null || payload.customerSpawn.customerDesignIndex < 0)
-                    {
-                        Fail(result, label + ".payload.customerSpawn.customerDesignIndex는 0 이상이어야 합니다.");
-                        return;
-                    }
-
-                    if (!TryResolveGameplayPrefab(payload.customerSpawn.targetId, spawnLookup, catalog, out GameObject customerPrefab) || customerPrefab == null)
-                    {
-                        Fail(result, label + ".payload.customerSpawn.targetId '" + payload.customerSpawn.targetId + "'를 baked gameplay prefab으로 해석하지 못했습니다.");
-                        return;
-                    }
-
-                    if (!PortablePrefabMetadataUtility.TryGetMetadata(customerPrefab, out CatalogPrefabMetadata customerMetadata) || !customerMetadata.supportsCustomerFeature)
-                        Fail(result, label + ".payload.customerSpawn.targetId '" + payload.customerSpawn.targetId + "'는 customer spawn이 가능한 feature가 아닙니다.");
-                    else if (catalog == null || !catalog.IsValidGameplayDesignIndex("customer", payload.customerSpawn.customerDesignIndex))
-                        Fail(result, label + ".payload.customerSpawn.customerDesignIndex '" + payload.customerSpawn.customerDesignIndex + "'는 customer catalog design으로 해석되지 않습니다.");
-                    break;
-
-                case FlowActionKinds.SELLER_REQUEST:
-                    if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyArrowGuidePayload(payload.arrowGuide) ||
-                        !IsEmptyRevealPayload(payload.reveal) ||
-                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn))
-                    {
-                        Fail(result, label + "에는 seller request 외 payload가 함께 들어있습니다.");
-                    }
-
-                    string targetId = payload.sellerRequest != null && payload.sellerRequest.targetId != null ? payload.sellerRequest.targetId.Trim() : string.Empty;
-                    string itemKey = ItemRefUtility.ToStableKey(payload.sellerRequest != null ? payload.sellerRequest.item : null);
-                    if (string.IsNullOrEmpty(targetId))
-                    {
-                        Fail(result, label + ".payload.sellerRequest.targetId가 필요합니다.");
-                        return;
-                    }
-
-                    if (!TryResolveGameplayPrefab(targetId, spawnLookup, catalog, out GameObject sellerPrefab) || sellerPrefab == null)
-                    {
-                        Fail(result, label + ".payload.sellerRequest.targetId '" + targetId + "'를 baked gameplay prefab으로 해석하지 못했습니다.");
-                        return;
-                    }
-
-                    if (string.IsNullOrEmpty(itemKey))
-                    {
-                        Fail(result, label + ".payload.sellerRequest.item은 필수입니다.");
-                        return;
-                    }
-
-                    if (!ItemRefUtility.IsValid(payload.sellerRequest.item))
-                        Fail(result, label + ".payload.sellerRequest.item은 familyId와 variantId가 모두 필요합니다.");
-
-                    if (!acceptedItemKeysByTargetId.TryGetValue(targetId, out HashSet<string> acceptedItemKeys) || !acceptedItemKeys.Contains(itemKey))
-                        Fail(result, label + ".payload.sellerRequest.item '" + itemKey + "'은(는) target seller accepted item에 포함되어야 합니다.");
-                    break;
-
                 default:
-                    Fail(result, label + ".kind '" + action.kind + "'는 지원되지 않습니다.");
                     break;
             }
         }
@@ -545,7 +443,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 string targetId = acceptedItem.targetId.Trim();
-                string itemKey = ItemRefUtility.ToStableKey(acceptedItem.item);
+                string itemKey = ItemRefUtility.ToItemKey(acceptedItem.item);
                 if (string.IsNullOrEmpty(itemKey))
                     continue;
 
@@ -593,20 +491,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 (string.IsNullOrWhiteSpace(payload.targetId) &&
                  string.IsNullOrWhiteSpace(payload.eventKey) &&
                  payload.autoHideOnBeatExit);
-        }
-
-        private static bool IsEmptyCustomerSpawnPayload(CustomerSpawnActionPayload payload)
-        {
-            return payload == null ||
-                (string.IsNullOrWhiteSpace(payload.targetId) &&
-                 payload.customerDesignIndex < 0);
-        }
-
-        private static bool IsEmptySellerRequestPayload(SellerRequestActionPayload payload)
-        {
-            return payload == null ||
-                (string.IsNullOrWhiteSpace(payload.targetId) &&
-                 string.IsNullOrWhiteSpace(ItemRefUtility.ToStableKey(payload.item)));
         }
 
         private static HashSet<string> ValidateSourceImages(
@@ -777,7 +661,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                string itemKey = ItemRefUtility.ToStableKey(itemPrice.item);
+                string itemKey = ItemRefUtility.ToItemKey(itemPrice.item);
                 if (string.IsNullOrWhiteSpace(itemKey))
                 {
                     Fail(result, "itemPrices[" + i + "].item은 필수입니다.");
@@ -820,7 +704,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!spawnLookup.ContainsKey(targetId))
                     Fail(result, "featureAcceptedItems[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
 
-                string itemKey = ItemRefUtility.ToStableKey(definition.item);
+                string itemKey = ItemRefUtility.ToItemKey(definition.item);
                 if (string.IsNullOrWhiteSpace(itemKey))
                 {
                     Fail(result, "featureAcceptedItems[" + i + "].item은 필수입니다.");
@@ -1010,7 +894,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!spawnLookup.ContainsKey(targetId))
                     Fail(result, "featureOutputItems[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
 
-                string itemKey = ItemRefUtility.ToStableKey(definition.item);
+                string itemKey = ItemRefUtility.ToItemKey(definition.item);
                 if (string.IsNullOrWhiteSpace(itemKey))
                 {
                     Fail(result, "featureOutputItems[" + i + "].item은 필수입니다.");
@@ -1030,20 +914,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 outputItemByTargetId[targetId] = itemKey;
             }
 
-            CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
-            for (int i = 0; i < safeSpawns.Length; i++)
-            {
-                CompiledSpawnData spawn = safeSpawns[i];
-                if (spawn == null || string.IsNullOrWhiteSpace(spawn.spawnKey))
-                    continue;
-
-                if (!string.Equals(spawn.objectId != null ? spawn.objectId.Trim() : string.Empty, "converter", StringComparison.Ordinal))
-                    continue;
-
-                string targetId = spawn.spawnKey.Trim();
-                if (!outputItemByTargetId.ContainsKey(targetId))
-                    Fail(result, "processor spawn '" + targetId + "'에는 featureOutputItems entry가 필요합니다.");
-            }
         }
 
         private static void ValidateCustomerPathPoint(
@@ -1355,87 +1225,60 @@ private static void ValidateEnvironmentSourceImageReferences(
                 if (!seenTypedTargets.Add(featureType + "::" + targetId))
                     Fail(result, "중복된 featureOptions(featureType, targetId) '" + featureType + "', '" + targetId + "'입니다.");
 
-                if (!string.Equals(featureType, PlayableFeatureTypeIds.PhysicsArea, StringComparison.Ordinal) &&
-                    !spawnLookup.ContainsKey(targetId))
+                if (!spawnLookup.ContainsKey(targetId))
                     Fail(result, "featureOptions[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
 
-                PlayableScenarioFeatureOptions options = definition.options.NormalizeForFeatureType(featureType);
-                ValidateFeatureOptionValues(featureType, options, "featureOptions[" + i + "].options", result);
+                PlayableScenarioFeatureOptions options = definition.options;
+                if (!string.Equals(PlayableFeatureTypeIds.Normalize(options.featureType), featureType, StringComparison.Ordinal))
+                    Fail(result, "featureOptions[" + i + "].options.featureType은 featureOptions[" + i + "].featureType과 같아야 합니다.");
+                if (!string.Equals(PlayableFeatureTypeIds.Normalize(options.targetId), targetId, StringComparison.Ordinal))
+                    Fail(result, "featureOptions[" + i + "].options.targetId는 featureOptions[" + i + "].targetId와 같아야 합니다.");
+                if (!LooksLikeJsonObject(options.optionsJson))
+                    Fail(result, "featureOptions[" + i + "].options.optionsJson은 JSON object 문자열이어야 합니다.");
 
-                if (spawnLookup.TryGetValue(targetId, out CompiledSpawnData spawn) &&
-                    spawn != null &&
-                    string.Equals(spawn.objectId != null ? spawn.objectId.Trim() : string.Empty, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-                {
-                    ValidateSellerCustomerRequestRange(options, "featureOptions[" + i + "].options", result);
-                }
             }
         }
 
-        private static void ValidateFeatureOptionValues(string featureType, PlayableScenarioFeatureOptions options, string label, CompiledPlayablePlanValidationResult result)
-        {
-            string normalizedFeatureType = PlayableFeatureTypeIds.Normalize(featureType);
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Seller)
-            {
-                if (options.customerReqMin < 0 || options.customerReqMax < 0)
-                    Fail(result, label + ".customerReqMin/Max는 0 이상이어야 합니다.");
-
-                if (options.customerReqMin > 0 || options.customerReqMax > 0)
-                {
-                    if (options.customerReqMin == 0 || options.customerReqMax == 0)
-                        Fail(result, label + ".customerReqMin/Max는 둘 다 0이거나 둘 다 1 이상이어야 합니다.");
-                    else if (options.customerReqMin > options.customerReqMax)
-                        Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
-                }
-            }
-
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.inputCountPerConversion < 0)
-                Fail(result, label + ".inputCountPerConversion은 0 이상이어야 합니다.");
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.conversionInterval < 0f)
-                Fail(result, label + ".conversionInterval은 0 이상이어야 합니다.");
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Converter && options.inputItemMoveInterval < 0f)
-                Fail(result, label + ".inputItemMoveInterval은 0 이상이어야 합니다.");
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Generator && options.spawnInterval < 0f)
-                Fail(result, label + ".spawnInterval은 0 이상이어야 합니다.");
-            if (normalizedFeatureType == PlayableFeatureTypeIds.Rail)
-            {
-                if (options.rail.spawnIntervalSeconds <= 0f)
-                    Fail(result, label + ".rail.spawnIntervalSeconds는 0보다 커야 합니다.");
-                if (options.rail.travelDurationSeconds <= 0f)
-                    Fail(result, label + ".rail.travelDurationSeconds는 0보다 커야 합니다.");
-            }
-            if (normalizedFeatureType == PlayableFeatureTypeIds.PhysicsArea && options.physicsArea.itemsPerBlock <= 0)
-                Fail(result, label + ".physicsArea.itemsPerBlock는 0보다 커야 합니다.");
-
-            bool requiresItemHandling =
-                normalizedFeatureType == PlayableFeatureTypeIds.Generator ||
-                normalizedFeatureType == PlayableFeatureTypeIds.Converter ||
-                normalizedFeatureType == PlayableFeatureTypeIds.Seller;
-            if (requiresItemHandling)
-            {
-                if (options.itemTweenDuration <= 0f)
-                    Fail(result, label + ".itemTweenDuration은 0보다 커야 합니다.");
-                if (options.itemTweenParabolaHeight < 0f)
-                    Fail(result, label + ".itemTweenParabolaHeight는 0 이상이어야 합니다.");
-                if (options.itemStacker.maxCount < 0)
-                    Fail(result, label + ".itemStacker.maxCount는 0 이상이어야 합니다.");
-                if (options.itemStacker.popIntervalSeconds < 0f)
-                    Fail(result, label + ".itemStacker.popIntervalSeconds는 0 이상이어야 합니다.");
-            }
-        }
-
-        private static void ValidateSellerCustomerRequestRange(
-            PlayableScenarioFeatureOptions options,
-            string label,
+        private static void ValidateFeatureLayouts(
+            FeatureJsonPayload[] featureLayouts,
+            Dictionary<string, CompiledSpawnData> spawnLookup,
+            PlayableObjectCatalog catalog,
             CompiledPlayablePlanValidationResult result)
         {
-            if (options.customerReqMin <= 0 || options.customerReqMax <= 0)
+            FeatureJsonPayload[] safeLayouts = featureLayouts ?? Array.Empty<FeatureJsonPayload>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < safeLayouts.Length; i++)
             {
-                Fail(result, label + ".customerReqMin/Max는 seller에서 둘 다 1 이상이어야 합니다.");
-                return;
-            }
+                FeatureJsonPayload layout = safeLayouts[i];
+                if (layout == null)
+                {
+                    Fail(result, "featureLayouts[" + i + "]가 null입니다.");
+                    continue;
+                }
 
-            if (options.customerReqMin > options.customerReqMax)
-                Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
+                string featureType = PlayableFeatureTypeIds.Normalize(layout.featureType);
+                string targetId = PlayableFeatureTypeIds.Normalize(layout.targetId);
+                if (string.IsNullOrEmpty(featureType))
+                    Fail(result, "featureLayouts[" + i + "].featureType는 필수입니다.");
+                if (string.IsNullOrEmpty(targetId))
+                    Fail(result, "featureLayouts[" + i + "].targetId는 필수입니다.");
+                if (!string.IsNullOrEmpty(featureType) && catalog != null && !catalog.IsSupportedFeatureType(featureType))
+                    Fail(result, "featureLayouts[" + i + "].featureType '" + featureType + "'는 현재 catalog에 없는 feature입니다.");
+                if (!string.IsNullOrEmpty(targetId) && !spawnLookup.ContainsKey(targetId))
+                    Fail(result, "featureLayouts[" + i + "].targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
+                if (!string.IsNullOrWhiteSpace(layout.json) && !LooksLikeJsonObject(layout.json))
+                    Fail(result, "featureLayouts[" + i + "].json은 JSON object 문자열이어야 합니다.");
+
+                string key = featureType + "::" + targetId;
+                if (!string.IsNullOrEmpty(featureType) && !string.IsNullOrEmpty(targetId) && !seen.Add(key))
+                    Fail(result, "중복된 featureLayouts(featureType, targetId) '" + featureType + "', '" + targetId + "'입니다.");
+            }
+        }
+
+        private static bool LooksLikeJsonObject(string value)
+        {
+            string trimmed = value != null ? value.Trim() : string.Empty;
+            return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
         }
 
 private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, ItemPriceDefinition[] itemPrices, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
@@ -1587,998 +1430,20 @@ private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns
             }
         }
 
-private static HashSet<string> ValidatePhysicsAreas(
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    PlayableObjectCatalog catalog,
-    CompiledPlayablePlanValidationResult result)
-{
-    var objectIds = new HashSet<string>(StringComparer.Ordinal);
-    var spawnKeys = new HashSet<string>(StringComparer.Ordinal);
-    CompiledPhysicsAreaDefinition[] safeAreas = physicsAreas ?? new CompiledPhysicsAreaDefinition[0];
-    for (int i = 0; i < safeAreas.Length; i++)
-    {
-        CompiledPhysicsAreaDefinition area = safeAreas[i];
-        if (area == null)
-        {
-            Fail(result, "physicsAreas[" + i + "]가 null입니다.");
-            continue;
-        }
-
-        string objectId = area.objectId != null ? area.objectId.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(objectId))
-        {
-            Fail(result, "physicsAreas[" + i + "].objectId가 필요합니다.");
-        }
-        else if (!objectIds.Add(objectId))
-        {
-            Fail(result, "중복된 physicsAreas objectId '" + objectId + "'입니다.");
-        }
-
-        string spawnKey = area.spawnKey != null ? area.spawnKey.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(spawnKey))
-        {
-            Fail(result, "physicsAreas[" + i + "].spawnKey가 필요합니다.");
-        }
-        else if (!spawnKeys.Add(spawnKey))
-        {
-            Fail(result, "중복된 physicsAreas spawnKey '" + spawnKey + "'입니다.");
-        }
-
-        if (area.options == null || !ItemRefUtility.IsValid(area.options.item))
-        {
-            Fail(result, "physicsAreas[" + i + "].options.item이 필요합니다.");
-        }
-
-        if (!TryResolvePhysicsAreaFootprintBounds(area, null, out _, out string error) && !string.IsNullOrEmpty(error))
-            Fail(result, error);
-    }
-
-    return objectIds;
-}
-
-private static void ValidateRails(
-    CompiledRailDefinition[] rails,
-    Dictionary<string, CompiledSpawnData> spawnLookup,
-    HashSet<string> physicsAreaObjectIds,
-    PlayableObjectCatalog catalog,
-    CompiledPlayablePlanValidationResult result)
-{
-    var seenObjectIds = new HashSet<string>(StringComparer.Ordinal);
-    var seenSpawnKeys = new HashSet<string>(StringComparer.Ordinal);
-    CompiledRailDefinition[] safeRails = rails ?? new CompiledRailDefinition[0];
-    for (int i = 0; i < safeRails.Length; i++)
-    {
-        CompiledRailDefinition rail = safeRails[i];
-        if (rail == null)
-        {
-            Fail(result, "rails[" + i + "]가 null입니다.");
-            continue;
-        }
-
-        string objectId = rail.objectId != null ? rail.objectId.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(objectId))
-        {
-            Fail(result, "rails[" + i + "].objectId가 필요합니다.");
-        }
-        else if (!seenObjectIds.Add(objectId))
-        {
-            Fail(result, "중복된 rails objectId '" + objectId + "'입니다.");
-        }
-
-        string spawnKey = rail.spawnKey != null ? rail.spawnKey.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(spawnKey))
-        {
-            Fail(result, "rails[" + i + "].spawnKey가 필요합니다.");
-        }
-        else if (!seenSpawnKeys.Add(spawnKey))
-        {
-            Fail(result, "중복된 rails spawnKey '" + spawnKey + "'입니다.");
-        }
-        else if (!spawnLookup.ContainsKey(spawnKey))
-        {
-            Fail(result, "rails[" + i + "].spawnKey '" + spawnKey + "'에 대응하는 compiled spawn을 찾지 못했습니다.");
-        }
-
-        if (rail.options == null)
-        {
-            Fail(result, "rails[" + i + "].options가 필요합니다.");
-        }
-        else
-        {
-            if (!ItemRefUtility.IsValid(rail.options.item))
-            {
-                Fail(result, "rails[" + i + "].options.item이 필요합니다.");
-            }
-
-            if (rail.options.spawnIntervalSeconds <= 0f)
-                Fail(result, "rails[" + i + "].options.spawnIntervalSeconds는 0보다 커야 합니다.");
-            if (rail.options.travelDurationSeconds <= 0f)
-                Fail(result, "rails[" + i + "].options.travelDurationSeconds는 0보다 커야 합니다.");
-
-            string sinkEndpointTargetObjectId = rail.options.sinkEndpointTargetObjectId != null ? rail.options.sinkEndpointTargetObjectId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(sinkEndpointTargetObjectId))
-            {
-                Fail(result, "rails[" + i + "].options.sinkEndpointTargetObjectId가 필요합니다.");
-            }
-            else if (!IsSupportedRailSinkTargetObjectId(sinkEndpointTargetObjectId, spawnLookup))
-            {
-                Fail(result, "rails[" + i + "].options.sinkEndpointTargetObjectId '" + sinkEndpointTargetObjectId + "'에 대응하는 processor 또는 seller를 찾지 못했습니다.");
-            }
-        }
-
-        if (rail.layout == null || rail.layout.pathCells == null || rail.layout.pathCells.Length == 0)
-            Fail(result, "rails[" + i + "].layout.pathCells가 필요합니다.");
-    }
-}
-
-private static void ValidateDeclaredLaneRelationships(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    CompiledPlayablePlanValidationResult result)
-{
-    if (layoutSpec == null)
-        return;
-
-    if (!TryCollectGameplayFootprintBounds(spawns, physicsAreas, rails, unlocks, catalog, layoutSpec, out List<GameplaySpawnFootprintBounds> boundsList, out string error))
-    {
-        if (!string.IsNullOrEmpty(error))
-            Fail(result, error);
-        return;
-    }
-
-    var lanes = new Dictionary<string, List<GameplaySpawnFootprintBounds>>(StringComparer.Ordinal);
-    for (int i = 0; i < boundsList.Count; i++)
-    {
-        GameplaySpawnFootprintBounds bounds = boundsList[i];
-        string laneId = bounds != null && bounds.LaneId != null ? bounds.LaneId.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(laneId) || !bounds.HasLaneOrder)
-            continue;
-
-        if (!lanes.TryGetValue(laneId, out List<GameplaySpawnFootprintBounds> laneBounds))
-        {
-            laneBounds = new List<GameplaySpawnFootprintBounds>();
-            lanes.Add(laneId, laneBounds);
-        }
-
-        laneBounds.Add(bounds);
-    }
-
-    foreach (KeyValuePair<string, List<GameplaySpawnFootprintBounds>> pair in lanes)
-    {
-        string laneId = pair.Key;
-        List<GameplaySpawnFootprintBounds> laneBounds = pair.Value ?? new List<GameplaySpawnFootprintBounds>();
-        laneBounds.Sort(
-            delegate (GameplaySpawnFootprintBounds left, GameplaySpawnFootprintBounds right)
-            {
-                int orderCompare = left.LaneOrder.CompareTo(right.LaneOrder);
-                if (orderCompare != 0)
-                    return orderCompare;
-                return string.CompareOrdinal(left.ObjectId, right.ObjectId);
-            });
-
-        for (int i = 0; i < laneBounds.Count;)
-        {
-            int laneOrder = laneBounds[i].LaneOrder;
-            var sameOrderGroup = new List<GameplaySpawnFootprintBounds>();
-            int cursor = i;
-            while (cursor < laneBounds.Count && laneBounds[cursor].LaneOrder == laneOrder)
-            {
-                sameOrderGroup.Add(laneBounds[cursor]);
-                cursor++;
-            }
-
-            if (cursor < laneBounds.Count)
-            {
-                int nextLaneOrder = laneBounds[cursor].LaneOrder;
-                var nextOrderGroup = new List<GameplaySpawnFootprintBounds>();
-                int nextCursor = cursor;
-                while (nextCursor < laneBounds.Count && laneBounds[nextCursor].LaneOrder == nextLaneOrder)
-                {
-                    nextOrderGroup.Add(laneBounds[nextCursor]);
-                    nextCursor++;
-                }
-
-                float upperAverageWorldZ = ComputeAverageWorldZ(sameOrderGroup);
-                float lowerAverageWorldZ = ComputeAverageWorldZ(nextOrderGroup);
-                float actualGap = ComputeLaneGroupGap(sameOrderGroup, nextOrderGroup);
-                float requiredGap = ResolveDeclaredLaneRequiredGap(sameOrderGroup, nextOrderGroup);
-            }
-
-            i = cursor;
-        }
-    }
-}
-
-        private static bool TryResolveExplicitLayoutWorldBounds(
-            LayoutSpecDocument layoutSpec,
-            PlayableObjectCatalog catalog,
-            out float minWorldX,
-            out float maxWorldX,
-            out float minWorldZ,
-            out float maxWorldZ)
-        {
-            minWorldX = 0f;
-            maxWorldX = 0f;
-            minWorldZ = 0f;
-            maxWorldZ = 0f;
-
-            LayoutSpecFloorBounds floorBounds = layoutSpec != null ? layoutSpec.floorBounds : null;
-            if (floorBounds != null && floorBounds.hasWorldBounds)
-            {
-                float worldWidth = floorBounds.worldWidth > 0f ? floorBounds.worldWidth : IntentAuthoringUtility.LAYOUT_SPACING;
-                float worldDepth = floorBounds.worldDepth > 0f ? floorBounds.worldDepth : IntentAuthoringUtility.LAYOUT_SPACING;
-                minWorldX = floorBounds.worldX - worldWidth * 0.5f;
-                maxWorldX = floorBounds.worldX + worldWidth * 0.5f;
-                minWorldZ = floorBounds.worldZ - worldDepth * 0.5f;
-                maxWorldZ = floorBounds.worldZ + worldDepth * 0.5f;
-                return true;
-            }
-
-            return TryResolveExplicitEnvironmentWorldBounds(layoutSpec != null ? layoutSpec.environment : null, catalog, out minWorldX, out maxWorldX, out minWorldZ, out maxWorldZ);
-        }
-
-        private static bool TryResolveExplicitEnvironmentWorldBounds(
-            LayoutSpecEnvironmentEntry[] entries,
-            PlayableObjectCatalog catalog,
-            out float minWorldX,
-            out float maxWorldX,
-            out float minWorldZ,
-            out float maxWorldZ)
-        {
-            minWorldX = 0f;
-            maxWorldX = 0f;
-            minWorldZ = 0f;
-            maxWorldZ = 0f;
-            LayoutSpecEnvironmentEntry[] safeEntries = entries ?? new LayoutSpecEnvironmentEntry[0];
-            var includeCandidates = new List<LayoutSpecEnvironmentEntry>();
-            var nonRoadCandidates = new List<LayoutSpecEnvironmentEntry>();
-            for (int i = 0; i < safeEntries.Length; i++)
-            {
-                LayoutSpecEnvironmentEntry entry = safeEntries[i];
-                if (entry == null || !entry.includeInBounds)
-                    continue;
-
-                includeCandidates.Add(entry);
-                if (!IsRoadEnvironmentEntry(entry, catalog))
-                    nonRoadCandidates.Add(entry);
-            }
-
-            LayoutSpecEnvironmentEntry[] boundsEntries = nonRoadCandidates.Count > 0
-                ? nonRoadCandidates.ToArray()
-                : includeCandidates.ToArray();
-            if (boundsEntries.Length == 0)
-                return false;
-
-            bool hasAny = false;
-            for (int i = 0; i < boundsEntries.Length; i++)
-            {
-                LayoutSpecEnvironmentEntry entry = boundsEntries[i];
-                if (entry == null)
-                    continue;
-
-                float worldWidth = entry.worldWidth > 0f ? entry.worldWidth : IntentAuthoringUtility.LAYOUT_SPACING;
-                float worldDepth = entry.worldDepth > 0f ? entry.worldDepth : IntentAuthoringUtility.LAYOUT_SPACING;
-                float entryMinX = entry.worldX - worldWidth * 0.5f;
-                float entryMaxX = entry.worldX + worldWidth * 0.5f;
-                float entryMinZ = entry.worldZ - worldDepth * 0.5f;
-                float entryMaxZ = entry.worldZ + worldDepth * 0.5f;
-                if (!hasAny)
-                {
-                    minWorldX = entryMinX;
-                    maxWorldX = entryMaxX;
-                    minWorldZ = entryMinZ;
-                    maxWorldZ = entryMaxZ;
-                    hasAny = true;
-                    continue;
-                }
-
-                if (entryMinX < minWorldX)
-                    minWorldX = entryMinX;
-                if (entryMaxX > maxWorldX)
-                    maxWorldX = entryMaxX;
-                if (entryMinZ < minWorldZ)
-                    minWorldZ = entryMinZ;
-                if (entryMaxZ > maxWorldZ)
-                    maxWorldZ = entryMaxZ;
-            }
-
-            return hasAny;
-        }
-
-        private static bool IsRoadEnvironmentEntry(LayoutSpecEnvironmentEntry entry, PlayableObjectCatalog catalog)
-        {
-            string objectId = entry != null && !string.IsNullOrWhiteSpace(entry.objectId) ? entry.objectId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(objectId))
-                return false;
-
-            if (catalog != null && catalog.TryGetEnvironmentEntry(objectId, out EnvironmentCatalogEntry environmentEntry) && environmentEntry != null)
-            {
-                return string.Equals(environmentEntry.category != null ? environmentEntry.category.Trim() : string.Empty, EnvironmentCatalog.ROAD_CATEGORY, StringComparison.Ordinal);
-            }
-
-            return string.Equals(objectId, "road", StringComparison.Ordinal);
-        }
-
-        private static bool IsFloorEnvironmentEntry(LayoutSpecEnvironmentEntry entry, PlayableObjectCatalog catalog)
-        {
-            string objectId = entry != null && !string.IsNullOrWhiteSpace(entry.objectId) ? entry.objectId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(objectId))
-                return false;
-
-            if (catalog != null && catalog.TryGetEnvironmentEntry(objectId, out EnvironmentCatalogEntry environmentEntry) && environmentEntry != null)
-            {
-                return string.Equals(environmentEntry.category != null ? environmentEntry.category.Trim() : string.Empty, EnvironmentCatalog.FLOOR_CATEGORY, StringComparison.Ordinal);
-            }
-
-            return string.Equals(objectId, "floor", StringComparison.Ordinal);
-        }
-
-        private static string ResolveEnvironmentCategory(PlayableObjectCatalog catalog, string objectId)
-        {
-            if (catalog == null || string.IsNullOrWhiteSpace(objectId))
-                return string.Empty;
-
-            if (!catalog.TryGetEnvironmentEntry(objectId.Trim(), out EnvironmentCatalogEntry entry) || entry == null)
-                return string.Empty;
-
-            return entry.category != null ? entry.category.Trim() : string.Empty;
-        }
-
-        private static string BuildEnvironmentDesignResolutionError(
-            PlayableObjectCatalog catalog,
-            string objectId,
-            string designId,
-            string label)
-        {
-            string normalizedObjectId = objectId != null ? objectId.Trim() : string.Empty;
-            string normalizedDesignId = designId != null ? designId.Trim() : string.Empty;
-            string missingDesignLabel = string.IsNullOrEmpty(normalizedDesignId) ? "(empty)" : normalizedDesignId;
-
-            var segments = new List<string>();
-            string[] availableObjectIds = BuildEnvironmentObjectIdCandidates(catalog, normalizedObjectId);
-            string[] availableDesignIds = TryGetAvailableEnvironmentDesignIds(catalog, normalizedObjectId);
-            if (availableObjectIds.Length > 0)
-                segments.Add("사용 가능한 objectId: [" + JoinCandidateValues(availableObjectIds) + "]");
-            if (availableDesignIds.Length > 0)
-                segments.Add("사용 가능한 designId: [" + JoinCandidateValues(availableDesignIds) + "]");
-
-            string guidance = segments.Count > 0
-                ? " -> 수정 가이드: " + string.Join("; ", segments) + "."
-                : " -> 수정 가이드: catalog의 objectId와 designId를 확인하세요.";
-            return label + "에서 objectId '" + normalizedObjectId + "'의 designId '" + missingDesignLabel +
-                   "'를 catalog environment design으로 해석하지 못했습니다." + guidance;
-        }
-
-        private static string[] BuildEnvironmentObjectIdCandidates(PlayableObjectCatalog catalog, string requestedObjectId)
-        {
-            if (catalog == null || string.IsNullOrWhiteSpace(requestedObjectId))
-                return Array.Empty<string>();
-
-            string normalizedRequestedObjectId = requestedObjectId.Trim();
-            var exactMatches = new HashSet<string>(StringComparer.Ordinal);
-            var fuzzyMatches = new HashSet<string>(StringComparer.Ordinal);
-            IReadOnlyList<EnvironmentCatalogEntry> entries = catalog.GetEnvironmentEntries();
-            for (int i = 0; i < entries.Count; i++)
-            {
-                EnvironmentCatalogEntry entry = entries[i];
-                string candidateObjectId = entry != null && !string.IsNullOrWhiteSpace(entry.objectId)
-                    ? entry.objectId.Trim()
-                    : string.Empty;
-                if (string.IsNullOrEmpty(candidateObjectId))
-                    continue;
-
-                if (string.Equals(candidateObjectId, normalizedRequestedObjectId, StringComparison.Ordinal))
-                {
-                    exactMatches.Add(candidateObjectId);
-                    continue;
-                }
-
-                if (candidateObjectId.IndexOf(normalizedRequestedObjectId, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    normalizedRequestedObjectId.IndexOf(candidateObjectId, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    fuzzyMatches.Add(candidateObjectId);
-                }
-            }
-
-            if (exactMatches.Count > 0)
-                return new List<string>(exactMatches).ToArray();
-
-            var values = new List<string>(fuzzyMatches);
-            values.Sort(StringComparer.Ordinal);
-            if (values.Count > 5)
-                values.RemoveRange(5, values.Count - 5);
-            return values.ToArray();
-        }
-
-        private static string[] TryGetAvailableEnvironmentDesignIds(PlayableObjectCatalog catalog, string objectId)
-        {
-            if (catalog == null ||
-                string.IsNullOrWhiteSpace(objectId) ||
-                !catalog.TryGetEnvironmentEntry(objectId.Trim(), out EnvironmentCatalogEntry entry) ||
-                entry == null)
-            {
-                return Array.Empty<string>();
-            }
-
-            EnvironmentDesignVariantEntry[] designs = entry.designs ?? Array.Empty<EnvironmentDesignVariantEntry>();
-            var values = new List<string>();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            for (int i = 0; i < designs.Length; i++)
-            {
-                string designId = designs[i] != null && !string.IsNullOrWhiteSpace(designs[i].designId)
-                    ? designs[i].designId.Trim()
-                    : string.Empty;
-                if (string.IsNullOrEmpty(designId) || !seen.Add(designId))
-                    continue;
-
-                values.Add(designId);
-            }
-
-            values.Sort(StringComparer.Ordinal);
-            return values.ToArray();
-        }
-
-        private static string JoinCandidateValues(IEnumerable<string> values)
-        {
-            if (values == null)
-                return string.Empty;
-
-            var filtered = new List<string>();
-            foreach (string value in values)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                    filtered.Add(value.Trim());
-            }
-
-            return string.Join(", ", filtered);
-        }
-
-        private static bool TryValidateEnvironmentDesignFootprintRules(
-            EnvironmentDesignVariantEntry design,
-            string variationMode,
-            out float tileStep,
-            out string error)
-        {
-            tileStep = 0f;
-            error = string.Empty;
-            var uniquePrefabs = new HashSet<GameObject>();
-            TryAddEnvironmentPrefab(uniquePrefabs, design != null ? design.prefab : null);
-            TryAddEnvironmentPrefab(uniquePrefabs, design != null ? design.straightPrefab : null);
-            TryAddEnvironmentPrefab(uniquePrefabs, design != null ? design.cornerPrefab : null);
-            TryAddEnvironmentPrefab(uniquePrefabs, design != null ? design.tJunctionPrefab : null);
-            TryAddEnvironmentPrefab(uniquePrefabs, design != null ? design.crossPrefab : null);
-            if (uniquePrefabs.Count == 0)
-            {
-                error = "environment prefab이 비어 있습니다.";
-                return false;
-            }
-
-            int expectedSquareSizeCells = 0;
-            foreach (GameObject prefab in uniquePrefabs)
-            {
-                if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
-                {
-                    error = "environment prefab metadata를 읽지 못했습니다.";
-                    return false;
-                }
-
-                int widthCells = metadata.placementFootprintWidthCells > 0 ? metadata.placementFootprintWidthCells : 1;
-                int depthCells = metadata.placementFootprintDepthCells > 0 ? metadata.placementFootprintDepthCells : 1;
-                if (widthCells != depthCells)
-                {
-                    error = "environment prefab footprint는 정사각형이어야 합니다.";
-                    return false;
-                }
-
-                if (expectedSquareSizeCells == 0)
-                {
-                    expectedSquareSizeCells = widthCells;
-                    continue;
-                }
-
-                if (expectedSquareSizeCells != widthCells)
-                {
-                    error = "environment prefab 세트의 모든 variant는 동일한 정사각 footprint를 가져야 합니다.";
-                    return false;
-                }
-            }
-
-            if (expectedSquareSizeCells < 1)
-            {
-                error = "environment footprint size를 해석하지 못했습니다.";
-                return false;
-            }
-
-            tileStep = expectedSquareSizeCells * IntentAuthoringUtility.LAYOUT_SPACING;
-            return true;
-        }
-
-        private static void TryAddEnvironmentPrefab(HashSet<GameObject> prefabs, GameObject prefab)
-        {
-            if (prefabs == null || prefab == null)
-                return;
-
-            prefabs.Add(prefab);
-        }
-
-        private static bool IsPerimeterEnvironmentPlacement(PlayableObjectCatalog catalog, LayoutSpecEnvironmentEntry entry)
-        {
-            if (catalog == null || entry == null || string.IsNullOrWhiteSpace(entry.objectId))
-                return false;
-
-            return catalog.TryResolveEnvironmentPlacementMode(entry.objectId.Trim(), out string placementMode) &&
-                   string.Equals(placementMode, EnvironmentCatalog.PLACEMENT_MODE_PERIMETER, StringComparison.Ordinal);
-        }
-
-        private static bool TryValidatePerimeterThicknessRule(
-            string placementMode,
-            LayoutSpecEnvironmentEntry entry,
-            float tileStep,
-            int entryIndex,
-            out string error)
-        {
-            error = string.Empty;
-            if (entry == null || !entry.hasWorldBounds)
-                return true;
-
-            if (!string.Equals(placementMode, EnvironmentCatalog.PLACEMENT_MODE_PERIMETER, StringComparison.Ordinal))
-                return true;
-
-            float safeTileStep = NormalizeEnvironmentTileStep(tileStep);
-            float worldWidth = entry.worldWidth > 0f ? entry.worldWidth : safeTileStep;
-            float worldDepth = entry.worldDepth > 0f ? entry.worldDepth : safeTileStep;
-            if (!TryResolveAlignedTileCount(worldWidth, safeTileStep, out int widthTileCount))
-            {
-                error =
-                    "layout_spec.environment[" + entryIndex + "]의 worldWidth가 footprint tileStep 배수가 아닙니다. " +
-                    "(objectId='" + (entry.objectId ?? string.Empty) + "', designId='" + (entry.designId ?? string.Empty) +
-                    "', worldWidth=" + worldWidth.ToString("0.###") + ", tileStep=" + safeTileStep.ToString("0.###") + ").";
-                return false;
-            }
-
-            if (!TryResolveAlignedTileCount(worldDepth, safeTileStep, out int depthTileCount))
-            {
-                error =
-                    "layout_spec.environment[" + entryIndex + "]의 worldDepth가 footprint tileStep 배수가 아닙니다. " +
-                    "(objectId='" + (entry.objectId ?? string.Empty) + "', designId='" + (entry.designId ?? string.Empty) +
-                    "', worldDepth=" + worldDepth.ToString("0.###") + ", tileStep=" + safeTileStep.ToString("0.###") + ").";
-                return false;
-            }
-
-            if (Math.Min(widthTileCount, depthTileCount) != 1)
-            {
-                int footprintCells = Math.Max(1, (int)MathF.Round(safeTileStep / IntentAuthoringUtility.LAYOUT_SPACING));
-                error =
-                    "layout_spec.environment[" + entryIndex + "]는 perimeter 두께 규칙을 위반했습니다. " +
-                    "(objectId='" + (entry.objectId ?? string.Empty) + "', designId='" + (entry.designId ?? string.Empty) +
-                    "', footprint=" + footprintCells + "x" + footprintCells +
-                    ", tileStep=" + safeTileStep.ToString("0.###") +
-                    ", worldWidth=" + worldWidth.ToString("0.###") +
-                    ", worldDepth=" + worldDepth.ToString("0.###") +
-                    ", tileCount=" + widthTileCount + "x" + depthTileCount + "). " +
-                    "perimeter는 짧은 축 두께가 정확히 1 tile이어야 합니다.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool TryResolveAlignedTileCount(float worldSize, float tileStep, out int tileCount)
-        {
-            tileCount = 0;
-            if (worldSize <= 0f || tileStep <= 0f)
-                return false;
-
-            float ratio = worldSize / tileStep;
-            if (float.IsNaN(ratio) || float.IsInfinity(ratio))
-                return false;
-
-            int rounded = Math.Max(1, (int)MathF.Round(ratio));
-            float snappedSize = rounded * tileStep;
-            float tolerance = Math.Max(ENVIRONMENT_TILE_ALIGNMENT_MIN_TOLERANCE, tileStep * ENVIRONMENT_TILE_ALIGNMENT_TOLERANCE_RATIO);
-            if (MathF.Abs(snappedSize - worldSize) > tolerance)
-                return false;
-
-            tileCount = rounded;
-            return true;
-        }
-
-        private static float NormalizeEnvironmentTileStep(float tileStep)
-        {
-            return tileStep > 0f ? tileStep : ENVIRONMENT_TILE_STEP_FLOOR;
-        }
-
-        private static int ResolveEnvironmentCoordinateStride(float tileStep)
-        {
-            float safeStep = NormalizeEnvironmentTileStep(tileStep);
-            return System.Math.Max(1, (int)System.MathF.Round(safeStep / ENVIRONMENT_COORD_UNIT));
-        }
-
-        private static Vector3 ResolveEnvironmentCellWorldPosition(EnvironmentCellCoordinate coordinate)
-        {
-            return new Vector3(coordinate.X * ENVIRONMENT_COORD_UNIT, 0f, coordinate.Y * ENVIRONMENT_COORD_UNIT);
-        }
-
-        private static int ResolveEnvironmentTileCount(float worldSize, float tileStep)
-        {
-            float safeStep = NormalizeEnvironmentTileStep(tileStep);
-            int floorCount = System.Math.Max(1, (int)System.MathF.Floor((worldSize / safeStep) + 0.0001f));
-            int ceilCount = System.Math.Max(1, (int)System.MathF.Ceiling((worldSize / safeStep) - 0.0001f));
-            float floorError = System.MathF.Abs(floorCount * safeStep - worldSize);
-            float ceilError = System.MathF.Abs(ceilCount * safeStep - worldSize);
-            return floorError <= ceilError ? floorCount : ceilCount;
-        }
-
-        private static int ResolveEnvironmentFirstCoordinate(
-            float worldCenter,
-            float worldSize,
-            int tileCount,
-            float tileStep,
-            int coordinateStride,
-            int footprintCells)
-        {
-            int safeTileCount = tileCount > 0 ? tileCount : 1;
-            if ((footprintCells & 1) == 0)
-            {
-                int snappedCenterCoordinate = QuantizeEnvironmentIntegerCenterCoordinate(worldCenter);
-                return snappedCenterCoordinate - ((safeTileCount - 1) * coordinateStride) / 2;
-            }
-
-            float firstTileCenterWorld = worldCenter - worldSize * 0.5f + NormalizeEnvironmentTileStep(tileStep) * 0.5f;
-            return QuantizeEnvironmentCoordinate(firstTileCenterWorld);
-        }
-
-        private static int QuantizeEnvironmentCoordinate(float worldCenter)
-        {
-            return (int)System.MathF.Round(worldCenter / ENVIRONMENT_COORD_UNIT);
-        }
-
-        private static int QuantizeEnvironmentIntegerCenterCoordinate(float worldCenter)
-        {
-            return (int)System.MathF.Round(worldCenter / IntentAuthoringUtility.LAYOUT_SPACING) * 2;
-        }
-
-private static bool TryResolveGameplaySpawnFootprintBounds(
-    CompiledSpawnData spawn,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    Dictionary<string, LayoutSpecPlacementEntry> placementLookup,
-    out GameplaySpawnFootprintBounds bounds,
-            out string error)
-        {
-            bounds = null;
-            error = string.Empty;
-            if (spawn == null || catalog == null || string.IsNullOrWhiteSpace(spawn.objectId))
-                return false;
-
-            if (!TryResolveSpawnFootprintFromCatalog(catalog, spawn, out int widthCells, out int depthCells))
-            {
-                error = "compiled spawn '" + ResolveSpawnLabel(spawn) + "'의 gameplay footprint metadata를 해석하지 못했습니다.";
-                return false;
-            }
-
-            if (ShouldSwapGameplaySpawnFootprintAxes(catalog, layoutSpec, spawn, widthCells, depthCells))
-            {
-                int temp = widthCells;
-                widthCells = depthCells;
-                depthCells = temp;
-            }
-
-            SerializableVector3 position = spawn.localPosition;
-            float halfWidth = widthCells * IntentAuthoringUtility.LAYOUT_SPACING * 0.5f;
-            float halfDepth = depthCells * IntentAuthoringUtility.LAYOUT_SPACING * 0.5f;
-            bounds = new GameplaySpawnFootprintBounds
-            {
-                ReferenceId = ResolveSpawnLabel(spawn),
-                SceneObjectId = ResolveSceneObjectIdFromSpawnKey(spawn),
-                SpawnKey = ResolveSpawnLabel(spawn),
-                ObjectId = spawn.objectId != null ? spawn.objectId.Trim() : string.Empty,
-                Role = GameplayOverlapAllowanceRules.ResolveCompiledGameplayRole(spawn.objectId),
-                CenterX = position.x,
-                CenterZ = position.z,
-                HasResolvedYaw = spawn.hasResolvedYaw,
-                ResolvedYawDegrees = spawn.resolvedYawDegrees,
-                MinX = position.x - halfWidth,
-                MaxX = position.x + halfWidth,
-                MinZ = position.z - halfDepth,
-                MaxZ = position.z + halfDepth,
-    };
-    ApplyPlacementSemantics(
-        bounds,
-        ResolveLayoutPlacementEntry(
-            placementLookup,
-            ResolveSpawnLabel(spawn),
-            ResolveSceneObjectIdFromSpawnKey(spawn)));
-    return true;
-}
-
-private static bool TryResolveRailFootprintBounds(
-    CompiledRailDefinition rail,
-    Dictionary<string, LayoutSpecPlacementEntry> placementLookup,
-    out GameplaySpawnFootprintBounds bounds,
-    out string error)
-{
-    bounds = null;
-    error = string.Empty;
-    if (rail == null)
-        return false;
-
-    string objectId = rail.objectId != null ? rail.objectId.Trim() : string.Empty;
-    string spawnKey = rail.spawnKey != null ? rail.spawnKey.Trim() : string.Empty;
-    if (string.IsNullOrEmpty(objectId))
-    {
-        error = "rail objectId가 비어 있습니다.";
-        return false;
-    }
-
-    if (!TryResolveRailLayoutBounds(rail.layout, out WorldBoundsDefinition trackBounds, out string trackBoundsError))
-    {
-        error = "rail '" + (string.IsNullOrEmpty(spawnKey) ? objectId : spawnKey) + "'의 layout.pathCells가 유효하지 않습니다. " + trackBoundsError;
-        return false;
-    }
-
-    float halfWidth = trackBounds.worldWidth * 0.5f;
-    float halfDepth = trackBounds.worldDepth * 0.5f;
-    string referenceId = string.IsNullOrEmpty(spawnKey) ? objectId : spawnKey;
-    bounds = new GameplaySpawnFootprintBounds
-    {
-        ReferenceId = referenceId,
-        SceneObjectId = objectId,
-        SpawnKey = referenceId,
-        ObjectId = objectId,
-        Role = PromptIntentObjectRoles.RAIL,
-        CenterX = trackBounds.worldX,
-        CenterZ = trackBounds.worldZ,
-        SinkEndpointTargetObjectId = rail.options != null && rail.options.sinkEndpointTargetObjectId != null
-            ? rail.options.sinkEndpointTargetObjectId.Trim()
-            : string.Empty,
-        MinX = trackBounds.worldX - halfWidth,
-        MaxX = trackBounds.worldX + halfWidth,
-        MinZ = trackBounds.worldZ - halfDepth,
-        MaxZ = trackBounds.worldZ + halfDepth,
-    };
-    ApplyPlacementSemantics(bounds, ResolveLayoutPlacementEntry(placementLookup, referenceId, objectId));
-    return true;
-}
-
-private static bool TryResolvePhysicsAreaFootprintBounds(
-    CompiledPhysicsAreaDefinition physicsArea,
-    Dictionary<string, LayoutSpecPlacementEntry> placementLookup,
-    out GameplaySpawnFootprintBounds bounds,
-    out string error)
-{
-    bounds = null;
-    error = string.Empty;
-    if (physicsArea == null)
-        return false;
-
-    string objectId = physicsArea.objectId != null ? physicsArea.objectId.Trim() : string.Empty;
-    string spawnKey = physicsArea.spawnKey != null ? physicsArea.spawnKey.Trim() : string.Empty;
-    if (string.IsNullOrEmpty(objectId))
-    {
-        error = "physics_area objectId가 비어 있습니다.";
-        return false;
-    }
-
-    if (!TryResolvePhysicsAreaUnionBounds(
-            physicsArea.layout,
-            out float minX,
-            out float maxX,
-            out float minZ,
-            out float maxZ,
-            out error))
-    {
-        return false;
-    }
-
-    bounds = new GameplaySpawnFootprintBounds
-    {
-        ReferenceId = string.IsNullOrEmpty(spawnKey) ? objectId : spawnKey,
-        SceneObjectId = objectId,
-        SpawnKey = string.IsNullOrEmpty(spawnKey) ? objectId : spawnKey,
-        ObjectId = objectId,
-        Role = PromptIntentObjectRoles.PHYSICS_AREA,
-        CenterX = (minX + maxX) * 0.5f,
-        CenterZ = (minZ + maxZ) * 0.5f,
-        MinX = minX,
-        MaxX = maxX,
-        MinZ = minZ,
-        MaxZ = maxZ,
-    };
-    ApplyPlacementSemantics(
-        bounds,
-        ResolveLayoutPlacementEntry(
-            placementLookup,
-            string.IsNullOrEmpty(spawnKey) ? objectId : spawnKey,
-            objectId));
-    return true;
-}
-
-private static bool TryResolvePhysicsAreaUnionBounds(
-    PhysicsAreaLayoutDefinition layout,
-    out float minX,
-    out float maxX,
-    out float minZ,
-    out float maxZ,
-    out string error)
-{
-    minX = 0f;
-    maxX = 0f;
-    minZ = 0f;
-    maxZ = 0f;
-    error = string.Empty;
-    if (layout == null || !HasWorldBounds(layout.realPhysicsZoneBounds) || !HasWorldBounds(layout.fakeSpriteZoneBounds))
-    {
-        error = "physics_area layout에는 real/fake zone world bounds가 모두 필요합니다.";
-        return false;
-    }
-
-    minX = Math.Min(
-        layout.realPhysicsZoneBounds.worldX - layout.realPhysicsZoneBounds.worldWidth * 0.5f,
-        layout.fakeSpriteZoneBounds.worldX - layout.fakeSpriteZoneBounds.worldWidth * 0.5f);
-    maxX = Math.Max(
-        layout.realPhysicsZoneBounds.worldX + layout.realPhysicsZoneBounds.worldWidth * 0.5f,
-        layout.fakeSpriteZoneBounds.worldX + layout.fakeSpriteZoneBounds.worldWidth * 0.5f);
-    minZ = Math.Min(
-        layout.realPhysicsZoneBounds.worldZ - layout.realPhysicsZoneBounds.worldDepth * 0.5f,
-        layout.fakeSpriteZoneBounds.worldZ - layout.fakeSpriteZoneBounds.worldDepth * 0.5f);
-    maxZ = Math.Max(
-        layout.realPhysicsZoneBounds.worldZ + layout.realPhysicsZoneBounds.worldDepth * 0.5f,
-        layout.fakeSpriteZoneBounds.worldZ + layout.fakeSpriteZoneBounds.worldDepth * 0.5f);
-    return true;
-}
-
-private static bool HasWorldBounds(WorldBoundsDefinition value)
-{
-    return value != null &&
-           value.hasWorldBounds &&
-           value.worldWidth > 0f &&
-           value.worldDepth > 0f;
-}
-
-private static bool UsesFloorBoundaryBackFacingRule(string objectId)
-{
-    return AuthoringLayoutRules.UsesFloorBoundaryInwardFacingRuleForObjectId(objectId);
-}
-
-        private static bool ShouldSwapGameplaySpawnFootprintAxes(
-            PlayableObjectCatalog catalog,
-            LayoutSpecDocument layoutSpec,
-            CompiledSpawnData spawn,
-            int widthCells,
-            int depthCells)
-        {
-            if (catalog == null || spawn == null || string.IsNullOrWhiteSpace(spawn.objectId))
-                return false;
-
-            if (UsesFloorBoundaryBackFacingRule(spawn.objectId) &&
-                TryResolveExplicitLayoutWorldBounds(layoutSpec, catalog, out float minWorldX, out float maxWorldX, out float minWorldZ, out float maxWorldZ))
-            {
-                SerializableVector3 position = spawn.localPosition;
-                float yaw = ResolveFloorBoundaryBackFacingYaw(position.x, position.z, minWorldX, maxWorldX, minWorldZ, maxWorldZ);
-                return IntentAuthoringUtility.IsQuarterTurnOddYaw(yaw);
-            }
-
-            if (spawn.hasResolvedYaw)
-                return IntentAuthoringUtility.IsQuarterTurnOddYaw(spawn.resolvedYawDegrees);
-
-            if (!catalog.TryGetGameplayEntry(spawn.objectId.Trim(), out GameplayCatalogEntry entry) || entry == null)
-                return false;
-
-            string category = entry.category != null ? entry.category.Trim() : string.Empty;
-            if (string.Equals(category, GameplayCatalog.UNLOCKER_CATEGORY, StringComparison.Ordinal))
-                return IntentAuthoringUtility.IsQuarterTurnOddYaw(0f);
-            return false;
-        }
-
-        private static float ResolveFloorBoundaryBackFacingYaw(
-            float positionX,
-            float positionZ,
-            float minWorldX,
-            float maxWorldX,
-            float minWorldZ,
-            float maxWorldZ)
-        {
-            return AuthoringLayoutRules.ResolveFloorBoundaryInwardFacingYaw(
-                positionX,
-                positionZ,
-                minWorldX,
-                maxWorldX,
-                minWorldZ,
-                maxWorldZ);
-        }
-
         private static void ValidateImageLayoutEnvironmentPresence(
             LayoutSpecDocument layoutSpec,
             PlayableObjectCatalog catalog,
             CompiledPlayablePlanValidationResult result)
         {
-            if (layoutSpec == null)
+            _ = catalog;
+            if (!HasAnyImagePlacement(layoutSpec))
                 return;
 
-            LayoutSpecPlacementEntry[] placements = layoutSpec.placements ?? new LayoutSpecPlacementEntry[0];
-            bool hasImagePlacement = false;
-            for (int i = 0; i < placements.Length; i++)
-            {
-                LayoutSpecPlacementEntry placement = placements[i];
-                if (placement != null && placement.hasImageBounds)
-                {
-                    hasImagePlacement = true;
-                    break;
-                }
-            }
-
-            if (!hasImagePlacement)
-                return;
-
-            LayoutSpecEnvironmentEntry[] environmentEntries = layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0];
+            LayoutSpecEnvironmentEntry[] environmentEntries = layoutSpec != null
+                ? layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0]
+                : new LayoutSpecEnvironmentEntry[0];
             if (environmentEntries.Length == 0)
-            {
                 Fail(result, "이미지 기반 Step 3에서는 environment[]를 비울 수 없습니다.");
-                return;
-            }
-
-            if (!HasRequiredImageLayoutEnvironmentStructure(layoutSpec, catalog))
-                Fail(result, "이미지 기반 Step 3에서는 floorBounds 또는 floor entry와 함께 wall/fence/road 경계가 필요합니다.");
-        }
-
-private static void ValidateImageLayoutPadding(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    CompiledPlayablePlanValidationResult result)
-{
-            if (!HasAnyImagePlacement(layoutSpec) ||
-                catalog == null ||
-                !TryResolveExplicitLayoutWorldBounds(layoutSpec, catalog, out float layoutMinX, out float layoutMaxX, out float layoutMinZ, out float layoutMaxZ))
-            {
-                return;
-            }
-
-    if (!TryResolveRequiredGameplayBounds(
-            spawns,
-            physicsAreas,
-            rails,
-            null,
-            catalog,
-            layoutSpec,
-            out float gameplayMinX,
-                    out float gameplayMaxX,
-                    out float gameplayMinZ,
-                    out float gameplayMaxZ,
-                    out string error))
-            {
-                if (!string.IsNullOrEmpty(error))
-                    Fail(result, error);
-                return;
-            }
-
-            float leftPadding = gameplayMinX - layoutMinX;
-            float rightPadding = layoutMaxX - gameplayMaxX;
-            float bottomPadding = gameplayMinZ - layoutMinZ;
-            float topPadding = layoutMaxZ - gameplayMaxZ;
-            const float EPSILON = 0.0001f;
-
-            if (leftPadding <= MAX_IMAGE_LAYOUT_PADDING_PER_SIDE + EPSILON &&
-                rightPadding <= MAX_IMAGE_LAYOUT_PADDING_PER_SIDE + EPSILON &&
-                bottomPadding <= MAX_IMAGE_LAYOUT_PADDING_PER_SIDE + EPSILON &&
-                topPadding <= MAX_IMAGE_LAYOUT_PADDING_PER_SIDE + EPSILON)
-            {
-                return;
-            }
-
-            Fail(
-                result,
-                "이미지 기반 Step 3 layout bounds 여유가 과도합니다. " +
-                "gameplayBounds=(" + gameplayMinX + ", " + gameplayMaxX + ", " + gameplayMinZ + ", " + gameplayMaxZ + "), " +
-                "layoutBounds=(" + layoutMinX + ", " + layoutMaxX + ", " + layoutMinZ + ", " + layoutMaxZ + "), " +
-                "maxPaddingPerSide=" + MAX_IMAGE_LAYOUT_PADDING_PER_SIDE + ".");
         }
 
         private static bool HasAnyImagePlacement(LayoutSpecDocument layoutSpec)
@@ -2596,393 +1461,12 @@ private static void ValidateImageLayoutPadding(
             return false;
         }
 
-private static bool TryResolveRequiredGameplayBounds(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    out float minX,
-    out float maxX,
-    out float minZ,
-            out float maxZ,
-            out string error)
+        private static string ResolveSceneObjectIdFromSpawnKey(CompiledSpawnData spawn)
         {
-            minX = 0f;
-    maxX = 0f;
-    minZ = 0f;
-    maxZ = 0f;
-    error = string.Empty;
-
-    if (!TryCollectGameplayFootprintBounds(spawns, physicsAreas, rails, unlocks, catalog, layoutSpec, out List<GameplaySpawnFootprintBounds> boundsList, out error))
-        return false;
-
-    bool hasAny = false;
-    for (int i = 0; i < boundsList.Count; i++)
-    {
-        GameplaySpawnFootprintBounds bounds = boundsList[i];
-
-        if (!hasAny)
-        {
-            minX = bounds.MinX;
-                    maxX = bounds.MaxX;
-                    minZ = bounds.MinZ;
-                    maxZ = bounds.MaxZ;
-                    hasAny = true;
-                    continue;
-                }
-
-                if (bounds.MinX < minX)
-                    minX = bounds.MinX;
-                if (bounds.MaxX > maxX)
-                    maxX = bounds.MaxX;
-                if (bounds.MinZ < minZ)
-                    minZ = bounds.MinZ;
-                if (bounds.MaxZ > maxZ)
-                    maxZ = bounds.MaxZ;
-    }
-
-    return hasAny;
-}
-
-private static bool TryCollectGameplayFootprintBounds(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas,
-    CompiledRailDefinition[] rails,
-    UnlockDefinition[] unlocks,
-    PlayableObjectCatalog catalog,
-    LayoutSpecDocument layoutSpec,
-    out List<GameplaySpawnFootprintBounds> boundsList,
-    out string error)
-{
-    boundsList = new List<GameplaySpawnFootprintBounds>();
-    error = string.Empty;
-    if (catalog == null)
-        return false;
-
-    Dictionary<string, LayoutSpecPlacementEntry> placementLookup = BuildLayoutPlacementLookup(layoutSpec);
-    Dictionary<string, CompiledRailDefinition> railBySpawnKey = BuildRailLookupBySpawnKey(rails);
-
-    CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
-    for (int i = 0; i < safeSpawns.Length; i++)
-    {
-        CompiledSpawnData spawn = safeSpawns[i];
-        string spawnKey = ResolveSpawnLabel(spawn);
-        if (spawn == null || (!string.IsNullOrEmpty(spawnKey) && railBySpawnKey.ContainsKey(spawnKey)))
-            continue;
-
-        if (!TryResolveGameplaySpawnFootprintBounds(
-                spawn,
-                catalog,
-                layoutSpec,
-                placementLookup,
-                out GameplaySpawnFootprintBounds bounds,
-                out error))
-        {
-            return false;
-        }
-
-        boundsList.Add(bounds);
-    }
-
-    foreach (KeyValuePair<string, CompiledRailDefinition> pair in railBySpawnKey)
-    {
-        if (!TryResolveRailFootprintBounds(pair.Value, placementLookup, out GameplaySpawnFootprintBounds railBounds, out error))
-            return false;
-
-        boundsList.Add(railBounds);
-    }
-
-    CompiledPhysicsAreaDefinition[] safeAreas = physicsAreas ?? new CompiledPhysicsAreaDefinition[0];
-    for (int i = 0; i < safeAreas.Length; i++)
-    {
-        CompiledPhysicsAreaDefinition area = safeAreas[i];
-        if (area == null)
-            continue;
-
-        if (!TryResolvePhysicsAreaFootprintBounds(area, placementLookup, out GameplaySpawnFootprintBounds bounds, out error))
-            return false;
-
-        boundsList.Add(bounds);
-    }
-
-    return true;
-}
-
-private static Dictionary<string, CompiledRailDefinition> BuildRailLookupBySpawnKey(CompiledRailDefinition[] rails)
-{
-    var lookup = new Dictionary<string, CompiledRailDefinition>(StringComparer.Ordinal);
-    CompiledRailDefinition[] safeRails = rails ?? new CompiledRailDefinition[0];
-    for (int i = 0; i < safeRails.Length; i++)
-    {
-        CompiledRailDefinition rail = safeRails[i];
-        string spawnKey = rail != null && rail.spawnKey != null ? rail.spawnKey.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(spawnKey))
-            continue;
-
-        lookup[spawnKey] = rail;
-    }
-
-    return lookup;
-}
-
-private static Dictionary<string, LayoutSpecPlacementEntry> BuildLayoutPlacementLookup(LayoutSpecDocument layoutSpec)
-{
-    var lookup = new Dictionary<string, LayoutSpecPlacementEntry>(StringComparer.Ordinal);
-    LayoutSpecPlacementEntry[] safePlacements = layoutSpec != null ? layoutSpec.placements ?? new LayoutSpecPlacementEntry[0] : new LayoutSpecPlacementEntry[0];
-    for (int i = 0; i < safePlacements.Length; i++)
-    {
-        LayoutSpecPlacementEntry entry = safePlacements[i];
-        string objectId = entry != null && entry.objectId != null ? entry.objectId.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(objectId))
-            continue;
-
-        lookup[objectId] = entry;
-    }
-
-    return lookup;
-}
-
-private static LayoutSpecPlacementEntry ResolveLayoutPlacementEntry(
-    Dictionary<string, LayoutSpecPlacementEntry> placementLookup,
-    params string[] referenceIds)
-{
-    if (placementLookup == null || referenceIds == null)
-        return null;
-
-    for (int i = 0; i < referenceIds.Length; i++)
-    {
-        string normalizedReferenceId = referenceIds[i] != null ? referenceIds[i].Trim() : string.Empty;
-        if (string.IsNullOrEmpty(normalizedReferenceId))
-            continue;
-
-        if (placementLookup.TryGetValue(normalizedReferenceId, out LayoutSpecPlacementEntry entry) && entry != null)
-            return entry;
-    }
-
-    return null;
-}
-
-private static void ApplyPlacementSemantics(
-    GameplaySpawnFootprintBounds bounds,
-    LayoutSpecPlacementEntry placementEntry)
-{
-    if (bounds == null || placementEntry == null)
-        return;
-
-    bounds.LaneId = placementEntry.laneId != null ? placementEntry.laneId.Trim() : string.Empty;
-    bounds.HasLaneOrder = placementEntry.hasLaneOrder;
-    bounds.LaneOrder = placementEntry.laneOrder;
-    bounds.HasMinGapToNextCells = placementEntry.hasMinGapToNextCells;
-    bounds.MinGapToNextCells = placementEntry.minGapToNextCells;
-}
-
-private static string ResolveSceneObjectIdFromSpawnKey(CompiledSpawnData spawn)
-{
-    string spawnKey = ResolveSpawnLabel(spawn);
-    if (spawnKey.StartsWith("spawn_", StringComparison.Ordinal))
-        return spawnKey.Substring("spawn_".Length);
-    return string.Empty;
-}
-
-private static float ComputeAverageWorldZ(List<GameplaySpawnFootprintBounds> boundsGroup)
-{
-    List<GameplaySpawnFootprintBounds> safeBoundsGroup = boundsGroup ?? new List<GameplaySpawnFootprintBounds>();
-    if (safeBoundsGroup.Count == 0)
-        return 0f;
-
-    float sum = 0f;
-    int count = 0;
-    for (int i = 0; i < safeBoundsGroup.Count; i++)
-    {
-        GameplaySpawnFootprintBounds bounds = safeBoundsGroup[i];
-        if (bounds == null)
-            continue;
-
-        sum += bounds.CenterZ;
-        count++;
-    }
-
-    return count == 0 ? 0f : sum / count;
-}
-
-private static float ComputeLaneGroupGap(
-    List<GameplaySpawnFootprintBounds> upperGroup,
-    List<GameplaySpawnFootprintBounds> lowerGroup)
-{
-    float gap = float.MaxValue;
-    List<GameplaySpawnFootprintBounds> safeUpperGroup = upperGroup ?? new List<GameplaySpawnFootprintBounds>();
-    List<GameplaySpawnFootprintBounds> safeLowerGroup = lowerGroup ?? new List<GameplaySpawnFootprintBounds>();
-    for (int upperIndex = 0; upperIndex < safeUpperGroup.Count; upperIndex++)
-    {
-        GameplaySpawnFootprintBounds upper = safeUpperGroup[upperIndex];
-        if (upper == null)
-            continue;
-
-        for (int lowerIndex = 0; lowerIndex < safeLowerGroup.Count; lowerIndex++)
-        {
-            GameplaySpawnFootprintBounds lower = safeLowerGroup[lowerIndex];
-            if (lower == null)
-                continue;
-
-            float candidateGap = ComputeAxisGap(lower.MinZ, lower.MaxZ, upper.MinZ, upper.MaxZ);
-            if (candidateGap < gap)
-                gap = candidateGap;
-        }
-    }
-
-    return gap == float.MaxValue ? 0f : gap;
-}
-
-private static float ResolveDeclaredLaneRequiredGap(
-    List<GameplaySpawnFootprintBounds> upperGroup,
-    List<GameplaySpawnFootprintBounds> lowerGroup)
-{
-    float requiredGap = 0f;
-    List<GameplaySpawnFootprintBounds> safeUpperGroup = upperGroup ?? new List<GameplaySpawnFootprintBounds>();
-    List<GameplaySpawnFootprintBounds> safeLowerGroup = lowerGroup ?? new List<GameplaySpawnFootprintBounds>();
-    for (int upperIndex = 0; upperIndex < safeUpperGroup.Count; upperIndex++)
-    {
-        GameplaySpawnFootprintBounds upper = safeUpperGroup[upperIndex];
-        if (upper == null)
-            continue;
-
-        if (upper.HasMinGapToNextCells)
-            requiredGap = Math.Max(requiredGap, upper.MinGapToNextCells);
-
-        for (int lowerIndex = 0; lowerIndex < safeLowerGroup.Count; lowerIndex++)
-        {
-            GameplaySpawnFootprintBounds lower = safeLowerGroup[lowerIndex];
-            if (lower == null)
-                continue;
-
-            requiredGap = Math.Max(requiredGap, ResolveRequiredLaneGapBetween(upper, lower));
-        }
-    }
-
-    return requiredGap;
-}
-
-private static float ResolveRequiredLaneGapBetween(
-    GameplaySpawnFootprintBounds left,
-    GameplaySpawnFootprintBounds right)
-{
-    if (left == null || right == null)
-        return 0f;
-
-    if (!string.Equals(left.LaneId, right.LaneId, StringComparison.Ordinal))
-        return 0f;
-
-    if (!left.HasLaneOrder || !right.HasLaneOrder || left.LaneOrder == right.LaneOrder)
-        return 0f;
-
-    float requiredGap = 0f;
-    if (left.LaneOrder < right.LaneOrder && left.HasMinGapToNextCells)
-        requiredGap = Math.Max(requiredGap, left.MinGapToNextCells);
-    if (right.LaneOrder < left.LaneOrder && right.HasMinGapToNextCells)
-        requiredGap = Math.Max(requiredGap, right.MinGapToNextCells);
-    return requiredGap;
-}
-
-private static string ResolveRepresentativePlacementId(List<GameplaySpawnFootprintBounds> boundsGroup)
-{
-    List<GameplaySpawnFootprintBounds> safeBoundsGroup = boundsGroup ?? new List<GameplaySpawnFootprintBounds>();
-    string bestObjectId = string.Empty;
-    for (int i = 0; i < safeBoundsGroup.Count; i++)
-    {
-        string objectId = safeBoundsGroup[i] != null && safeBoundsGroup[i].ObjectId != null
-            ? safeBoundsGroup[i].ObjectId.Trim()
-            : string.Empty;
-        if (string.IsNullOrEmpty(objectId))
-            continue;
-
-        if (string.IsNullOrEmpty(bestObjectId) || string.CompareOrdinal(objectId, bestObjectId) < 0)
-            bestObjectId = objectId;
-    }
-
-    return bestObjectId;
-}
-
-private static float ComputeAxisGap(float firstMin, float firstMax, float secondMin, float secondMax)
-{
-    if (firstMax < secondMin)
-        return secondMin - firstMax;
-    if (secondMax < firstMin)
-        return firstMin - secondMax;
-    return 0f;
-}
-
-
-        private static bool HasRequiredImageLayoutEnvironmentStructure(
-            LayoutSpecDocument layoutSpec,
-            PlayableObjectCatalog catalog)
-        {
-            bool hasFloorEnvelope = layoutSpec != null &&
-                                    layoutSpec.floorBounds != null &&
-                                    layoutSpec.floorBounds.hasWorldBounds;
-            bool hasBoundaryStructure = false;
-            LayoutSpecEnvironmentEntry[] environmentEntries = layoutSpec != null
-                ? layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0]
-                : new LayoutSpecEnvironmentEntry[0];
-            for (int i = 0; i < environmentEntries.Length; i++)
-            {
-                LayoutSpecEnvironmentEntry entry = environmentEntries[i];
-                if (entry == null)
-                    continue;
-
-                string category = ResolveEnvironmentCategory(catalog, entry.objectId != null ? entry.objectId.Trim() : string.Empty);
-                if (string.Equals(category, EnvironmentCatalog.FLOOR_CATEGORY, StringComparison.Ordinal))
-                    hasFloorEnvelope = true;
-
-                if (string.Equals(category, EnvironmentCatalog.WALL_CATEGORY, StringComparison.Ordinal) ||
-                    string.Equals(category, EnvironmentCatalog.FENCE_CATEGORY, StringComparison.Ordinal) ||
-                    string.Equals(category, EnvironmentCatalog.ROAD_CATEGORY, StringComparison.Ordinal))
-                {
-                    hasBoundaryStructure = true;
-                }
-            }
-
-            return hasFloorEnvelope && hasBoundaryStructure;
-        }
-
-        private static bool TryResolveSpawnFootprintFromCatalog(
-            PlayableObjectCatalog catalog,
-            CompiledSpawnData spawn,
-            out int widthCells,
-            out int depthCells)
-        {
-            widthCells = 1;
-            depthCells = 1;
-            if (catalog == null || spawn == null || string.IsNullOrWhiteSpace(spawn.objectId))
-                return false;
-
-            if (!catalog.TryResolveGameplayPrefab(spawn.objectId.Trim(), spawn.designIndex, out GameObject prefab, out _) || prefab == null)
-                return false;
-
-            if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
-                return false;
-
-            widthCells = metadata.placementFootprintWidthCells > 0 ? metadata.placementFootprintWidthCells : 1;
-            depthCells = metadata.placementFootprintDepthCells > 0 ? metadata.placementFootprintDepthCells : 1;
-            return widthCells > 0 && depthCells > 0;
-        }
-
-
-        private static bool AreWorldBoundsOverlapping(
-            float minAX,
-            float maxAX,
-            float minAZ,
-            float maxAZ,
-            float minBX,
-            float maxBX,
-            float minBZ,
-            float maxBZ)
-        {
-            return minAX < maxBX &&
-                   maxAX > minBX &&
-                   minAZ < maxBZ &&
-                   maxAZ > minBZ;
+            string spawnKey = ResolveSpawnLabel(spawn);
+            if (spawnKey.StartsWith("spawn_", StringComparison.Ordinal))
+                return spawnKey.Substring("spawn_".Length);
+            return string.Empty;
         }
 
         private static string ResolveSpawnLabel(CompiledSpawnData spawn)
@@ -3007,7 +1491,9 @@ private static float ComputeAxisGap(float firstMin, float firstMax, float second
                     string.IsNullOrWhiteSpace(selection.objectId) ||
                     string.IsNullOrWhiteSpace(selection.designId) ||
                     selection.designIndex < 0)
+                {
                     continue;
+                }
 
                 lookup[ContentCatalogTokenUtility.BuildObjectDesignSelectionKey(selection.objectId.Trim(), selection.designId.Trim())] = selection.designIndex;
             }
@@ -3015,13 +1501,11 @@ private static float ComputeAxisGap(float firstMin, float firstMax, float second
             return lookup;
         }
 
-private static Dictionary<string, CompiledSpawnData> BuildSpawnLookup(
-    CompiledSpawnData[] spawns,
-    CompiledPhysicsAreaDefinition[] physicsAreas)
-{
-    var lookup = new Dictionary<string, CompiledSpawnData>(StringComparer.Ordinal);
-    var objectIdCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-    CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
+        private static Dictionary<string, CompiledSpawnData> BuildSpawnLookup(CompiledSpawnData[] spawns)
+        {
+            var lookup = new Dictionary<string, CompiledSpawnData>(StringComparer.Ordinal);
+            var objectIdCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            CompiledSpawnData[] safeSpawns = spawns ?? new CompiledSpawnData[0];
 
             for (int i = 0; i < safeSpawns.Length; i++)
             {
@@ -3054,59 +1538,8 @@ private static Dictionary<string, CompiledSpawnData> BuildSpawnLookup(
                     lookup[sceneObjectId] = spawn;
             }
 
-    CompiledPhysicsAreaDefinition[] safeAreas = physicsAreas ?? new CompiledPhysicsAreaDefinition[0];
-    for (int i = 0; i < safeAreas.Length; i++)
-    {
-        CompiledPhysicsAreaDefinition area = safeAreas[i];
-        if (area == null)
-            continue;
-
-        var sceneRef = new CompiledSpawnData
-        {
-            spawnKey = area.spawnKey,
-            objectId = area.objectId,
-            localPosition = area.localPosition,
-        };
-
-        if (!string.IsNullOrWhiteSpace(sceneRef.spawnKey))
-            lookup[sceneRef.spawnKey.Trim()] = sceneRef;
-        if (!string.IsNullOrWhiteSpace(sceneRef.objectId))
-            lookup[sceneRef.objectId.Trim()] = sceneRef;
-    }
-
-    return lookup;
-}
-
-private static bool IsSupportedRailSinkTargetObjectId(
-    string sinkEndpointTargetObjectId,
-    Dictionary<string, CompiledSpawnData> spawnLookup)
-{
-    string normalizedTargetObjectId = string.IsNullOrWhiteSpace(sinkEndpointTargetObjectId)
-        ? string.Empty
-        : sinkEndpointTargetObjectId.Trim();
-    if (string.IsNullOrEmpty(normalizedTargetObjectId))
-        return false;
-
-    if (spawnLookup == null || !spawnLookup.TryGetValue(normalizedTargetObjectId, out CompiledSpawnData spawn) || spawn == null)
-        return false;
-
-    string compiledGameplayObjectId = !string.IsNullOrWhiteSpace(spawn.objectId)
-        ? spawn.objectId.Trim()
-        : string.Empty;
-    string compiledRole = GameplayOverlapAllowanceRules.ResolveCompiledGameplayRole(compiledGameplayObjectId);
-    return PromptIntentObjectRoles.IsRailSinkTargetRoleSupported(compiledRole);
-}
-
-private static bool TryResolveRailLayoutBounds(
-    RailLayoutDefinition layout,
-    out WorldBoundsDefinition bounds,
-    out string error)
-{
-    bounds = new WorldBoundsDefinition();
-    error = string.Empty;
-    RailPathAnchorDefinition[] pathCells = layout != null ? layout.pathCells ?? new RailPathAnchorDefinition[0] : new RailPathAnchorDefinition[0];
-    return RailPathAuthoringUtility.TryBuildTrackBounds(pathCells, out bounds, out error);
-}
+            return lookup;
+        }
 
         private static bool TryResolveGameplayPrefab(string sceneRef, Dictionary<string, CompiledSpawnData> spawnLookup, PlayableObjectCatalog catalog, out GameObject prefab)
         {

@@ -12,19 +12,18 @@ namespace Supercent.PlayableAI.Common.Format
         public ObjectDesignSelectionDefinition[] objectDesigns = new ObjectDesignSelectionDefinition[0];
         public ContentSelectionDefinition[] contentSelections = new ContentSelectionDefinition[0];
         public CompiledSpawnData[] spawns = new CompiledSpawnData[0];
-        public CompiledPhysicsAreaDefinition[] physicsAreas = new CompiledPhysicsAreaDefinition[0];
-        public CompiledRailDefinition[] rails = new CompiledRailDefinition[0];
         public CurrencyDefinition[] currencies = new CurrencyDefinition[0];
         public ItemPriceDefinition[] itemPrices = new ItemPriceDefinition[0];
         public FeatureAcceptedItemDefinition[] featureAcceptedItems = new FeatureAcceptedItemDefinition[0];
         public FeatureOutputItemDefinition[] featureOutputItems = new FeatureOutputItemDefinition[0];
         public PlayableScenarioPlayerOptions playerOptions;
         public PlayableScenarioFeatureOptionDefinition[] featureOptions = new PlayableScenarioFeatureOptionDefinition[0];
+        public FeatureJsonPayload[] featureLayouts = new FeatureJsonPayload[0];
         public UnlockDefinition[] unlocks = new UnlockDefinition[0];
         public int flowSchemaVersion = FLOW_SCHEMA_VERSION;
         public FlowBeatDefinition[] beats = new FlowBeatDefinition[0];
         public FlowActionDefinition[] actions = new FlowActionDefinition[0];
-        /// <summary>First beat id per stage (same order as model.stages). Used for entry spawn_customer arrival audit.</summary>
+        /// <summary>First beat id per stage (same order as model.stages). Used by flow entry audit.</summary>
         public string[] stageFirstBeatIds = new string[0];
     }
 
@@ -43,25 +42,5 @@ namespace Supercent.PlayableAI.Common.Format
         public string orientationReason;
         public float anchorDeltaCellsX;
         public float anchorDeltaCellsZ;
-    }
-
-    [Serializable]
-    public sealed class CompiledPhysicsAreaDefinition
-    {
-        public string objectId;
-        public string spawnKey;
-        public bool startActive = true;
-        public SerializableVector3 localPosition;
-        public PhysicsAreaOptionsDefinition options = new PhysicsAreaOptionsDefinition();
-        public PhysicsAreaLayoutDefinition layout = new PhysicsAreaLayoutDefinition();
-    }
-
-    [Serializable]
-    public sealed class CompiledRailDefinition
-    {
-        public string objectId;
-        public string spawnKey;
-        public RailOptionsDefinition options = new RailOptionsDefinition();
-        public RailLayoutDefinition layout = new RailLayoutDefinition();
     }
 }

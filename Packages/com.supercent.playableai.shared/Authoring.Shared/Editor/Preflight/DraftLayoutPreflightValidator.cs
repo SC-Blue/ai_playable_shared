@@ -284,51 +284,46 @@ namespace PlayableAI.AuthoringCore
                 if (!objects.TryGetValue(objectId, out PromptIntentObjectDefinition objectDefinition))
                     continue;
 
-                string role = Normalize(objectDefinition.role);
-                if (string.Equals(role, PromptIntentObjectRoles.RAIL, StringComparison.Ordinal))
-                {
-                    RailOptionsDefinition railOptions = objectDefinition.railOptions;
-                    if (railOptions == null ||
-                        string.IsNullOrWhiteSpace(railOptions.sinkEndpointTargetObjectId))
-                    {
-                        AddDiagnostic(diagnostics, "blocker", "DraftLayout", "rail object '" + objectId + "'는 intent.railOptions.sinkEndpointTargetObjectId를 가져야 합니다.");
-                    }
-
-                    if (placement == null ||
-                        placement.railLayout == null ||
-                        placement.railLayout.pathCells == null ||
-                        placement.railLayout.pathCells.Length == 0)
-                    {
-                        AddDiagnostic(diagnostics, "blocker", "DraftLayout", "rail object '" + objectId + "'는 layoutSpec.railLayout.pathCells가 필요합니다.");
-                    }
-                    else if (!TryResolveRailSinkBounds(railOptions, placements, out WorldBoundsDefinition sinkBounds))
-                    {
-                        AddDiagnostic(diagnostics, "blocker", "DraftLayout", "rail object '" + objectId + "'의 sink endpoint target placement를 찾지 못했습니다.");
-                    }
-                    else if (!RailPathAuthoringUtility.TryBuildResolvedPath(placement.railLayout.pathCells, sinkBounds, out _, out string railPathError))
-                    {
-                        AddDiagnostic(diagnostics, "blocker", "DraftLayout", "rail object '" + objectId + "'의 pathCells가 유효하지 않습니다: " + railPathError);
-                    }
-                }
-
-                if (string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-                {
-                    LayoutSpecPhysicsAreaLayoutEntry physicsAreaLayout = placement != null ? placement.physicsAreaLayout : null;
-                    bool hasRealBounds =
-                        physicsAreaLayout != null &&
-                        physicsAreaLayout.realPhysicsZoneBounds != null &&
-                        physicsAreaLayout.realPhysicsZoneBounds.hasWorldBounds;
-                    bool hasFakeBounds =
-                        physicsAreaLayout != null &&
-                        physicsAreaLayout.fakeSpriteZoneBounds != null &&
-                        physicsAreaLayout.fakeSpriteZoneBounds.hasWorldBounds;
-                    if (!hasRealBounds || !hasFakeBounds)
-                    {
-                        AddDiagnostic(diagnostics, "blocker", "DraftLayout", "physics_area object '" + objectId + "'는 realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 가져야 합니다.");
-                    }
-
-                }
+                ValidateFeatureLayoutPayload(objectId, objectDefinition, placement, diagnostics);
             }
+        }
+
+        private static void ValidateFeatureLayoutPayload(
+            string objectId,
+            PromptIntentObjectDefinition objectDefinition,
+            LayoutSpecPlacementEntry placement,
+            List<DraftLayoutPreflightDiagnostic> diagnostics)
+        {
+            if (objectDefinition == null || string.IsNullOrEmpty(Normalize(objectDefinition.featureOptions.featureType)))
+                return;
+
+            FeatureJsonPayload featureLayout = placement != null ? placement.featureLayout : null;
+            if (featureLayout == null)
+                return;
+
+            string expectedFeatureType = Normalize(objectDefinition.featureOptions.featureType);
+            string layoutFeatureType = Normalize(featureLayout.featureType);
+            if (!string.IsNullOrEmpty(layoutFeatureType) &&
+                !string.Equals(layoutFeatureType, expectedFeatureType, StringComparison.Ordinal))
+            {
+                AddDiagnostic(diagnostics, "blocker", "DraftLayout", "placement '" + objectId + "' featureLayout.featureType은 '" + expectedFeatureType + "'여야 합니다.");
+            }
+
+            string layoutTargetId = Normalize(featureLayout.targetId);
+            if (!string.IsNullOrEmpty(layoutTargetId) &&
+                !string.Equals(layoutTargetId, objectId, StringComparison.Ordinal))
+            {
+                AddDiagnostic(diagnostics, "blocker", "DraftLayout", "placement '" + objectId + "' featureLayout.targetId는 placement objectId와 같아야 합니다.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(featureLayout.json) && !LooksLikeJsonObject(featureLayout.json))
+                AddDiagnostic(diagnostics, "blocker", "DraftLayout", "placement '" + objectId + "' featureLayout.json은 JSON object 문자열이어야 합니다.");
+        }
+
+        private static bool LooksLikeJsonObject(string value)
+        {
+            string trimmed = value != null ? value.Trim() : string.Empty;
+            return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
         }
 
         private static void AddDiagnostic(
@@ -402,13 +397,13 @@ namespace PlayableAI.AuthoringCore
             if (message.IndexOf("targetId", StringComparison.Ordinal) >= 0 && message.IndexOf("customerPaths", StringComparison.Ordinal) >= 0)
                 return "CustomerPathTargetCoverage";
             if (message.IndexOf("pathCells", StringComparison.Ordinal) >= 0 && message.IndexOf("필요합니다", StringComparison.Ordinal) >= 0)
-                return "MissingRailPathCells";
+                return "MissingFeaturePathCells";
             if (message.IndexOf("sink endpoint target placement", StringComparison.Ordinal) >= 0)
-                return "MissingRailSinkPlacement";
+                return "MissingFeatureSinkPlacement";
             if (message.IndexOf("pathCells가 유효하지 않습니다", StringComparison.Ordinal) >= 0)
-                return "InvalidRailPathTopology";
+                return "InvalidFeaturePathTopology";
             if (message.IndexOf("realPhysicsZoneBounds", StringComparison.Ordinal) >= 0 || message.IndexOf("fakeSpriteZoneBounds", StringComparison.Ordinal) >= 0)
-                return "MissingPhysicsAreaBounds";
+                return "MissingFeatureBounds";
             if (message.IndexOf("environment 점유 셀과 충돌", StringComparison.Ordinal) >= 0)
                 return "EnvironmentOccupiedCellConflict";
             if (message.IndexOf("layout 경계를 벗어났습니다", StringComparison.Ordinal) >= 0)
@@ -471,20 +466,20 @@ namespace PlayableAI.AuthoringCore
                 AddUnique(fixes, safeObjectIds.Length == 0
                     ? "customer-facing feature마다 draft_layout.customerPaths[targetId=<targetId>]를 정확히 1개씩 작성해주세요."
                     : "customer-facing feature마다 customer path를 정확히 1개씩 작성해주세요. 현재 누락/중복 확인 대상: " + string.Join(", ", safeObjectIds) + ".");
-            if (string.Equals(ruleCode, "MissingRailPathCells", StringComparison.Ordinal))
+            if (string.Equals(ruleCode, "MissingFeaturePathCells", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
-                    ? "draft_layout.placements[*].railLayout.pathCells를 작성해주세요. 연결된 경로 자체가 권위 데이터입니다."
-                    : "draft_layout.placements[objectId=" + firstObjectId + "].railLayout.pathCells를 작성해주세요. 연결된 경로 자체가 권위 데이터입니다.");
-            if (string.Equals(ruleCode, "MissingRailSinkPlacement", StringComparison.Ordinal))
-                AddUnique(fixes, "intent.railOptions.sinkEndpointTargetObjectId가 가리키는 object의 placement를 draft_layout.placements에 함께 작성해주세요.");
-            if (string.Equals(ruleCode, "InvalidRailPathTopology", StringComparison.Ordinal))
+                    ? "draft_layout.placements[*].featureLayout.json에 descriptor layout schema가 요구하는 경로 정보를 작성해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json에 descriptor layout schema가 요구하는 경로 정보를 작성해주세요.");
+            if (string.Equals(ruleCode, "MissingFeatureSinkPlacement", StringComparison.Ordinal))
+                AddUnique(fixes, "featureOptions.optionsJson 안의 sink target과 대응되는 placement를 draft_layout.placements에 함께 작성해주세요.");
+            if (string.Equals(ruleCode, "InvalidFeaturePathTopology", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
-                    ? "draft_layout.placements[*].railLayout.pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다."
-                    : "draft_layout.placements[objectId=" + firstObjectId + "].railLayout.pathCells를 하나의 connected non-branching path로 다시 작성해주세요. terminal은 정확히 2개여야 합니다.");
-            if (string.Equals(ruleCode, "MissingPhysicsAreaBounds", StringComparison.Ordinal))
+                    ? "draft_layout.placements[*].featureLayout.json을 descriptor layout schema에 맞게 다시 작성해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json을 descriptor layout schema에 맞게 다시 작성해주세요.");
+            if (string.Equals(ruleCode, "MissingFeatureBounds", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
-                    ? "draft_layout.placements[*].physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요."
-                    : "draft_layout.placements[objectId=" + firstObjectId + "].physicsAreaLayout.realPhysicsZoneBounds와 fakeSpriteZoneBounds를 함께 작성해주세요.");
+                    ? "draft_layout.placements[*].featureLayout.json에 descriptor layout schema가 요구하는 bounds를 작성해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json에 descriptor layout schema가 요구하는 bounds를 작성해주세요.");
             if (string.Equals(ruleCode, "EnvironmentOccupiedCellConflict", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
                     ? "draft_layout.environment[*] bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요."
@@ -548,37 +543,6 @@ namespace PlayableAI.AuthoringCore
             }
 
             return "manual";
-        }
-
-        private static bool TryResolveRailSinkBounds(
-            RailOptionsDefinition railOptions,
-            LayoutSpecPlacementEntry[] placements,
-            out WorldBoundsDefinition sinkBounds)
-        {
-            sinkBounds = new WorldBoundsDefinition();
-            string sinkObjectId = Normalize(railOptions != null ? railOptions.sinkEndpointTargetObjectId : string.Empty);
-            if (string.IsNullOrEmpty(sinkObjectId))
-                return false;
-
-            LayoutSpecPlacementEntry[] safePlacements = placements ?? Array.Empty<LayoutSpecPlacementEntry>();
-            for (int i = 0; i < safePlacements.Length; i++)
-            {
-                LayoutSpecPlacementEntry placement = safePlacements[i];
-                if (placement == null || !string.Equals(Normalize(placement.objectId), sinkObjectId, StringComparison.Ordinal))
-                    continue;
-
-                sinkBounds = new WorldBoundsDefinition
-                {
-                    hasWorldBounds = true,
-                    worldX = placement.worldX,
-                    worldZ = placement.worldZ,
-                    worldWidth = 1f,
-                    worldDepth = 1f,
-                };
-                return true;
-            }
-
-            return false;
         }
 
         private static Dictionary<string, PromptIntentObjectDefinition> BuildObjectLookup(PlayablePromptIntent intent)

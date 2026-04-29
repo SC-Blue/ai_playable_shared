@@ -5,10 +5,6 @@ namespace Supercent.PlayableAI.Common.Contracts
     public static class PromptIntentObjectiveKinds
     {
         public const string UNLOCK_OBJECT = "unlock_object";
-        public const string COLLECT_ITEM = "collect_item";
-        public const string CONVERT_ITEM = "convert_item";
-        public const string SELL_ITEM = "sell_item";
-        public const string COLLECT_CURRENCY = "collect_currency";
         public const string WAIT_SECONDS = "wait_seconds";
 
         public static string[] GetSupportedKinds()

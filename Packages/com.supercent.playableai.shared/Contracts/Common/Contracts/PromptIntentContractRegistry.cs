@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Supercent.PlayableAI.Common.Format;
 
@@ -16,11 +16,10 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string summary;
         public bool catalogBacked;
         public bool supportsDesignId;
-        public bool supportsScenarioOptions;
-        public bool supportsRailSinkTarget;
+        public bool supportsFeatureOptions;
     }
 
-    public sealed class PromptIntentScenarioOptionDescriptor
+    public sealed class PromptIntentFeatureOptionDescriptor
     {
         public string value;
         public string summary;
@@ -78,14 +77,13 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public int schemaVersion;
         public PromptIntentObjectRoleDescriptor[] objectRoles = new PromptIntentObjectRoleDescriptor[0];
-        public PromptIntentScenarioOptionDescriptor[] scenarioOptions = new PromptIntentScenarioOptionDescriptor[0];
+        public PromptIntentFeatureOptionDescriptor[] featureOptions = new PromptIntentFeatureOptionDescriptor[0];
         public PromptIntentConditionKindDescriptor[] conditionKinds = new PromptIntentConditionKindDescriptor[0];
         public PromptIntentObjectiveKindDescriptor[] objectiveKinds = new PromptIntentObjectiveKindDescriptor[0];
         public PromptIntentEffectKindDescriptor[] effectKinds = new PromptIntentEffectKindDescriptor[0];
         public PromptIntentValueDescriptor[] effectTimingKinds = new PromptIntentValueDescriptor[0];
         public PromptIntentValueDescriptor[] flowTargetEventKeys = new PromptIntentValueDescriptor[0];
         public PromptIntentValueDescriptor[] currencyStartVisualModes = new PromptIntentValueDescriptor[0];
-        public PromptIntentValueDescriptor[] railEndpointSides = new PromptIntentValueDescriptor[0];
         public PromptIntentCompiledGameplayRoleDescriptor[] compiledGameplayRoles = new PromptIntentCompiledGameplayRoleDescriptor[0];
     }
 
@@ -94,37 +92,15 @@ namespace Supercent.PlayableAI.Common.Contracts
         // <generated-contract-registry-data>
         public const int SCHEMA_VERSION = 4;
 
-        public const string SCENARIO_OPTION_CUSTOMER_REQUEST_COUNT = "customerRequestCount";
-        public const string SCENARIO_OPTION_REQUESTABLE_ITEMS = "requestableItems";
-        public const string SCENARIO_OPTION_INPUT_COUNT_PER_CONVERSION = "inputCountPerConversion";
-        public const string SCENARIO_OPTION_CONVERSION_INTERVAL_SECONDS = "conversionIntervalSeconds";
-        public const string SCENARIO_OPTION_INPUT_ITEM_MOVE_INTERVAL_SECONDS = "inputItemMoveIntervalSeconds";
-        public const string SCENARIO_OPTION_SPAWN_INTERVAL_SECONDS = "spawnIntervalSeconds";
-
-        public const string RAIL_ENDPOINT_SIDE_LEFT = "left";
-        public const string RAIL_ENDPOINT_SIDE_RIGHT = "right";
-        public const string RAIL_ENDPOINT_SIDE_TOP = "top";
-        public const string RAIL_ENDPOINT_SIDE_BOTTOM = "bottom";
 
         private static readonly PromptIntentObjectRoleDescriptor[] OBJECT_ROLES =
         {
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PLAYER, summary = "Player model", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.GENERATOR, summary = "Generator facility", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PROCESSOR, summary = "Processing/packing facility", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.SELLER, summary = "Sales counter", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = true, supportsRailSinkTarget = true },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.UNLOCK_PAD, summary = "Unlock pad", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PHYSICS_AREA, summary = "Physics stacking area", catalogBacked = false, supportsDesignId = false, supportsScenarioOptions = false, supportsRailSinkTarget = false },
-            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.RAIL, summary = "Automatic item supply rail", catalogBacked = true, supportsDesignId = true, supportsScenarioOptions = false, supportsRailSinkTarget = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.PLAYER, summary = "Player model", catalogBacked = true, supportsDesignId = true, supportsFeatureOptions = false },
+            new PromptIntentObjectRoleDescriptor { value = PromptIntentObjectRoles.UNLOCK_PAD, summary = "Unlock pad", catalogBacked = true, supportsDesignId = true, supportsFeatureOptions = false },
         };
 
-        private static readonly PromptIntentScenarioOptionDescriptor[] SCENARIO_OPTIONS =
+        private static readonly PromptIntentFeatureOptionDescriptor[] FEATURE_OPTIONS =
         {
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CUSTOMER_REQUEST_COUNT, summary = "Seller customer order count range", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_REQUESTABLE_ITEMS, summary = "Seller requestable item unlock condition", supportedRoles = new[] { PromptIntentObjectRoles.SELLER } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_COUNT_PER_CONVERSION, summary = "Processor input count per conversion", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_CONVERSION_INTERVAL_SECONDS, summary = "Processor conversion interval", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_INPUT_ITEM_MOVE_INTERVAL_SECONDS, summary = "Processor input item movement interval", supportedRoles = new[] { PromptIntentObjectRoles.PROCESSOR } },
-            new PromptIntentScenarioOptionDescriptor { value = SCENARIO_OPTION_SPAWN_INTERVAL_SECONDS, summary = "Generator spawn interval", supportedRoles = new[] { PromptIntentObjectRoles.GENERATOR } },
         };
 
         private static readonly PromptIntentConditionKindDescriptor[] CONDITION_KINDS =
@@ -133,22 +109,11 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.STAGE_COMPLETED, summary = "Enter after previous stage completion", supportsStageId = true, requiresStageId = true, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.BALANCE_AT_LEAST, summary = "Enter when balance reaches threshold", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = true, requiresPositiveAmountValue = true },
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.UNLOCK_COMPLETED, summary = "Unlock pad completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_GENERATED, summary = "Item generated by generator", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_COLLECTED, summary = "Item directly collected", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.ITEM_CONVERTED, summary = "Processor conversion completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.RAIL_ITEM_ARRIVED, summary = "Automatic rail supply arrived", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = true, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.SALE_COMPLETED, summary = "Sale transaction completed and paid", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = true, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.MONEY_COLLECTED, summary = "Money collection completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = false, requiresPositiveAmountValue = false },
-            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.CUSTOMER_SERVED, summary = "Customer service completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
         };
 
         private static readonly PromptIntentObjectiveKindDescriptor[] OBJECTIVE_KINDS =
         {
             new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.UNLOCK_OBJECT, summary = "Interact with unlock pad", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = true, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_ITEM, summary = "Collect item", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.CONVERT_ITEM, summary = "Insert and convert processing/packing input", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = true, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.SELL_ITEM, summary = "Sell at sales counter", requiresTargetObjectId = true, requiresItem = true, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.COLLECT_CURRENCY, summary = "Collect money", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = false, requiresSeconds = false, canAbsorbArrow = true },
             new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.WAIT_SECONDS, summary = "Wait for specified duration", requiresTargetObjectId = false, requiresItem = false, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = true, canAbsorbArrow = false },
         };
 
@@ -159,7 +124,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.FOCUS_CAMERA, summary = "Focus camera", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_ARROW, summary = "Show objective-bound arrow guidance", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SHOW_GUIDE_ARROW, summary = "Show presentation-only arrow guidance", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = true, supportsEventKey = true, isNonBlockingSystemAction = false },
-            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SPAWN_CUSTOMER, summary = "Spawn customer", requiresTargetObjectId = true, supportsTiming = true, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_ENDCARD, summary = "Reveal endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.END_GAME, summary = "End game immediately and trigger CTA without endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.HIDE_GUIDE, summary = "Hide guide", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = true },
@@ -174,10 +138,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         private static readonly PromptIntentValueDescriptor[] FLOW_TARGET_EVENT_KEYS =
         {
             new PromptIntentValueDescriptor { value = FlowTargetEventKeys.ROOT, summary = "Object root interaction" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.GET_ITEM, summary = "Guide item pickup" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.DROP_ITEM, summary = "Guide item drop-off" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.SELL_ITEM, summary = "Guide sale" },
-            new PromptIntentValueDescriptor { value = FlowTargetEventKeys.COLLECT_MONEY, summary = "Guide money collection" },
         };
 
         private static readonly PromptIntentValueDescriptor[] CURRENCY_START_VISUAL_MODES =
@@ -186,21 +146,9 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentValueDescriptor { value = CurrencyStartVisualRules.NONE, summary = "No money visual at start" },
         };
 
-        private static readonly PromptIntentValueDescriptor[] RAIL_ENDPOINT_SIDES =
-        {
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_LEFT, summary = "Left endpoint" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_RIGHT, summary = "Right endpoint" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_TOP, summary = "Top endpoint" },
-            new PromptIntentValueDescriptor { value = RAIL_ENDPOINT_SIDE_BOTTOM, summary = "Bottom endpoint" },
-        };
-
         private static readonly PromptIntentCompiledGameplayRoleDescriptor[] COMPILED_GAMEPLAY_ROLES =
         {
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "generator", role = PromptIntentObjectRoles.GENERATOR, summary = "Compiled generator spawn maps to generator role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "converter", role = PromptIntentObjectRoles.PROCESSOR, summary = "Compiled converter spawn maps to processor role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "seller", role = PromptIntentObjectRoles.SELLER, summary = "Compiled seller spawn maps to seller role" },
             new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "unlocker", role = PromptIntentObjectRoles.UNLOCK_PAD, summary = "Compiled unlocker spawn maps to unlock_pad role" },
-            new PromptIntentCompiledGameplayRoleDescriptor { gameplayObjectId = "rail", role = PromptIntentObjectRoles.RAIL, summary = "Compiled rail spawn maps to rail role" },
         };
         // </generated-contract-registry-data>
 
@@ -220,14 +168,13 @@ namespace Supercent.PlayableAI.Common.Contracts
             {
                 schemaVersion = SCHEMA_VERSION,
                 objectRoles = CloneObjectRoleDescriptors(GetObjectRolesInternal()),
-                scenarioOptions = CloneScenarioOptionDescriptors(GetScenarioOptionsInternal()),
+                featureOptions = CloneFeatureOptionDescriptors(GetFeatureOptionsInternal()),
                 conditionKinds = CloneConditionKindDescriptors(GetConditionKindsInternal()),
                 objectiveKinds = CloneObjectiveKindDescriptors(GetObjectiveKindsInternal()),
                 effectKinds = CloneEffectKindDescriptors(GetEffectKindsInternal()),
                 effectTimingKinds = CloneValueDescriptors(EFFECT_TIMING_KINDS),
                 flowTargetEventKeys = CloneValueDescriptors(GetFlowTargetEventKeysInternal()),
                 currencyStartVisualModes = CloneValueDescriptors(CURRENCY_START_VISUAL_MODES),
-                railEndpointSides = CloneValueDescriptors(RAIL_ENDPOINT_SIDES),
                 compiledGameplayRoles = CloneCompiledGameplayRoleDescriptors(GetCompiledGameplayRolesInternal()),
             };
         }
@@ -254,10 +201,10 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null && descriptor.supportsDesignId;
         }
 
-        public static bool ObjectRoleSupportsScenarioOptions(string role)
+        public static bool ObjectRoleSupportsFeatureOptions(string role)
         {
             PromptIntentObjectRoleDescriptor descriptor = FindObjectRole(role);
-            return descriptor != null && descriptor.supportsScenarioOptions;
+            return descriptor != null && descriptor.supportsFeatureOptions;
         }
 
         public static string ResolveFeatureTypeForRole(string role)
@@ -265,28 +212,22 @@ namespace Supercent.PlayableAI.Common.Contracts
             return PromptIntentFeatureDescriptorBridge.ResolveFeatureTypeForRole(role);
         }
 
-        public static bool ObjectRoleSupportsRailSinkTarget(string role)
+        public static PromptIntentFeatureOptionDescriptor[] GetFeatureOptions()
         {
-            PromptIntentObjectRoleDescriptor descriptor = FindObjectRole(role);
-            return descriptor != null && descriptor.supportsRailSinkTarget;
+            return CloneFeatureOptionDescriptors(GetFeatureOptionsInternal());
         }
 
-        public static PromptIntentScenarioOptionDescriptor[] GetScenarioOptions()
-        {
-            return CloneScenarioOptionDescriptors(GetScenarioOptionsInternal());
-        }
-
-        public static string[] GetSupportedScenarioOptionNames(string role)
+        public static string[] GetSupportedFeatureOptionNames(string role)
         {
             string normalizedRole = Normalize(role);
             if (string.IsNullOrEmpty(normalizedRole))
                 return new string[0];
 
             var values = new List<string>();
-            PromptIntentScenarioOptionDescriptor[] options = GetScenarioOptionsInternal();
+            PromptIntentFeatureOptionDescriptor[] options = GetFeatureOptionsInternal();
             for (int i = 0; i < options.Length; i++)
             {
-                PromptIntentScenarioOptionDescriptor descriptor = options[i];
+                PromptIntentFeatureOptionDescriptor descriptor = options[i];
                 if (descriptor != null && ContainsValue(descriptor.supportedRoles, normalizedRole))
                     values.Add(descriptor.value);
             }
@@ -294,20 +235,20 @@ namespace Supercent.PlayableAI.Common.Contracts
             return values.ToArray();
         }
 
-        public static bool SupportsScenarioOption(string role, string optionName)
+        public static bool SupportsFeatureOption(string role, string optionName)
         {
             string normalizedRole = Normalize(role);
             string normalizedOptionName = Normalize(optionName);
             if (string.IsNullOrEmpty(normalizedRole) || string.IsNullOrEmpty(normalizedOptionName))
                 return false;
 
-            PromptIntentScenarioOptionDescriptor descriptor = FindScenarioOption(normalizedOptionName);
+            PromptIntentFeatureOptionDescriptor descriptor = FindFeatureOption(normalizedOptionName);
             return descriptor != null && ContainsValue(descriptor.supportedRoles, normalizedRole);
         }
 
-        public static string DescribeSupportedScenarioOptions(string role)
+        public static string DescribeSupportedFeatureOptions(string role)
         {
-            string[] names = GetSupportedScenarioOptionNames(role);
+            string[] names = GetSupportedFeatureOptionNames(role);
             if (names.Length == 0)
                 return "No scenario options are supported.";
             if (names.Length == 1)
@@ -559,16 +500,6 @@ namespace Supercent.PlayableAI.Common.Contracts
             return FindValueDescriptor(CURRENCY_START_VISUAL_MODES, mode) != null;
         }
 
-        public static string[] GetRailEndpointSides()
-        {
-            return ExtractValues(RAIL_ENDPOINT_SIDES);
-        }
-
-        public static bool IsSupportedRailEndpointSide(string side)
-        {
-            return FindValueDescriptor(RAIL_ENDPOINT_SIDES, side) != null;
-        }
-
         public static PromptIntentCompiledGameplayRoleDescriptor[] GetCompiledGameplayRoles()
         {
             return CloneCompiledGameplayRoleDescriptors(GetCompiledGameplayRolesInternal());
@@ -609,10 +540,10 @@ namespace Supercent.PlayableAI.Common.Contracts
             return null;
         }
 
-        private static PromptIntentScenarioOptionDescriptor FindScenarioOption(string optionName)
+        private static PromptIntentFeatureOptionDescriptor FindFeatureOption(string optionName)
         {
             string normalized = Normalize(optionName);
-            PromptIntentScenarioOptionDescriptor[] descriptors = GetScenarioOptionsInternal();
+            PromptIntentFeatureOptionDescriptor[] descriptors = GetFeatureOptionsInternal();
             for (int i = 0; i < descriptors.Length; i++)
             {
                 if (descriptors[i].value == normalized)
@@ -679,9 +610,9 @@ namespace Supercent.PlayableAI.Common.Contracts
             return PromptIntentFeatureDescriptorBridge.MergeObjectRoles(OBJECT_ROLES);
         }
 
-        private static PromptIntentScenarioOptionDescriptor[] GetScenarioOptionsInternal()
+        private static PromptIntentFeatureOptionDescriptor[] GetFeatureOptionsInternal()
         {
-            return PromptIntentFeatureDescriptorBridge.MergeScenarioOptions(SCENARIO_OPTIONS);
+            return PromptIntentFeatureDescriptorBridge.MergeFeatureOptions(FEATURE_OPTIONS);
         }
 
         private static PromptIntentConditionKindDescriptor[] GetConditionKindsInternal()
@@ -772,20 +703,19 @@ namespace Supercent.PlayableAI.Common.Contracts
                     summary = values[i].summary,
                     catalogBacked = values[i].catalogBacked,
                     supportsDesignId = values[i].supportsDesignId,
-                    supportsScenarioOptions = values[i].supportsScenarioOptions,
-                    supportsRailSinkTarget = values[i].supportsRailSinkTarget,
+                    supportsFeatureOptions = values[i].supportsFeatureOptions,
                 };
             }
 
             return copies;
         }
 
-        private static PromptIntentScenarioOptionDescriptor[] CloneScenarioOptionDescriptors(PromptIntentScenarioOptionDescriptor[] values)
+        private static PromptIntentFeatureOptionDescriptor[] CloneFeatureOptionDescriptors(PromptIntentFeatureOptionDescriptor[] values)
         {
-            var copies = new PromptIntentScenarioOptionDescriptor[values.Length];
+            var copies = new PromptIntentFeatureOptionDescriptor[values.Length];
             for (int i = 0; i < values.Length; i++)
             {
-                copies[i] = new PromptIntentScenarioOptionDescriptor
+                copies[i] = new PromptIntentFeatureOptionDescriptor
                 {
                     value = values[i].value,
                     summary = values[i].summary,

@@ -76,8 +76,8 @@ namespace Supercent.PlayableAI.Common.Format
     {
         private static readonly ContentStoreTaxonomyOption[] ThemeOptions =
         {
-            Option("PizzaReady", "피자레디", "/assets/themes/pizza_ready.webp", "pizza_ready", "pizza-ready", "pizzaready"),
-            Option("SuzysRestaurant", "수지 레스토랑", "/assets/themes/suzys_restaurant.webp", "suzys_restaurant", "suzy", "suzy_restaurant", "suzys-restaurant", "suzy-restaurant", "suzysrestaurant", "suzyrestaurant"),
+            Option("pizza_ready", "피자레디", "/assets/themes/pizza_ready.webp"),
+            Option("suzys_restaurant", "수지 레스토랑", "/assets/themes/suzys_restaurant.webp"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] ContentKindOptions =
@@ -99,11 +99,6 @@ namespace Supercent.PlayableAI.Common.Format
 
         private static readonly ContentStoreTaxonomyOption[] FeatureGroupOptions =
         {
-            Option(PlayableFeatureTypeIds.Generator, "생성기"),
-            Option(PlayableFeatureTypeIds.Converter, "변환기"),
-            Option(PlayableFeatureTypeIds.Seller, "판매대"),
-            Option(PlayableFeatureTypeIds.Rail, "아이템 레일"),
-            Option(PlayableFeatureTypeIds.PhysicsArea, "더미 물리 영역"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] SharedAssetGroupOptions =
@@ -300,16 +295,6 @@ namespace Supercent.PlayableAI.Common.Format
                     return "Item";
                 case CatalogCategoryIds.UNLOCKER:
                     return "Unlocker";
-                case PlayableFeatureTypeIds.Generator:
-                    return "Generator";
-                case PlayableFeatureTypeIds.Converter:
-                    return "Converter";
-                case PlayableFeatureTypeIds.Seller:
-                    return "Seller";
-                case PlayableFeatureTypeIds.Rail:
-                    return "Rail";
-                case PlayableFeatureTypeIds.PhysicsArea:
-                    return "PhysicsArea";
                 case ContentStoreSharedCategoryIds.FontsPathToken:
                     return "Fonts";
                 case ContentStoreSharedCategoryIds.AssetsPathToken:
@@ -363,33 +348,18 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static bool IsSupportedThemeId(string themeId)
         {
-            string canonical = CanonicalizeThemeId(themeId);
-            return ThemeOptions.Any(option => string.Equals(option.id, canonical, StringComparison.Ordinal));
+            string normalized = Normalize(themeId);
+            return ThemeOptions.Any(option => string.Equals(option.id, normalized, StringComparison.Ordinal));
         }
 
         public static string CanonicalizeThemeId(string themeId)
         {
-            string normalized = Normalize(themeId);
-            string token = CanonicalToken(normalized);
-            foreach (ContentStoreTaxonomyOption option in ThemeOptions)
-            {
-                if (string.Equals(CanonicalToken(option.id), token, StringComparison.Ordinal))
-                    return option.id;
-                if ((option.aliases ?? Array.Empty<string>()).Any(alias => string.Equals(CanonicalToken(alias), token, StringComparison.Ordinal)))
-                    return option.id;
-            }
-
-            return normalized;
+            return Normalize(themeId);
         }
 
         public static string ResolveThemeContentPathToken(string themeId)
         {
-            string canonical = CanonicalizeThemeId(themeId);
-            if (string.Equals(canonical, "PizzaReady", StringComparison.Ordinal))
-                return "pizza_ready";
-            if (string.Equals(canonical, "SuzysRestaurant", StringComparison.Ordinal))
-                return "suzys_restaurant";
-            return Normalize(canonical);
+            return CanonicalizeThemeId(themeId);
         }
 
         public static string[] ResolveThemePathTokens(string themeId)
@@ -463,14 +433,5 @@ namespace Supercent.PlayableAI.Common.Format
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
         }
 
-        private static string CanonicalToken(string value)
-        {
-            return Normalize(value)
-                .Replace("-", string.Empty, StringComparison.Ordinal)
-                .Replace("_", string.Empty, StringComparison.Ordinal)
-                .Replace(" ", string.Empty, StringComparison.Ordinal)
-                .Replace("'", string.Empty, StringComparison.Ordinal)
-                .ToLowerInvariant();
-        }
     }
 }

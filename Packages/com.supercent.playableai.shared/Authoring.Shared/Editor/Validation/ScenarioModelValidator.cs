@@ -17,18 +17,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
     public static class ScenarioModelValidator
     {
-        private struct EconomyLoopState
-        {
-            // collect_item 이후 바로 sell_item으로 닫을 수 있는 수익 경로 후보인지 추적한다.
-            public bool CanDirectSell;
-            // convert_item을 거친 뒤 sell_item으로 닫을 수 있는 수익 경로 후보인지 추적한다.
-            public bool CanProcessedSell;
-            // 현재 sale -> collect_currency가 반복 수익 구성을 완성할 수 있는지 표시한다.
-            public bool SaleCanCompleteLoop;
-            // 직전 sale이 어느 currency로 정산되었는지 기억해서 collect_currency와 연결한다.
-            public string SoldCurrencyId;
-        }
-
         public static ScenarioModelValidationResult Validate(PlayableScenarioModel model)
         {
             var result = new ScenarioModelValidationResult
@@ -68,8 +56,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateContentSelections(model.contentSelections, result);
             ValidateObjects(model.objects, result);
             ValidateStages(model, result);
-            ValidateSellerRequestableItems(model, result);
-            ValidateEconomyReachability(model, result);
             return FinalizeResult(result);
         }
 
@@ -115,35 +101,51 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         }
 
         private static void ValidateFeatureOptions(
+            string role,
+            string objectId,
             PlayableScenarioFeatureOptions options,
             string label,
             ScenarioModelValidationResult result)
         {
-            if (options.customerReqMin < 0 || options.customerReqMax < 0)
-                Fail(result, label + ".customerReqMin/Max는 0 이상이어야 합니다.");
+            string normalizedRole = Normalize(role);
+            string normalizedObjectId = Normalize(objectId);
+            bool isCoreObject = IsCoreObjectRole(normalizedRole);
 
-            if (options.customerReqMin > 0 || options.customerReqMax > 0)
+            string featureType = Normalize(options.featureType);
+            string targetId = Normalize(options.targetId);
+            string optionsJson = options.optionsJson != null ? options.optionsJson.Trim() : string.Empty;
+
+            if (isCoreObject)
             {
-                if (options.customerReqMin == 0 || options.customerReqMax == 0)
-                    Fail(result, label + ".customerReqMin/Max는 둘 다 0이거나 둘 다 1 이상이어야 합니다.");
-                else if (options.customerReqMin > options.customerReqMax)
-                    Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
+                if (!string.IsNullOrEmpty(featureType) ||
+                    !string.IsNullOrEmpty(targetId) ||
+                    !string.IsNullOrEmpty(optionsJson))
+                {
+                    Fail(result, label + "는 core object role '" + normalizedRole + "'에서 사용할 수 없습니다.");
+                }
+
+                return;
             }
 
-            if (options.inputCountPerConversion < 0)
-                Fail(result, label + ".inputCountPerConversion은 0 이상이어야 합니다.");
-            if (options.conversionInterval < 0f)
-                Fail(result, label + ".conversionInterval은 0 이상이어야 합니다.");
-            if (options.inputItemMoveInterval < 0f)
-                Fail(result, label + ".inputItemMoveInterval은 0 이상이어야 합니다.");
-            if (options.spawnInterval < 0f)
-                Fail(result, label + ".spawnInterval은 0 이상이어야 합니다.");
+            if (string.IsNullOrEmpty(featureType))
+                Fail(result, label + ".featureType이 필요합니다.");
+            else if (!string.Equals(featureType, normalizedRole, StringComparison.Ordinal))
+                Fail(result, label + ".featureType '" + featureType + "'는 object role '" + normalizedRole + "'와 같아야 합니다.");
+
+            if (string.IsNullOrEmpty(targetId))
+                Fail(result, label + ".targetId가 필요합니다.");
+            else if (!string.Equals(targetId, normalizedObjectId, StringComparison.Ordinal))
+                Fail(result, label + ".targetId '" + targetId + "'는 object id '" + normalizedObjectId + "'와 같아야 합니다.");
+
+            if (string.IsNullOrEmpty(optionsJson))
+                Fail(result, label + ".optionsJson이 필요합니다.");
+            else if (!LooksLikeJsonObject(optionsJson))
+                Fail(result, label + ".optionsJson은 JSON object 문자열이어야 합니다.");
         }
 
         private static void ValidateObjects(ScenarioModelObjectDefinition[] objects, ScenarioModelValidationResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            Dictionary<string, ScenarioModelObjectDefinition> objectById = BuildObjectLookup(safeObjects);
             for (int i = 0; i < safeObjects.Length; i++)
             {
                 ScenarioModelObjectDefinition value = safeObjects[i];
@@ -164,211 +166,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     Fail(result, "objects[" + i + "]는 present later인데 active at start로 표시되었습니다.");
 
                 string label = "objects[" + i + "].featureOptions";
-                ValidateFeatureOptions(value.featureOptions, label, result);
-                ValidateObjectFeatureOptionsByRole(value.role, value.featureOptions, label, result);
-                ValidateSellerRequestableItemDefinitions(value, "objects[" + i + "]", objectById, result);
-                ValidateRoleSpecificOptions(value, "objects[" + i + "]", objectById, result);
+                ValidateFeatureOptions(value.role, value.id, value.featureOptions, label, result);
             }
         }
 
-        private static void ValidateSellerRequestableItemDefinitions(
-            ScenarioModelObjectDefinition value,
-            string label,
-            Dictionary<string, ScenarioModelObjectDefinition> objectById,
-            ScenarioModelValidationResult result)
+        private static bool LooksLikeJsonObject(string value)
         {
-            if (value == null)
-                return;
-
-            string role = value.role != null ? value.role.Trim() : string.Empty;
-            ScenarioModelSellerRequestableItemDefinition[] requestableItems = value.sellerRequestableItems ?? new ScenarioModelSellerRequestableItemDefinition[0];
-            if (requestableItems.Length == 0)
-                return;
-
-            if (!string.Equals(role, PromptIntentObjectRoles.SELLER, StringComparison.Ordinal))
-            {
-                Fail(result, label + ".sellerRequestableItems는 seller role에서만 사용할 수 있습니다.");
-                return;
-            }
-
-            var seenItemKeys = new HashSet<string>(StringComparer.Ordinal);
-            for (int i = 0; i < requestableItems.Length; i++)
-            {
-                ScenarioModelSellerRequestableItemDefinition requestableItem = requestableItems[i];
-                string requestableLabel = label + ".sellerRequestableItems[" + i + "]";
-                if (requestableItem == null)
-                {
-                    Fail(result, requestableLabel + "가 null입니다.");
-                    continue;
-                }
-
-                string itemKey = ItemRefUtility.ToStableKey(requestableItem.item);
-                if (!ItemRefUtility.IsValid(requestableItem.item))
-                    Fail(result, requestableLabel + ".item은 familyId와 variantId가 모두 필요합니다.");
-                else if (!seenItemKeys.Add(itemKey))
-                    Fail(result, requestableLabel + ".item '" + itemKey + "'이 중복되었습니다.");
-
-                ValidateSellerRequestableItemStartCondition(
-                    requestableItem.startCondition,
-                    requestableLabel + ".startCondition",
-                    objectById,
-                    result);
-            }
+            string trimmed = value != null ? value.Trim() : string.Empty;
+            return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
         }
 
-        private static void ValidateSellerRequestableItemStartCondition(
-            ScenarioModelConditionDefinition condition,
-            string label,
-            Dictionary<string, ScenarioModelObjectDefinition> objectById,
-            ScenarioModelValidationResult result)
+        private static bool IsCoreObjectRole(string role)
         {
-            if (condition == null)
-            {
-                Fail(result, label + "가 필요합니다.");
-                return;
-            }
-
-            string kind = condition.kind != null ? condition.kind.Trim() : string.Empty;
-            string[] supportedTargetRoles = PromptIntentCapabilityRegistry.GetConditionSupportedTargetRoles(kind);
-            bool allowAnyTargetRole = PromptIntentCapabilityRegistry.ConditionAllowsAnyTargetRole(kind);
-            if (allowAnyTargetRole || supportedTargetRoles.Length > 0)
-            {
-                ValidateScenarioObjectReferenceByRolePolicy(
-                    condition.targetObjectId,
-                    objectById,
-                    supportedTargetRoles,
-                    allowAnyTargetRole,
-                    label + ".targetObjectId",
-                    result);
-            }
-
-            if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
-            {
-                Fail(result, label + ".kind는 requestableItems에서 stage_completed를 지원하지 않습니다.");
-                return;
-            }
-
-            if (PromptIntentContractRegistry.ConditionRequiresCurrencyId(kind))
-            {
-                if (string.IsNullOrWhiteSpace(condition.currencyId))
-                    Fail(result, label + ".currencyId가 필요합니다.");
-            }
-
-            if (PromptIntentContractRegistry.ConditionRequiresItem(kind))
-            {
-                if (!ItemRefUtility.IsValid(condition.item))
-                    Fail(result, label + ".item은 familyId와 variantId가 모두 필요합니다.");
-            }
-            else if (!ItemRefUtility.IsEmpty(condition.item) && !PromptIntentContractRegistry.ConditionSupportsItem(kind))
-            {
-                Fail(result, label + ".item은 kind '" + kind + "'에서 지원되지 않습니다.");
-            }
-
-            if (!PromptIntentConditionKinds.IsSupported(kind))
-            {
-                Fail(result, label + ".kind '" + kind + "'은(는) 지원되지 않습니다.");
-            }
+            string normalized = Normalize(role);
+            return string.Equals(normalized, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal) ||
+                   string.Equals(normalized, PromptIntentObjectRoles.UNLOCK_PAD, StringComparison.Ordinal);
         }
 
-        private static void ValidateObjectFeatureOptionsByRole(
-            string role,
-            PlayableScenarioFeatureOptions options,
-            string label,
-            ScenarioModelValidationResult result)
+        private static string Normalize(string value)
         {
-            string normalizedRole = role != null ? role.Trim() : string.Empty;
-            bool supportsCustomerRequestCount = FeatureScenarioOptionRules.SupportsCustomerRequestCount(normalizedRole);
-            bool supportsInputCountPerConversion = FeatureScenarioOptionRules.SupportsInputCountPerConversion(normalizedRole);
-            bool supportsConversionInterval = FeatureScenarioOptionRules.SupportsConversionIntervalSeconds(normalizedRole);
-            bool supportsInputItemMoveInterval = FeatureScenarioOptionRules.SupportsInputItemMoveIntervalSeconds(normalizedRole);
-            bool supportsSpawnInterval = FeatureScenarioOptionRules.SupportsSpawnIntervalSeconds(normalizedRole);
-
-            switch (normalizedRole)
-            {
-                case PromptIntentObjectRoles.SELLER:
-                    if (supportsCustomerRequestCount && (options.customerReqMin <= 0 || options.customerReqMax <= 0))
-                    {
-                        Fail(result, label + "는 seller role에서 customerReqMin/Max가 둘 다 1 이상이어야 합니다.");
-                        break;
-                    }
-
-                    if (supportsCustomerRequestCount && options.customerReqMin > options.customerReqMax)
-                    {
-                        Fail(result, label + ".customerReqMin은 customerReqMax보다 클 수 없습니다.");
-                        break;
-                    }
-
-                    if ((!supportsInputCountPerConversion && options.inputCountPerConversion > 0) ||
-                        (!supportsConversionInterval && options.conversionInterval > 0f) ||
-                        (!supportsInputItemMoveInterval && options.inputItemMoveInterval > 0f) ||
-                        (!supportsSpawnInterval && options.spawnInterval > 0f))
-                        Fail(result, label + "는 seller role에서 customerReqMin/Max만 지원합니다.");
-                    break;
-                case PromptIntentObjectRoles.PROCESSOR:
-                    if ((!supportsCustomerRequestCount && (options.customerReqMin > 0 || options.customerReqMax > 0)) ||
-                        (!supportsSpawnInterval && options.spawnInterval > 0f))
-                        Fail(result, label + "는 processor role에서 conversion 관련 옵션만 지원합니다.");
-                    break;
-                case PromptIntentObjectRoles.GENERATOR:
-                    if ((!supportsCustomerRequestCount && (options.customerReqMin > 0 || options.customerReqMax > 0)) ||
-                        (!supportsInputCountPerConversion && options.inputCountPerConversion > 0) ||
-                        (!supportsConversionInterval && options.conversionInterval > 0f) ||
-                        (!supportsInputItemMoveInterval && options.inputItemMoveInterval > 0f))
-                        Fail(result, label + "는 generator role에서 spawnInterval만 지원합니다.");
-                    break;
-                default:
-                    if ((options.customerReqMin > 0 || options.customerReqMax > 0) ||
-                        options.inputCountPerConversion > 0 ||
-                        options.conversionInterval > 0f ||
-                        options.inputItemMoveInterval > 0f ||
-                        options.spawnInterval > 0f)
-                        Fail(result, label + "는 seller, processor, generator role에서만 지원합니다.");
-                    break;
-            }
-        }
-
-        private static void ValidateRoleSpecificOptions(
-            ScenarioModelObjectDefinition value,
-            string label,
-            Dictionary<string, ScenarioModelObjectDefinition> objectById,
-            ScenarioModelValidationResult result)
-        {
-            if (value == null)
-                return;
-
-            string role = value.role != null ? value.role.Trim() : string.Empty;
-            if (string.Equals(role, PromptIntentObjectRoles.PHYSICS_AREA, StringComparison.Ordinal))
-            {
-                if (value.physicsAreaOptions == null || !ItemRefUtility.IsValid(value.physicsAreaOptions.item))
-                    Fail(result, label + ".physicsAreaOptions.item이 필요합니다.");
-                return;
-            }
-
-            if (string.Equals(role, PromptIntentObjectRoles.RAIL, StringComparison.Ordinal))
-            {
-                if (value.railOptions == null)
-                {
-                    Fail(result, label + ".railOptions가 필요합니다.");
-                    return;
-                }
-
-                if (!ItemRefUtility.IsValid(value.railOptions.item))
-                    Fail(result, label + ".railOptions.item이 필요합니다.");
-                if (string.IsNullOrWhiteSpace(value.railOptions.sinkEndpointTargetObjectId))
-                    Fail(result, label + ".railOptions.sinkEndpointTargetObjectId가 필요합니다.");
-                else
-                    ValidateRailEndpointTargetRole(
-                        value.railOptions.sinkEndpointTargetObjectId,
-                        objectById,
-                        PromptIntentObjectRoles.IsRailSinkTargetRoleSupported,
-                        label + ".railOptions.sinkEndpointTargetObjectId",
-                        "processor/seller",
-                        result);
-                if (value.railOptions.spawnIntervalSeconds <= 0f)
-                    Fail(result, label + ".railOptions.spawnIntervalSeconds는 0보다 커야 합니다.");
-                if (value.railOptions.travelDurationSeconds <= 0f)
-                    Fail(result, label + ".railOptions.travelDurationSeconds는 0보다 커야 합니다.");
-            }
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
         }
 
         private static void ValidateWorldBounds(
@@ -446,12 +263,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (unlockObjectiveCount > 1)
                     Fail(result, "stages[" + i + "]는 unlock_object objective를 1개까지만 지원합니다.");
 
-                ValidateSpawnCustomerTiming(stage, i, stages, result);
                 ValidateShowArrowTiming(stage, i, result);
             }
         }
 
-        private static void ValidateRailEndpointTargetRole(
+        private static void ValidateFeatureEndpointTargetRole(
             string objectId,
             Dictionary<string, ScenarioModelObjectDefinition> objectById,
             Func<string, bool> isSupportedRole,
@@ -565,68 +381,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             Fail(result, label + " '" + normalizedObjectId + "'는 role '" + JoinRoles(safeSupportedRoles) + "' 중 하나여야 합니다.");
         }
 
-        private static void ValidateSellerRequestableItems(PlayableScenarioModel model, ScenarioModelValidationResult result)
-        {
-            if (model == null)
-                return;
-
-            var acceptedItemKeysBySellerId = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];
-            for (int stageIndex = 0; stageIndex < stages.Length; stageIndex++)
-            {
-                ScenarioModelStageDefinition stage = stages[stageIndex];
-                ScenarioModelObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new ScenarioModelObjectiveDefinition[0] : new ScenarioModelObjectiveDefinition[0];
-                for (int objectiveIndex = 0; objectiveIndex < objectives.Length; objectiveIndex++)
-                {
-                    ScenarioModelObjectiveDefinition objective = objectives[objectiveIndex];
-                    if (objective == null ||
-                        !string.Equals(objective.kind != null ? objective.kind.Trim() : string.Empty, PromptIntentObjectiveKinds.SELL_ITEM, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    string sellerId = objective.targetObjectId != null ? objective.targetObjectId.Trim() : string.Empty;
-                    string itemKey = ItemRefUtility.ToStableKey(objective.item);
-                    if (string.IsNullOrEmpty(sellerId) || string.IsNullOrEmpty(itemKey))
-                        continue;
-
-                    if (!acceptedItemKeysBySellerId.TryGetValue(sellerId, out HashSet<string> itemKeys))
-                    {
-                        itemKeys = new HashSet<string>(StringComparer.Ordinal);
-                        acceptedItemKeysBySellerId.Add(sellerId, itemKeys);
-                    }
-
-                    itemKeys.Add(itemKey);
-                }
-            }
-
-            ScenarioModelObjectDefinition[] objects = model.objects ?? new ScenarioModelObjectDefinition[0];
-            for (int i = 0; i < objects.Length; i++)
-            {
-                ScenarioModelObjectDefinition value = objects[i];
-                if (value == null)
-                    continue;
-
-                string sellerId = value.id != null ? value.id.Trim() : string.Empty;
-                ScenarioModelSellerRequestableItemDefinition[] requestableItems = value.sellerRequestableItems ?? new ScenarioModelSellerRequestableItemDefinition[0];
-                for (int requestIndex = 0; requestIndex < requestableItems.Length; requestIndex++)
-                {
-                    ScenarioModelSellerRequestableItemDefinition requestableItem = requestableItems[requestIndex];
-                    if (requestableItem == null)
-                        continue;
-
-                    string itemKey = ItemRefUtility.ToStableKey(requestableItem.item);
-                    if (string.IsNullOrEmpty(itemKey))
-                        continue;
-
-                    if (!acceptedItemKeysBySellerId.TryGetValue(sellerId, out HashSet<string> acceptedItems) || !acceptedItems.Contains(itemKey))
-                    {
-                        Fail(result, "objects[" + i + "].sellerRequestableItems[" + requestIndex + "].item '" + itemKey + "'은(는) 해당 seller의 sell_item objective로 선언되어야 합니다.");
-                    }
-                }
-            }
-        }
-
         private static void ValidateObjectiveContract(
             ScenarioModelObjectiveDefinition objective,
             Dictionary<string, ScenarioModelObjectDefinition> objectById,
@@ -643,11 +397,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateTargetEventKeyCapability(objective.targetObjectId, targetEventKey, objectById, label + ".targetObjectId", kind, result);
             }
 
-            if (string.Equals(kind, PromptIntentObjectiveKinds.CONVERT_ITEM, StringComparison.Ordinal))
-            {
-                if (!ItemRefUtility.IsValid(objective.inputItem))
-                    Fail(result, label + ".inputItem이 필요합니다.");
-            }
+            if (PromptIntentContractRegistry.ObjectiveRequiresItem(kind) && !ItemRefUtility.IsValid(objective.item))
+                Fail(result, label + ".item이 필요합니다.");
+
+            if (PromptIntentContractRegistry.ObjectiveRequiresInputItem(kind) && !ItemRefUtility.IsValid(objective.inputItem))
+                Fail(result, label + ".inputItem이 필요합니다.");
 
             if (PromptIntentCapabilityRegistry.ObjectiveRequiresAbsorbedArrow(kind) && !objective.absorbsArrow)
             {
@@ -729,212 +483,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             Fail(result, label + "는 object '" + normalizedObjectId + "'(role='" + role + "')에서 " + usageLabel + " eventKey '" + normalizedEventKey + "'를 지원하지 않습니다." + BuildTargetEventKeyGuidance(normalizedObjectId, role, usageLabel));
         }
 
-        private static void ValidateEconomyReachability(PlayableScenarioModel model, ScenarioModelValidationResult result)
-        {
-            ScenarioModelCurrencyDefinition[] currencies = model.currencies ?? new ScenarioModelCurrencyDefinition[0];
-            ScenarioModelSaleValueDefinition[] saleValues = model.saleValues ?? new ScenarioModelSaleValueDefinition[0];
-            ScenarioModelStageDefinition[] stages = model.stages ?? new ScenarioModelStageDefinition[0];
-
-            var spendableBalanceByCurrency = new Dictionary<string, int>(StringComparer.Ordinal);
-            var pendingCollectedByCurrency = new Dictionary<string, int>(StringComparer.Ordinal);
-            var repeatableIncomeCurrencies = new HashSet<string>(StringComparer.Ordinal);
-            var loopState = new EconomyLoopState();
-            for (int i = 0; i < currencies.Length; i++)
-            {
-                ScenarioModelCurrencyDefinition currency = currencies[i];
-                if (currency == null || string.IsNullOrWhiteSpace(currency.currencyId))
-                    continue;
-
-                string currencyId = currency.currencyId.Trim();
-                spendableBalanceByCurrency[currencyId] = Math.Max(0, currency.startingAmount);
-                pendingCollectedByCurrency[currencyId] = 0;
-            }
-
-            var saleValuesByItemKey = new Dictionary<string, ScenarioModelSaleValueDefinition>(StringComparer.Ordinal);
-            for (int i = 0; i < saleValues.Length; i++)
-            {
-                ScenarioModelSaleValueDefinition saleValue = saleValues[i];
-                string itemKey = ItemRefUtility.ToStableKey(saleValue != null ? saleValue.item : null);
-                if (saleValue == null || string.IsNullOrWhiteSpace(itemKey))
-                    continue;
-
-                saleValuesByItemKey[itemKey] = saleValue;
-            }
-
-            for (int i = 0; i < stages.Length; i++)
-            {
-                ScenarioModelStageDefinition stage = stages[i];
-                if (stage == null || stage.enterCondition == null)
-                    continue;
-
-                ScenarioModelConditionDefinition enterCondition = stage.enterCondition;
-                if (string.Equals(enterCondition.kind, PromptIntentConditionKinds.BALANCE_AT_LEAST, StringComparison.Ordinal))
-                {
-                    string currencyId = enterCondition.currencyId != null ? enterCondition.currencyId.Trim() : string.Empty;
-                    int currentUpperBound = GetCurrencyAmount(spendableBalanceByCurrency, currencyId);
-                    if (currentUpperBound < enterCondition.amount && !repeatableIncomeCurrencies.Contains(currencyId))
-                    {
-                        Fail(result, "stages[" + i + "].enterCondition은 currency '" + currencyId + "'의 threshold '" + enterCondition.amountValue + "'에 도달할 수 없습니다.");
-                    }
-                }
-
-                ApplyStageEconomyEffects(
-                    stage.objectives,
-                    saleValuesByItemKey,
-                    spendableBalanceByCurrency,
-                    pendingCollectedByCurrency,
-                    repeatableIncomeCurrencies,
-                    ref loopState);
-            }
-        }
-
-        private static void ApplyStageEconomyEffects(
-            ScenarioModelObjectiveDefinition[] objectives,
-            Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByItemKey,
-            Dictionary<string, int> spendableBalanceByCurrency,
-            Dictionary<string, int> pendingCollectedByCurrency,
-            HashSet<string> repeatableIncomeCurrencies,
-            ref EconomyLoopState loopState)
-        {
-            ScenarioModelObjectiveDefinition[] safeObjectives = objectives ?? new ScenarioModelObjectiveDefinition[0];
-
-            for (int i = 0; i < safeObjectives.Length; i++)
-            {
-                ScenarioModelObjectiveDefinition objective = safeObjectives[i];
-                if (objective == null)
-                    continue;
-
-                string kind = objective.kind != null ? objective.kind.Trim() : string.Empty;
-                switch (kind)
-                {
-                    case PromptIntentObjectiveKinds.COLLECT_ITEM:
-                        loopState.CanDirectSell = true;
-                        loopState.CanProcessedSell = false;
-                        loopState.SaleCanCompleteLoop = false;
-                        loopState.SoldCurrencyId = string.Empty;
-                        break;
-                    case PromptIntentObjectiveKinds.CONVERT_ITEM:
-                        if (loopState.CanDirectSell)
-                            loopState.CanProcessedSell = true;
-                        loopState.SaleCanCompleteLoop = false;
-                        loopState.SoldCurrencyId = string.Empty;
-                        break;
-                    case PromptIntentObjectiveKinds.SELL_ITEM:
-                        ApplySaleObjective(
-                            objective,
-                            saleValuesByItemKey,
-                            pendingCollectedByCurrency,
-                            ref loopState.SaleCanCompleteLoop,
-                            ref loopState.SoldCurrencyId,
-                            loopState.CanDirectSell,
-                            loopState.CanProcessedSell);
-                        loopState.CanDirectSell = false;
-                        loopState.CanProcessedSell = false;
-                        break;
-                    case PromptIntentObjectiveKinds.COLLECT_CURRENCY:
-                        ApplyCollectCurrencyObjective(
-                            objective,
-                            spendableBalanceByCurrency,
-                            pendingCollectedByCurrency,
-                            repeatableIncomeCurrencies,
-                            ref loopState.SaleCanCompleteLoop,
-                            ref loopState.SoldCurrencyId);
-                        break;
-                    case PromptIntentObjectiveKinds.UNLOCK_OBJECT:
-                        ApplyUnlockObjective(objective, spendableBalanceByCurrency);
-                        loopState.SaleCanCompleteLoop = false;
-                        loopState.SoldCurrencyId = string.Empty;
-                        loopState.CanDirectSell = false;
-                        loopState.CanProcessedSell = false;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-
-        private static void ApplySaleObjective(
-            ScenarioModelObjectiveDefinition objective,
-            Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByItemKey,
-            Dictionary<string, int> pendingCollectedByCurrency,
-            ref bool saleCanCompleteLoop,
-            ref string soldCurrencyId,
-            bool canDirectSell,
-            bool canProcessedSell)
-        {
-            string itemKey = ItemRefUtility.ToStableKey(objective != null ? objective.item : null);
-            if (!saleValuesByItemKey.TryGetValue(itemKey, out ScenarioModelSaleValueDefinition saleValue) || saleValue == null)
-            {
-                saleCanCompleteLoop = false;
-                soldCurrencyId = string.Empty;
-                return;
-            }
-
-            string currencyId = saleValue.currencyId != null ? saleValue.currencyId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(currencyId))
-            {
-                saleCanCompleteLoop = false;
-                soldCurrencyId = string.Empty;
-                return;
-            }
-
-            int currentPending = GetCurrencyAmount(pendingCollectedByCurrency, currencyId);
-            pendingCollectedByCurrency[currencyId] = currentPending + Math.Max(0, saleValue.amount);
-            saleCanCompleteLoop = canDirectSell || canProcessedSell;
-            soldCurrencyId = currencyId;
-        }
-
-        private static void ApplyCollectCurrencyObjective(
-            ScenarioModelObjectiveDefinition objective,
-            Dictionary<string, int> spendableBalanceByCurrency,
-            Dictionary<string, int> pendingCollectedByCurrency,
-            HashSet<string> repeatableIncomeCurrencies,
-            ref bool saleCanCompleteLoop,
-            ref string soldCurrencyId)
-        {
-            string currencyId = objective.currencyId != null ? objective.currencyId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(currencyId))
-            {
-                saleCanCompleteLoop = false;
-                soldCurrencyId = string.Empty;
-                return;
-            }
-
-            int pendingAmount = GetCurrencyAmount(pendingCollectedByCurrency, currencyId);
-            if (pendingAmount > 0)
-            {
-                int spendableAmount = GetCurrencyAmount(spendableBalanceByCurrency, currencyId);
-                spendableBalanceByCurrency[currencyId] = spendableAmount + pendingAmount;
-                pendingCollectedByCurrency[currencyId] = 0;
-            }
-
-            if (saleCanCompleteLoop && string.Equals(soldCurrencyId, currencyId, StringComparison.Ordinal) && pendingAmount > 0)
-                repeatableIncomeCurrencies.Add(currencyId);
-
-            saleCanCompleteLoop = false;
-            soldCurrencyId = string.Empty;
-        }
-
-        private static void ApplyUnlockObjective(
-            ScenarioModelObjectiveDefinition objective,
-            Dictionary<string, int> spendableBalanceByCurrency)
-        {
-            string currencyId = objective.currencyId != null ? objective.currencyId.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(currencyId))
-                return;
-
-            int currentBalance = GetCurrencyAmount(spendableBalanceByCurrency, currencyId);
-            spendableBalanceByCurrency[currencyId] = Math.Max(0, currentBalance - Math.Max(0, objective.amount));
-        }
-
-        private static int GetCurrencyAmount(Dictionary<string, int> amountsByCurrency, string currencyId)
-        {
-            if (string.IsNullOrEmpty(currencyId))
-                return 0;
-
-            return amountsByCurrency.TryGetValue(currencyId, out int amount) ? amount : 0;
-        }
-
         private static bool HasFocusCamera(ScenarioModelEffectDefinition[] effects)
         {
             return HasEffect(effects, PromptIntentEffectKinds.FOCUS_CAMERA);
@@ -954,73 +502,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             }
 
             return false;
-        }
-
-        private static void ValidateSpawnCustomerTiming(
-            ScenarioModelStageDefinition stage,
-            int stageIndex,
-            ScenarioModelStageDefinition[] allStages,
-            ScenarioModelValidationResult result)
-        {
-            if (stage == null)
-                return;
-
-            bool completionFocusAsLastBeat = HasCompletionFocusAsLastBeat(stage);
-            bool previousStageFocusAsLastBeat = HasPreviousStageFocusAsLastBeat(stageIndex, stage, allStages);
-
-            ValidateSpawnCustomerTimingGroup(
-                stage.entryEffects,
-                "stages[" + stageIndex + "].entryEffects",
-                requireExplicitTiming: previousStageFocusAsLastBeat,
-                previousStageFocusAsLastBeat,
-                result);
-
-            ValidateSpawnCustomerTimingGroup(
-                stage.completionEffects,
-                "stages[" + stageIndex + "].completionEffects",
-                requireExplicitTiming: completionFocusAsLastBeat,
-                completionFocusAsLastBeat,
-                result);
-        }
-
-        private static void ValidateSpawnCustomerTimingGroup(
-            ScenarioModelEffectDefinition[] effects,
-            string label,
-            bool requireExplicitTiming,
-            bool allowArrivalTiming,
-            ScenarioModelValidationResult result)
-        {
-            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
-            for (int i = 0; i < safeEffects.Length; i++)
-            {
-                ScenarioModelEffectDefinition effect = safeEffects[i];
-                if (effect == null ||
-                    !string.Equals(effect.kind != null ? effect.kind.Trim() : string.Empty, PromptIntentEffectKinds.SPAWN_CUSTOMER, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                string timing = effect.timing != null ? effect.timing.Trim() : string.Empty;
-                if (requireExplicitTiming && string.IsNullOrEmpty(timing))
-                {
-                    Fail(result, label + "[" + i + "].timing이 필요합니다. focus camera와 직접 연결되는 spawn_customer는 arrival/completed를 명시해야 합니다.");
-                    continue;
-                }
-
-                if (!string.IsNullOrEmpty(timing) &&
-                    !PromptIntentEffectTimingKinds.IsSupported(timing))
-                {
-                    Fail(result, label + "[" + i + "].timing '" + timing + "'은(는) 지원되지 않습니다.");
-                    continue;
-                }
-
-                if (string.Equals(timing, PromptIntentEffectTimingKinds.ARRIVAL, StringComparison.Ordinal) &&
-                    !allowArrivalTiming &&
-                    !IntentAuthoringUtility.HasEntryFocusBeforeIndex(safeEffects, i))
-                {
-                    Fail(result, label + "[" + i + "].timing 'arrival'은 focus camera arrival context가 있을 때만 사용할 수 있습니다.");
-                }
-            }
         }
 
         private static void ValidateShowArrowTiming(
@@ -1070,63 +551,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             if (hasArrivalArrow && !HasFocusCamera(stage.entryEffects))
                 Fail(result, "stages[" + stageIndex + "]의 show_arrow arrival timing은 same-stage entry focus_camera가 있을 때만 사용할 수 있습니다.");
-        }
-
-        private static bool HasPreviousStageFocusAsLastBeat(
-            int stageIndex,
-            ScenarioModelStageDefinition stage,
-            ScenarioModelStageDefinition[] allStages)
-        {
-            if (stageIndex <= 0)
-                return false;
-
-            ScenarioModelConditionDefinition enterCondition = stage != null ? stage.enterCondition : null;
-            string kind = enterCondition != null && enterCondition.kind != null ? enterCondition.kind.Trim() : string.Empty;
-            if (string.Equals(kind, PromptIntentConditionKinds.STAGE_COMPLETED, StringComparison.Ordinal))
-            {
-                string referencedStageId = enterCondition.stageId != null ? enterCondition.stageId.Trim() : string.Empty;
-                ScenarioModelStageDefinition referencedStage = FindStageById(allStages, referencedStageId);
-                return HasFocusAsLastBeat(referencedStage);
-            }
-
-            return HasFocusAsLastBeat(allStages[stageIndex - 1]);
-        }
-
-        private static bool HasFocusAsLastBeat(ScenarioModelStageDefinition stage)
-        {
-            if (stage == null)
-                return false;
-
-            if (HasCompletionFocusAsLastBeat(stage))
-                return true;
-
-            ScenarioModelObjectiveDefinition[] objectives = stage.objectives ?? new ScenarioModelObjectiveDefinition[0];
-            if (objectives.Length > 0)
-                return false;
-
-            return HasFocusCamera(stage.entryEffects);
-        }
-
-        private static bool HasCompletionFocusAsLastBeat(ScenarioModelStageDefinition stage)
-        {
-            ScenarioModelEffectDefinition[] effects = stage != null ? stage.completionEffects ?? new ScenarioModelEffectDefinition[0] : new ScenarioModelEffectDefinition[0];
-            return HasFocusCamera(effects);
-        }
-
-        private static ScenarioModelStageDefinition FindStageById(ScenarioModelStageDefinition[] stages, string stageId)
-        {
-            if (string.IsNullOrEmpty(stageId))
-                return null;
-
-            ScenarioModelStageDefinition[] safeStages = stages ?? new ScenarioModelStageDefinition[0];
-            for (int i = 0; i < safeStages.Length; i++)
-            {
-                ScenarioModelStageDefinition stage = safeStages[i];
-                if (stage != null && string.Equals(stage.id != null ? stage.id.Trim() : string.Empty, stageId, StringComparison.Ordinal))
-                    return stage;
-            }
-
-            return null;
         }
 
         private static int CountObjectives(ScenarioModelObjectiveDefinition[] objectives, string kind)

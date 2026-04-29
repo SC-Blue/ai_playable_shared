@@ -8,13 +8,6 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string STAGE_COMPLETED = "stage_completed";
         public const string BALANCE_AT_LEAST = "balance_at_least";
         public const string UNLOCK_COMPLETED = "unlock_completed";
-        public const string ITEM_GENERATED = "item_generated";
-        public const string ITEM_COLLECTED = "item_collected";
-        public const string ITEM_CONVERTED = "item_converted";
-        public const string RAIL_ITEM_ARRIVED = "rail_item_arrived";
-        public const string SALE_COMPLETED = "sale_completed";
-        public const string MONEY_COLLECTED = "money_collected";
-        public const string CUSTOMER_SERVED = "customer_served";
 
         public static string[] GetSupportedKinds()
         {

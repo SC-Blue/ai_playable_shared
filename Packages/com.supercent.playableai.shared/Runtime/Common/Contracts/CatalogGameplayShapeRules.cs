@@ -10,29 +10,16 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string ShapeTJunction = "t_junction";
         public const string ShapeCross = "cross";
 
-        private static readonly string[] RailRequiredShapes = { ShapeStraight, ShapeCorner };
         private static readonly string[] Connected3RequiredShapes = { ShapeStraight, ShapeCorner, ShapeCross };
         private static readonly string[] Connected3AllowedShapes = { ShapeStraight, ShapeCorner, ShapeTJunction, ShapeCross };
 
         public static bool RequiresGameplayFootprint(string role)
         {
             string normalizedRole = Normalize(role);
-            return string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleGenerator, System.StringComparison.Ordinal) ||
-                   string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleProcessor, System.StringComparison.Ordinal) ||
-                   string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleSeller, System.StringComparison.Ordinal) ||
-                   string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleUnlockPad, System.StringComparison.Ordinal) ||
-                   string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleRail, System.StringComparison.Ordinal);
-        }
-
-        public static bool RequiresRailPathShapes()
-        {
-            return true;
-        }
-
-        public static bool IsValidRailPathShapeSet(IEnumerable<string> shapes)
-        {
-            HashSet<string> normalized = NormalizeSet(shapes, RailRequiredShapes);
-            return normalized.SetEquals(RailRequiredShapes);
+            return string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleUnlockPad, System.StringComparison.Ordinal) ||
+                   (PromptIntentContractRegistry.IsSupportedObjectRole(normalizedRole) &&
+                    !string.Equals(normalizedRole, CatalogGameplayTaxonomy.RolePlayer, System.StringComparison.Ordinal) &&
+                    !string.Equals(normalizedRole, CatalogGameplayTaxonomy.RoleUnlockPad, System.StringComparison.Ordinal));
         }
 
         public static bool IsValidEnvironmentPerimeterShapeSet(string placementMode, string variationMode, IEnumerable<string> shapes)
@@ -74,15 +61,8 @@ namespace Supercent.PlayableAI.Common.Contracts
             if (string.IsNullOrWhiteSpace(normalizedExpectedShape))
                 return false;
 
-            return NormalizeSet(shapes, Connected3AllowedShapes.Concat(RailRequiredShapes))
+            return NormalizeSet(shapes, Connected3AllowedShapes)
                 .Contains(normalizedExpectedShape);
-        }
-
-        public static string[] NormalizeRailPathShapes(IEnumerable<string> shapes)
-        {
-            return NormalizeSet(shapes, RailRequiredShapes)
-                .OrderBy(value => value, System.StringComparer.Ordinal)
-                .ToArray();
         }
 
         public static string[] NormalizeEnvironmentPerimeterShapes(IEnumerable<string> shapes)

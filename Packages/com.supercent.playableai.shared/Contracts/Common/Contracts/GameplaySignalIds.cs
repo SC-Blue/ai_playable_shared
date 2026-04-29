@@ -4,27 +4,9 @@ namespace Supercent.PlayableAI.Common.Contracts
 {
     public static class GameplaySignalIds
     {
-        public const string ITEM_GENERATED = "item_generated";
-        public const string ITEM_COLLECTED = "item_collected";
-        public const string RAIL_ITEM_ARRIVED = "rail_item_arrived";
-        public const string ITEM_DELIVERED = "item_delivered";
-        public const string ITEM_CONVERTED = "item_converted";
-        public const string SALE_COMPLETED = "sale_completed";
-        public const string MONEY_COLLECTED = "money_collected";
-        public const string CUSTOMER_SPAWN_STARTED = "customer_spawn_started";
-        public const string CUSTOMER_SERVED = "customer_served";
 
         private static readonly string[] All =
         {
-            ITEM_GENERATED,
-            ITEM_COLLECTED,
-            RAIL_ITEM_ARRIVED,
-            ITEM_DELIVERED,
-            ITEM_CONVERTED,
-            SALE_COMPLETED,
-            MONEY_COLLECTED,
-            CUSTOMER_SPAWN_STARTED,
-            CUSTOMER_SERVED,
         };
 
         public static string[] GetAll()
