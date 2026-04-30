@@ -36,6 +36,42 @@ namespace Supercent.PlayableAI.Common.Format
         public const string FontsPathToken = "fonts";
     }
 
+    public static class ContentStoreThemeIds
+    {
+        public const string OfficeLife = "office_life";
+        public const string SnakeClash = "snake_clash";
+        public const string BulldozerMaster = "bull_dozer_master";
+        public const string DinosaurUniverse = "dinosaur_universe";
+        public const string ArrowFlow = "arrow_flow";
+        public const string DownhillRacer = "downhill_racer";
+        public const string PizzaReady = "pizza_ready";
+        public const string SpinMiner = "spin_miner";
+        public const string PrisonLife = "prison_life";
+        public const string SuzysRestaurant = "suzys_restaurant";
+        public const string XpHero = "xp_hero";
+        public const string CrabLife = "crab_life";
+        public const string CaptainOfSpace = "captain_of_space";
+        public const string PaperDeliveryBoy = "paper_delivery_boy";
+
+        public static readonly string[] All =
+        {
+            OfficeLife,
+            SnakeClash,
+            BulldozerMaster,
+            DinosaurUniverse,
+            ArrowFlow,
+            DownhillRacer,
+            PizzaReady,
+            SpinMiner,
+            PrisonLife,
+            SuzysRestaurant,
+            XpHero,
+            CrabLife,
+            CaptainOfSpace,
+            PaperDeliveryBoy,
+        };
+    }
+
     [Serializable]
     public sealed class ContentStoreTaxonomyDefinition
     {
@@ -76,8 +112,20 @@ namespace Supercent.PlayableAI.Common.Format
     {
         private static readonly ContentStoreTaxonomyOption[] ThemeOptions =
         {
-            Option("pizza_ready", "피자레디", "/assets/themes/pizza_ready.webp"),
-            Option("suzys_restaurant", "수지 레스토랑", "/assets/themes/suzys_restaurant.webp"),
+            PlayableTheme(ContentStoreThemeIds.OfficeLife, "Office Life", "office-life", "office-life"),
+            PlayableTheme(ContentStoreThemeIds.SnakeClash, "Snake Clash", "snake-clash", "snake-clash"),
+            PlayableTheme(ContentStoreThemeIds.BulldozerMaster, "Bulldozer Master", "bull-dozer-master", "bull-dozer-master", "bulldozer_master"),
+            PlayableTheme(ContentStoreThemeIds.DinosaurUniverse, "Dino Universe", "dinosaur-universe", "dinosaur-universe", "dino_universe", "dino-universe"),
+            PlayableTheme(ContentStoreThemeIds.ArrowFlow, "Arrow Flow", "arrow-flow", "arrow-flow"),
+            PlayableTheme(ContentStoreThemeIds.DownhillRacer, "Downhill Racer", "downhill-racer", "downhill-racer"),
+            PlayableTheme(ContentStoreThemeIds.PizzaReady, "Pizza Ready", "pizza-ready", "pizza-ready"),
+            PlayableTheme(ContentStoreThemeIds.SpinMiner, "Spin Miner", "spin-miner", "spin-miner"),
+            PlayableTheme(ContentStoreThemeIds.PrisonLife, "Prison Life", "prison-life", "prison-life"),
+            PlayableTheme(ContentStoreThemeIds.SuzysRestaurant, "Suzy's Restaurant", "suzy-s-restaurant", "suzy-s-restaurant", "suzy_s_restaurant"),
+            PlayableTheme(ContentStoreThemeIds.XpHero, "XP Hero", "xp-hero", "xp-hero"),
+            PlayableTheme(ContentStoreThemeIds.CrabLife, "Crab Life", "crab-life", "crab-life"),
+            PlayableTheme(ContentStoreThemeIds.CaptainOfSpace, "Captain of Space", "captain-of-space", "captain-of-space"),
+            PlayableTheme(ContentStoreThemeIds.PaperDeliveryBoy, "Paper Delivery Boy", "paper-delivery-boy", "paper-delivery-boy"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] ContentKindOptions =
@@ -348,18 +396,32 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static bool IsSupportedThemeId(string themeId)
         {
-            string normalized = Normalize(themeId);
-            return ThemeOptions.Any(option => string.Equals(option.id, normalized, StringComparison.Ordinal));
+            string canonical = CanonicalizeThemeId(themeId);
+            return ThemeOptions.Any(option => string.Equals(option.id, canonical, StringComparison.Ordinal));
         }
 
         public static string CanonicalizeThemeId(string themeId)
         {
-            return Normalize(themeId);
+            string normalized = Normalize(themeId);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return string.Empty;
+
+            ContentStoreTaxonomyOption option = ThemeOptions.FirstOrDefault(candidate =>
+                string.Equals(candidate.id, normalized, StringComparison.Ordinal) ||
+                (candidate.aliases ?? Array.Empty<string>()).Any(alias => string.Equals(alias, normalized, StringComparison.Ordinal)));
+            return option != null ? option.id : normalized;
         }
 
         public static string ResolveThemeContentPathToken(string themeId)
         {
             return CanonicalizeThemeId(themeId);
+        }
+
+        public static string ResolveThemeIconUrl(string themeId)
+        {
+            string canonical = CanonicalizeThemeId(themeId);
+            ContentStoreTaxonomyOption option = ThemeOptions.FirstOrDefault(candidate => string.Equals(candidate.id, canonical, StringComparison.Ordinal));
+            return option != null ? option.iconUrl ?? string.Empty : string.Empty;
         }
 
         public static string[] ResolveThemePathTokens(string themeId)
@@ -380,6 +442,11 @@ namespace Supercent.PlayableAI.Common.Format
                 iconUrl = iconUrl,
                 aliases = aliases ?? Array.Empty<string>(),
             };
+        }
+
+        private static ContentStoreTaxonomyOption PlayableTheme(string id, string label, string iconSlug, params string[] aliases)
+        {
+            return Option(id, label, "/assets/supercent-games/" + iconSlug + ".webp", aliases);
         }
 
         private static ContentStoreTaxonomySubcategoryGroup Group(string category, params ContentStoreTaxonomyOption[] subcategories)

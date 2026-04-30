@@ -7,9 +7,11 @@ namespace Supercent.PlayableAI.Common.Contracts
     public sealed class FeatureDescriptorAsset : ScriptableObject
     {
         [SerializeField] private FeatureDescriptor _descriptor = new FeatureDescriptor();
+        [SerializeField, HideInInspector] private bool _contentStoreLocked;
         [SerializeField, HideInInspector] private string _lastValidationError = string.Empty;
 
         public bool IsRuntimePackage => ToDescriptor().isRuntimePackage;
+        public bool IsContentStoreLocked => _contentStoreLocked;
         public string LastValidationError => _lastValidationError ?? string.Empty;
 
         public FeatureDescriptor ToDescriptor()
@@ -20,7 +22,13 @@ namespace Supercent.PlayableAI.Common.Contracts
         public void SetDescriptorForImport(FeatureDescriptor descriptor)
         {
             _descriptor = FeatureDescriptorUtility.Clone(descriptor);
+            _contentStoreLocked = true;
             TryValidate(out _lastValidationError);
+        }
+
+        public void SetContentStoreLocked(bool locked)
+        {
+            _contentStoreLocked = locked;
         }
 
         public bool TryValidate(out string error)
