@@ -396,14 +396,12 @@ namespace PlayableAI.AuthoringCore
                 return "MissingLeavePoint";
             if (message.IndexOf("targetId", StringComparison.Ordinal) >= 0 && message.IndexOf("customerPaths", StringComparison.Ordinal) >= 0)
                 return "CustomerPathTargetCoverage";
-            if (message.IndexOf("pathCells", StringComparison.Ordinal) >= 0 && message.IndexOf("필요합니다", StringComparison.Ordinal) >= 0)
-                return "MissingFeaturePathCells";
-            if (message.IndexOf("sink endpoint target placement", StringComparison.Ordinal) >= 0)
-                return "MissingFeatureSinkPlacement";
-            if (message.IndexOf("pathCells가 유효하지 않습니다", StringComparison.Ordinal) >= 0)
-                return "InvalidFeaturePathTopology";
-            if (message.IndexOf("realPhysicsZoneBounds", StringComparison.Ordinal) >= 0 || message.IndexOf("fakeSpriteZoneBounds", StringComparison.Ordinal) >= 0)
-                return "MissingFeatureBounds";
+            if (message.IndexOf("featureLayout", StringComparison.Ordinal) >= 0 &&
+                message.IndexOf("필요", StringComparison.Ordinal) >= 0)
+                return "MissingFeatureLayoutPayload";
+            if (message.IndexOf("featureLayout", StringComparison.Ordinal) >= 0 &&
+                message.IndexOf("유효하지", StringComparison.Ordinal) >= 0)
+                return "InvalidFeatureLayoutPayload";
             if (message.IndexOf("environment 점유 셀과 충돌", StringComparison.Ordinal) >= 0)
                 return "EnvironmentOccupiedCellConflict";
             if (message.IndexOf("layout 경계를 벗어났습니다", StringComparison.Ordinal) >= 0)
@@ -466,20 +464,14 @@ namespace PlayableAI.AuthoringCore
                 AddUnique(fixes, safeObjectIds.Length == 0
                     ? "customer-facing feature마다 draft_layout.customerPaths[targetId=<targetId>]를 정확히 1개씩 작성해주세요."
                     : "customer-facing feature마다 customer path를 정확히 1개씩 작성해주세요. 현재 누락/중복 확인 대상: " + string.Join(", ", safeObjectIds) + ".");
-            if (string.Equals(ruleCode, "MissingFeaturePathCells", StringComparison.Ordinal))
+            if (string.Equals(ruleCode, "MissingFeatureLayoutPayload", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
-                    ? "draft_layout.placements[*].featureLayout.json에 descriptor layout schema가 요구하는 경로 정보를 작성해주세요."
-                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json에 descriptor layout schema가 요구하는 경로 정보를 작성해주세요.");
-            if (string.Equals(ruleCode, "MissingFeatureSinkPlacement", StringComparison.Ordinal))
-                AddUnique(fixes, "featureOptions.optionsJson 안의 sink target과 대응되는 placement를 draft_layout.placements에 함께 작성해주세요.");
-            if (string.Equals(ruleCode, "InvalidFeaturePathTopology", StringComparison.Ordinal))
+                    ? "draft_layout.placements[*].featureLayout.json에 descriptor가 요구하는 layout payload를 작성해주세요."
+                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json에 descriptor가 요구하는 layout payload를 작성해주세요.");
+            if (string.Equals(ruleCode, "InvalidFeatureLayoutPayload", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
                     ? "draft_layout.placements[*].featureLayout.json을 descriptor layout schema에 맞게 다시 작성해주세요."
                     : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json을 descriptor layout schema에 맞게 다시 작성해주세요.");
-            if (string.Equals(ruleCode, "MissingFeatureBounds", StringComparison.Ordinal))
-                AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
-                    ? "draft_layout.placements[*].featureLayout.json에 descriptor layout schema가 요구하는 bounds를 작성해주세요."
-                    : "draft_layout.placements[objectId=" + firstObjectId + "].featureLayout.json에 descriptor layout schema가 요구하는 bounds를 작성해주세요.");
             if (string.Equals(ruleCode, "EnvironmentOccupiedCellConflict", StringComparison.Ordinal))
                 AddUnique(fixes, string.IsNullOrEmpty(firstObjectId)
                     ? "draft_layout.environment[*] bounds를 줄이거나 이동해 gameplay footprint와 겹치지 않게 해주세요."
@@ -494,10 +486,40 @@ namespace PlayableAI.AuthoringCore
                 AddUnique(fixes, "draft_layout.placements에서 중복 objectId를 제거해 각 objectId가 정확히 1번만 나오게 해주세요.");
             if (string.Equals(ruleCode, "MissingPlacementCoverage", StringComparison.Ordinal))
                 AddUnique(fixes, "draft_layout.placements, draft_layout.playerStart, draft_layout.environment, draft_layout.customerPaths 중 최소 하나 이상을 채워주세요.");
+            if (string.Equals(ruleCode, "EnvironmentPerimeterThickness", StringComparison.Ordinal))
+                AddEnvironmentPerimeterThicknessFixes(fixes, message);
             if (fixes.Count == 0 && !string.IsNullOrWhiteSpace(message))
                 AddUnique(fixes, "현재 blocker message를 기준으로 가장 직접적인 원인부터 제거해주세요.");
 
             return fixes.ToArray();
+        }
+
+        private static void AddEnvironmentPerimeterThicknessFixes(List<string> fixes, string message)
+        {
+            if (fixes == null)
+                return;
+
+            string normalizedMessage = Normalize(message);
+            Match match = Regex.Match(
+                normalizedMessage,
+                @"layoutSpec\.environment\[(?<index>[0-9]+)\]\((?<objectId>[^/)]+)/(?<designId>[^)]+)\).*thickness=(?<thickness>[0-9]+(?:\.[0-9]+)?), max=(?<max>[0-9]+(?:\.[0-9]+)?)",
+                RegexOptions.CultureInvariant);
+
+            if (match.Success)
+            {
+                string index = match.Groups["index"].Value;
+                string objectId = Normalize(match.Groups["objectId"].Value);
+                string designId = Normalize(match.Groups["designId"].Value);
+                string max = Normalize(match.Groups["max"].Value);
+                string target = "draft_layout.environment[" + index + "]";
+                string label = string.IsNullOrEmpty(objectId) ? target : target + "(" + objectId + "/" + designId + ")";
+
+                AddUnique(fixes, label + "의 perimeter 짧은 축 두께를 " + max + " 이하로 줄여주세요. 가로 띠면 worldDepth를, 세로 띠면 worldWidth를 줄입니다.");
+                AddUnique(fixes, label + "는 긴 축으로만 연장하고 짧은 축은 catalog footprint 두께를 유지해야 합니다.");
+                return;
+            }
+
+            AddUnique(fixes, "문제가 된 draft_layout.environment 항목의 짧은 축 두께를 catalog footprint 이하로 줄여주세요. 가로 띠는 worldDepth, 세로 띠는 worldWidth가 두께입니다.");
         }
 
         private static DraftLayoutPreflightDiagnostic[] FilterOverlapDiagnostics(List<DraftLayoutPreflightDiagnostic> diagnostics)

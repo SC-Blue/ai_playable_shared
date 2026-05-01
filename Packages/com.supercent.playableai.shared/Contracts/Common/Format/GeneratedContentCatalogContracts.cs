@@ -95,9 +95,7 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public const char ENTRY_ID_DELIMITER = '/';
         public const string MONEY_OBJECT_ID = "money";
-        public const string MONEY_DESIGN_ID = "money_pile";
         public const string CUSTOMER_OBJECT_ID = "customer";
-        public const string CUSTOMER_DESIGN_ID = "car";
     }
 
     public static class ContentCatalogTokenUtility
@@ -324,6 +322,119 @@ namespace Supercent.PlayableAI.Common.Format
         public GeneratedContentCatalogEntry[] entries = new GeneratedContentCatalogEntry[0];
         public string[] availableFeatureTypes = Array.Empty<string>();
         public FeatureDescriptor[] featureDescriptors = Array.Empty<FeatureDescriptor>();
+        public GeneratedContentCatalogThemeCatalog[] themeCatalogs = Array.Empty<GeneratedContentCatalogThemeCatalog>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogThemeCatalog
+    {
+        public int schemaVersion = 2;
+        public string generatedAtUtc = string.Empty;
+        public string sourceHash = string.Empty;
+        public string themeId = string.Empty;
+        public GeneratedContentCatalogThemeOption[] availableThemes = Array.Empty<GeneratedContentCatalogThemeOption>();
+        public string[] availableFeatureTypes = Array.Empty<string>();
+        public FeatureDescriptor[] featureDescriptors = Array.Empty<FeatureDescriptor>();
+        public GeneratedContentCatalogStep2Document step2 = new GeneratedContentCatalogStep2Document();
+        public GeneratedContentCatalogStep3Document step3 = new GeneratedContentCatalogStep3Document();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogThemeOption
+    {
+        public string themeId = string.Empty;
+        public string label = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogStep2Document
+    {
+        public int schemaVersion = 2;
+        public string themeId = string.Empty;
+        public string selectableUiRootPath = string.Empty;
+        public string selectionInstructions = string.Empty;
+        public GeneratedContentCatalogGameplayObject[] objects = Array.Empty<GeneratedContentCatalogGameplayObject>();
+        public GeneratedContentCatalogSelectableContent[] contents = Array.Empty<GeneratedContentCatalogSelectableContent>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogStep3Document
+    {
+        public int schemaVersion = 2;
+        public string themeId = string.Empty;
+        public string selectableUiRootPath = string.Empty;
+        public string selectionInstructions = string.Empty;
+        public GeneratedContentCatalogGameplayObject[] gameplayObjects = Array.Empty<GeneratedContentCatalogGameplayObject>();
+        public GeneratedContentCatalogSelectableContent[] contents = Array.Empty<GeneratedContentCatalogSelectableContent>();
+        public GeneratedContentCatalogEnvironmentObject[] environmentObjects = Array.Empty<GeneratedContentCatalogEnvironmentObject>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogGameplayObject
+    {
+        public string objectId = string.Empty;
+        public string role = string.Empty;
+        public string category = string.Empty;
+        public string designMode = string.Empty;
+        public GeneratedContentCatalogGameplayDesign[] designs = Array.Empty<GeneratedContentCatalogGameplayDesign>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogGameplayDesign
+    {
+        public string designId = string.Empty;
+        public string description = string.Empty;
+        public string[] generatedItems = Array.Empty<string>();
+        public string[] outputItems = Array.Empty<string>();
+        public string[] capabilities = Array.Empty<string>();
+        public GeneratedContentCatalogFootprint footprint = null;
+        public string[] pathShape = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogSelectableContent
+    {
+        public string objectId = string.Empty;
+        public string category = string.Empty;
+        public bool required = true;
+        public string defaultDesignId = "NOT_SET";
+        public GeneratedContentCatalogSelectableContentDesign[] designs = Array.Empty<GeneratedContentCatalogSelectableContentDesign>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogSelectableContentDesign
+    {
+        public string designId = string.Empty;
+        public string description = string.Empty;
+        public string prefabAssetPath = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogEnvironmentObject
+    {
+        public string objectId = string.Empty;
+        public string role = string.Empty;
+        public string placementMode = string.Empty;
+        public string variationMode = string.Empty;
+        public GeneratedContentCatalogEnvironmentDesign[] designs = Array.Empty<GeneratedContentCatalogEnvironmentDesign>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogEnvironmentDesign
+    {
+        public string designId = string.Empty;
+        public string description = string.Empty;
+        public GeneratedContentCatalogFootprint footprint = null;
+        public string[] perimeterShape = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class GeneratedContentCatalogFootprint
+    {
+        public int widthCells;
+        public int depthCells;
+        public float centerOffsetX;
+        public float centerOffsetZ;
     }
 
     [Serializable]
@@ -345,6 +456,9 @@ namespace Supercent.PlayableAI.Common.Format
         public string prefabAssetGuid = string.Empty;
         public GeneratedContentCatalogPathAssets pathAssets = new GeneratedContentCatalogPathAssets();
         public GeneratedContentCatalogEnvironmentAssets environmentAssets = new GeneratedContentCatalogEnvironmentAssets();
+        public string[] generatedItems = Array.Empty<string>();
+        public string[] outputItems = Array.Empty<string>();
+        public string[] capabilities = Array.Empty<string>();
         public int footprintWidthCells = 1;
         public int footprintDepthCells = 1;
         public float footprintCenterOffsetX;

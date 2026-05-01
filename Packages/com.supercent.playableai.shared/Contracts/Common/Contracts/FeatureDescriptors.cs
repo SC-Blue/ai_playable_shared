@@ -15,9 +15,13 @@ namespace Supercent.PlayableAI.Common.Contracts
     {
         public const int SCHEMA_VERSION = 1;
         public const string VALUE_TYPE_INT = "int";
+        public const string VALUE_TYPE_INT_RANGE = "int_range";
         public const string VALUE_TYPE_FLOAT = "float";
         public const string VALUE_TYPE_ITEM_REF = "item_ref";
         public const string VALUE_TYPE_TARGET_OBJECT_ID = "target_object_id";
+        public const string EDITOR_PREVIEW_RENDERER_PATH = "path";
+        public const string EDITOR_PREVIEW_RENDERER_BOUNDS = "bounds";
+        public const string EDITOR_PREVIEW_VISUAL_OPTION_ITEM_REF = "option_item_ref";
     }
 
     [Serializable]
@@ -46,6 +50,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public FeatureCompiledGameplayRoleDescriptor[] compiledGameplayRoleMappings = Array.Empty<FeatureCompiledGameplayRoleDescriptor>();
         public FeatureInputOutputSemantics inputOutputSemantics = new FeatureInputOutputSemantics();
         public FeatureLayoutRequirementDescriptor layoutRequirements = new FeatureLayoutRequirementDescriptor();
+        public FeatureEditorPreviewDescriptor editorPreview = new FeatureEditorPreviewDescriptor();
     }
 
     [Serializable]
@@ -79,6 +84,8 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string summary = string.Empty;
         public string valueType = string.Empty;
         public bool required;
+        public string[] requiredItemDesignCapabilities = Array.Empty<string>();
+        public int minIntValue;
     }
 
     [Serializable]
@@ -192,6 +199,45 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string designMode = string.Empty;
         public string placementMode = string.Empty;
         public string[] pathShape = Array.Empty<string>();
+        public string[] requiredDesignCapabilities = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class FeatureEditorPreviewDescriptor
+    {
+        public string renderer = string.Empty;
+        public FeatureEditorPreviewPathDescriptor path = new FeatureEditorPreviewPathDescriptor();
+        public FeatureEditorPreviewBoundsDescriptor[] bounds = Array.Empty<FeatureEditorPreviewBoundsDescriptor>();
+        public FeatureEditorPreviewVisualSourceDescriptor visualSource = new FeatureEditorPreviewVisualSourceDescriptor();
+    }
+
+    [Serializable]
+    public sealed class FeatureEditorPreviewPathDescriptor
+    {
+        public string cellsField = string.Empty;
+        public string sinkTargetField = string.Empty;
+        public string straightDesignSlot = string.Empty;
+        public string cornerDesignSlot = string.Empty;
+        public int tileWidthCells = 2;
+        public int tileDepthCells = 2;
+    }
+
+    [Serializable]
+    public sealed class FeatureEditorPreviewBoundsDescriptor
+    {
+        public string field = string.Empty;
+        public string zoneKind = string.Empty;
+        public string label = string.Empty;
+        public string color = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class FeatureEditorPreviewVisualSourceDescriptor
+    {
+        public string kind = string.Empty;
+        public string optionFieldId = string.Empty;
+        public string contentCategory = string.Empty;
+        public string mediaSlot = string.Empty;
     }
 
     public sealed class FeatureDescriptorRegistry : IFeatureDescriptorRegistry
@@ -278,6 +324,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 compiledGameplayRoleMappings = Clone(value.compiledGameplayRoleMappings),
                 inputOutputSemantics = Clone(value.inputOutputSemantics),
                 layoutRequirements = Clone(value.layoutRequirements),
+                editorPreview = Clone(value.editorPreview),
             };
         }
 
@@ -336,6 +383,8 @@ namespace Supercent.PlayableAI.Common.Contracts
                     summary = value.summary ?? string.Empty,
                     valueType = Normalize(value.valueType),
                     required = value.required,
+                    requiredItemDesignCapabilities = CloneStrings(value.requiredItemDesignCapabilities),
+                    minIntValue = value.minIntValue,
                 };
             }
 
@@ -520,6 +569,67 @@ namespace Supercent.PlayableAI.Common.Contracts
                     designMode = Normalize(value.designMode),
                     placementMode = Normalize(value.placementMode),
                     pathShape = CloneStrings(value.pathShape),
+                    requiredDesignCapabilities = CloneStrings(value.requiredDesignCapabilities),
+                };
+        }
+
+        public static FeatureEditorPreviewDescriptor Clone(FeatureEditorPreviewDescriptor value)
+        {
+            return value == null
+                ? new FeatureEditorPreviewDescriptor()
+                : new FeatureEditorPreviewDescriptor
+                {
+                    renderer = Normalize(value.renderer),
+                    path = Clone(value.path),
+                    bounds = Clone(value.bounds),
+                    visualSource = Clone(value.visualSource),
+                };
+        }
+
+        public static FeatureEditorPreviewPathDescriptor Clone(FeatureEditorPreviewPathDescriptor value)
+        {
+            return value == null
+                ? new FeatureEditorPreviewPathDescriptor()
+                : new FeatureEditorPreviewPathDescriptor
+                {
+                    cellsField = Normalize(value.cellsField),
+                    sinkTargetField = Normalize(value.sinkTargetField),
+                    straightDesignSlot = Normalize(value.straightDesignSlot),
+                    cornerDesignSlot = Normalize(value.cornerDesignSlot),
+                    tileWidthCells = Math.Max(1, value.tileWidthCells),
+                    tileDepthCells = Math.Max(1, value.tileDepthCells),
+                };
+        }
+
+        public static FeatureEditorPreviewBoundsDescriptor[] Clone(FeatureEditorPreviewBoundsDescriptor[] values)
+        {
+            FeatureEditorPreviewBoundsDescriptor[] safeValues = values ?? Array.Empty<FeatureEditorPreviewBoundsDescriptor>();
+            var clones = new FeatureEditorPreviewBoundsDescriptor[safeValues.Length];
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                FeatureEditorPreviewBoundsDescriptor value = safeValues[i] ?? new FeatureEditorPreviewBoundsDescriptor();
+                clones[i] = new FeatureEditorPreviewBoundsDescriptor
+                {
+                    field = Normalize(value.field),
+                    zoneKind = Normalize(value.zoneKind),
+                    label = Normalize(value.label),
+                    color = Normalize(value.color),
+                };
+            }
+
+            return clones;
+        }
+
+        public static FeatureEditorPreviewVisualSourceDescriptor Clone(FeatureEditorPreviewVisualSourceDescriptor value)
+        {
+            return value == null
+                ? new FeatureEditorPreviewVisualSourceDescriptor()
+                : new FeatureEditorPreviewVisualSourceDescriptor
+                {
+                    kind = Normalize(value.kind),
+                    optionFieldId = Normalize(value.optionFieldId),
+                    contentCategory = Normalize(value.contentCategory),
+                    mediaSlot = Normalize(value.mediaSlot),
                 };
         }
 
@@ -626,6 +736,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             ValidateSignalReferences(featureType, descriptor.conditionKinds, signals, errors);
             ValidateSignalReferences(featureType, descriptor.objectiveKinds, signals, errors);
             ValidateRoleReferences(featureType, descriptor.compiledGameplayRoleMappings, roles, errors);
+            ValidateInputOutputReferences(featureType, descriptor.inputOutputSemantics, objectives, errors);
         }
 
         private static void AddUniqueValues(
@@ -689,6 +800,32 @@ namespace Supercent.PlayableAI.Common.Contracts
                 string role = FeatureDescriptorUtility.Normalize(safeMappings[i] != null ? safeMappings[i].role : string.Empty);
                 if (!string.IsNullOrWhiteSpace(role) && !roles.Contains(role))
                     errors.Add("compiledGameplayRoleMappings가 선언되지 않은 role을 참조합니다: " + featureType + "/" + role);
+            }
+        }
+
+        private static void ValidateInputOutputReferences(
+            string featureType,
+            FeatureInputOutputSemantics semantics,
+            HashSet<string> objectives,
+            List<string> errors)
+        {
+            ValidateObjectiveKindReferences(featureType, "inputOutputSemantics.generatedItems", semantics != null ? semantics.generatedItems : null, objectives, errors);
+            ValidateObjectiveKindReferences(featureType, "inputOutputSemantics.outputItems", semantics != null ? semantics.outputItems : null, objectives, errors);
+        }
+
+        private static void ValidateObjectiveKindReferences(
+            string featureType,
+            string label,
+            string[] values,
+            HashSet<string> objectives,
+            List<string> errors)
+        {
+            string[] safeValues = values ?? Array.Empty<string>();
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                string objectiveKind = FeatureDescriptorUtility.Normalize(safeValues[i]);
+                if (!string.IsNullOrWhiteSpace(objectiveKind) && !objectives.Contains(objectiveKind))
+                    errors.Add(label + "가 선언되지 않은 objectiveKind를 참조합니다: " + featureType + "/" + objectiveKind);
             }
         }
 

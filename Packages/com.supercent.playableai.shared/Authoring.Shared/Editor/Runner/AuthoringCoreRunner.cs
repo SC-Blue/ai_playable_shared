@@ -130,6 +130,7 @@ namespace PlayableAI.AuthoringCore
             ScenarioModelLoweringResult lowering = ScenarioModelLoweringCompiler.Compile(modelBuild.Model, catalog, layoutSpec);
             if (!lowering.IsValid)
                 return Fail(result, GenerationStageNames.LOWERING, lowering.FailureCode, lowering.Message, lowering.Errors);
+            AddWarnings(result.Warnings, lowering.Warnings);
 
             result.Plan = lowering.Plan;
 
@@ -144,10 +145,21 @@ namespace PlayableAI.AuthoringCore
             if (!compiledValidation.IsValid)
                 return Fail(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, compiledValidation.FailureCode, compiledValidation.Message, compiledValidation.Errors);
 
-            result.Warnings = compiledValidation.Warnings != null
-                ? new List<string>(compiledValidation.Warnings)
-                : new List<string>();
+            AddWarnings(result.Warnings, compiledValidation.Warnings);
             return Success(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, "검증 및 컴파일이 완료되었습니다.");
+        }
+
+        private static void AddWarnings(List<string> target, IReadOnlyList<string> warnings)
+        {
+            if (target == null || warnings == null)
+                return;
+
+            for (int i = 0; i < warnings.Count; i++)
+            {
+                string warning = warnings[i] ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(warning) && !target.Contains(warning))
+                    target.Add(warning);
+            }
         }
 
         private static AuthoringCoreExecutionProfile ResolveProfile(string mode)

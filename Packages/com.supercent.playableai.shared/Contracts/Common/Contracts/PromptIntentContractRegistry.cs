@@ -367,7 +367,8 @@ namespace Supercent.PlayableAI.Common.Contracts
         public static bool ObjectiveSupportsItem(string kind)
         {
             PromptIntentObjectiveKindDescriptor descriptor = FindObjectiveKind(kind);
-            return descriptor != null && descriptor.requiresItem;
+            return (descriptor != null && descriptor.requiresItem) ||
+                   PromptIntentFeatureDescriptorBridge.ObjectiveKindDefinesFeatureOutputItem(kind);
         }
 
         public static bool ObjectiveRequiresItem(string kind)

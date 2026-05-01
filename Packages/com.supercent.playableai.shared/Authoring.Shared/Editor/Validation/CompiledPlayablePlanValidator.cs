@@ -73,14 +73,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateFeatureAcceptedItems(plan.featureAcceptedItems, spawnLookup, catalog, result);
                 ValidateFeatureOutputItems(plan.spawns, plan.featureOutputItems, spawnLookup, catalog, result);
                 ValidatePlayerOptions(plan.playerOptions, result);
-                ValidateFeatureOptions(plan.featureOptions, spawnLookup, result);
+                ValidateFeatureOptions(plan.featureOptions, spawnLookup, catalog, result);
                 ValidateFeatureLayouts(plan.featureLayouts, spawnLookup, catalog, result);
                 ValidateCompiledFlowBeats(plan.beats, plan.actions, spawnLookup, catalog, currencyUnits, result);
                 HashSet<string> declaredSourceImageIds = ValidateSourceImages(layoutSpec, result);
                 ValidateCustomerPaths(layoutSpec, spawnLookup, catalog, result);
                 ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
+                ValidateEnvironmentPerimeterThickness(layoutSpec, catalog, result);
                 ValidatePlacementSpatialSemantics(layoutSpec, result);
-                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.itemPrices, plan.currencies, objectDesignLookup, catalog, result);
+                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.featureOptions, plan.itemPrices, plan.currencies, objectDesignLookup, catalog, result);
                 ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
             }
             finally
@@ -995,7 +996,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
         {
             if (prefab != null &&
                 PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata) &&
-                metadata.supportsCustomerFeature)
+                CatalogPrefabMetadataCapabilityUtility.HasCapability(metadata, CatalogPrefabCapabilityIds.CUSTOMER_FEATURE))
             {
                 return true;
             }
@@ -1145,6 +1146,95 @@ private static void ValidatePlacementSpatialSemantics(
 
 }
 
+private static void ValidateEnvironmentPerimeterThickness(
+    LayoutSpecDocument layoutSpec,
+    PlayableObjectCatalog catalog,
+    CompiledPlayablePlanValidationResult result)
+{
+    if (layoutSpec == null || catalog == null)
+        return;
+
+    LayoutSpecEnvironmentEntry[] environmentEntries = layoutSpec.environment ?? new LayoutSpecEnvironmentEntry[0];
+    for (int i = 0; i < environmentEntries.Length; i++)
+    {
+        LayoutSpecEnvironmentEntry entry = environmentEntries[i];
+        if (entry == null || !entry.hasWorldBounds)
+            continue;
+
+        string objectId = entry.objectId != null ? entry.objectId.Trim() : string.Empty;
+        string designId = entry.designId != null ? entry.designId.Trim() : string.Empty;
+        if (string.IsNullOrEmpty(objectId))
+            continue;
+
+        if (!catalog.TryGetEnvironmentDesign(
+                objectId,
+                designId,
+                out EnvironmentDesignVariantEntry design,
+                out string placementMode,
+                out _,
+                out _) ||
+            !string.Equals(placementMode != null ? placementMode.Trim() : string.Empty, EnvironmentCatalog.PLACEMENT_MODE_PERIMETER, StringComparison.Ordinal))
+        {
+            continue;
+        }
+
+        if (!TryResolveEnvironmentFootprintCells(design, out int footprintCells))
+        {
+            Fail(result, "EnvironmentPerimeterThickness: layoutSpec.environment[" + i + "](" + objectId + "/" + designId + ") perimeter 두께를 검증할 catalog footprint metadata가 없습니다.");
+            continue;
+        }
+
+        float worldWidth = Math.Abs(entry.worldWidth);
+        float worldDepth = Math.Abs(entry.worldDepth);
+        if (worldWidth <= 0f || worldDepth <= 0f)
+            continue;
+
+        float maxThickness = Math.Max(1, footprintCells) * IntentAuthoringUtility.LAYOUT_SPACING;
+        float actualThickness = Math.Min(worldWidth, worldDepth);
+        if (actualThickness > maxThickness + ENVIRONMENT_TILE_ALIGNMENT_MIN_TOLERANCE)
+        {
+            Fail(result, "EnvironmentPerimeterThickness: layoutSpec.environment[" + i + "](" + objectId + "/" + designId + ") perimeter 두께가 catalog footprint " +
+                footprintCells + "x" + footprintCells + "를 초과했습니다. thickness=" +
+                actualThickness.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
+                ", max=" + maxThickness.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
+                ". perimeter는 긴 축만 늘리고 짧은 축 두께는 footprint 이하로 유지해야 합니다.");
+        }
+    }
+}
+
+private static bool TryResolveEnvironmentFootprintCells(EnvironmentDesignVariantEntry design, out int footprintCells)
+{
+    footprintCells = 0;
+    if (TryReadEnvironmentPrefabFootprintCells(design != null ? design.prefab : null, out footprintCells) ||
+        TryReadEnvironmentPrefabFootprintCells(design != null ? design.straightPrefab : null, out footprintCells) ||
+        TryReadEnvironmentPrefabFootprintCells(design != null ? design.cornerPrefab : null, out footprintCells) ||
+        TryReadEnvironmentPrefabFootprintCells(design != null ? design.tJunctionPrefab : null, out footprintCells) ||
+        TryReadEnvironmentPrefabFootprintCells(design != null ? design.crossPrefab : null, out footprintCells))
+    {
+        return footprintCells > 0;
+    }
+
+    return false;
+}
+
+private static bool TryReadEnvironmentPrefabFootprintCells(GameObject prefab, out int footprintCells)
+{
+    footprintCells = 0;
+    if (prefab == null)
+        return false;
+
+    if (!PortablePrefabMetadataUtility.TryGetMetadata(prefab, out CatalogPrefabMetadata metadata))
+        return false;
+
+    int widthCells = metadata.placementFootprintWidthCells > 0 ? metadata.placementFootprintWidthCells : 1;
+    int depthCells = metadata.placementFootprintDepthCells > 0 ? metadata.placementFootprintDepthCells : 1;
+    if (widthCells != depthCells)
+        return false;
+
+    footprintCells = widthCells;
+    return true;
+}
+
 private static bool IsPlayerPlacement(LayoutSpecPlacementEntry entry)
 {
     string objectId = entry != null && entry.objectId != null ? entry.objectId.Trim() : string.Empty;
@@ -1220,7 +1310,11 @@ private static void ValidateEnvironmentSourceImageReferences(
                 Fail(result, "playerOptions.itemStacker.maxCount는 0 이상이어야 합니다.");
         }
 
-        private static void ValidateFeatureOptions(PlayableScenarioFeatureOptionDefinition[] definitions, Dictionary<string, CompiledSpawnData> spawnLookup, CompiledPlayablePlanValidationResult result)
+        private static void ValidateFeatureOptions(
+            PlayableScenarioFeatureOptionDefinition[] definitions,
+            Dictionary<string, CompiledSpawnData> spawnLookup,
+            PlayableObjectCatalog catalog,
+            CompiledPlayablePlanValidationResult result)
         {
             PlayableScenarioFeatureOptionDefinition[] safeDefinitions = definitions ?? new PlayableScenarioFeatureOptionDefinition[0];
             var seenFeatureIds = new HashSet<string>(StringComparer.Ordinal);
@@ -1270,7 +1364,21 @@ private static void ValidateEnvironmentSourceImageReferences(
                 if (!string.Equals(PlayableFeatureTypeIds.Normalize(options.targetId), targetId, StringComparison.Ordinal))
                     Fail(result, "featureOptions[" + i + "].options.targetId는 featureOptions[" + i + "].targetId와 같아야 합니다.");
                 if (!LooksLikeJsonObject(options.optionsJson))
+                {
                     Fail(result, "featureOptions[" + i + "].options.optionsJson은 JSON object 문자열이어야 합니다.");
+                }
+                else if (catalog != null && catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor))
+                {
+                    var schemaErrors = new List<string>();
+                    FeatureOptionsSchemaValidator.ValidateCompiledOptions(
+                        definition,
+                        descriptor,
+                        spawnLookup,
+                        "featureOptions[" + i + "]",
+                        schemaErrors);
+                    for (int schemaErrorIndex = 0; schemaErrorIndex < schemaErrors.Count; schemaErrorIndex++)
+                        Fail(result, schemaErrors[schemaErrorIndex]);
+                }
 
             }
         }
@@ -1317,9 +1425,9 @@ private static void ValidateEnvironmentSourceImageReferences(
             return trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}';
         }
 
-private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, ItemPriceDefinition[] itemPrices, CurrencyDefinition[] currencies, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
+private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, PlayableScenarioFeatureOptionDefinition[] featureOptions, ItemPriceDefinition[] itemPrices, CurrencyDefinition[] currencies, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
 {
-    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog);
+    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog);
     for (int i = 0; i < resolution.Errors.Count; i++)
         Fail(result, resolution.Errors[i]);
 

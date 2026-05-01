@@ -14,6 +14,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         public string Message;
         public CompiledPlayablePlan Plan;
         public List<string> Errors = new List<string>();
+        public List<string> Warnings = new List<string>();
     }
 
     internal sealed class LoweredStageState
@@ -88,12 +89,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ItemPriceDefinition[] itemPrices = BuildItemPrices(model.saleValues);
             CurrencyDefinition[] currencies = BuildCurrencies(model.currencies);
             CompiledSpawnData[] spawns = BuildSpawns(objects, positions, layoutSpec, catalog, featureAcceptedItems, result);
-            FeatureJsonPayload[] featureLayouts = BuildFeatureLayouts(objects, spawnKeys, layoutSpec, result);
-            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog, result);
-            ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
+            PlayableScenarioFeatureOptionDefinition[] featureOptions = BuildFeatureOptions(model.objects, spawnKeys, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
-            PlayableScenarioFeatureOptionDefinition[] featureOptions = BuildFeatureOptions(model.objects, spawnKeys, catalog, result);
+            FeatureJsonPayload[] featureLayouts = BuildFeatureLayouts(objects, spawnKeys, layoutSpec, result);
+            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog, result);
+            ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
 
@@ -1501,7 +1502,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ScenarioModelLoweringResult result)
         {
             ScenarioModelObjectDefinition[] safeObjects = objects ?? new ScenarioModelObjectDefinition[0];
-            Dictionary<string, int> acceptedItemCountByTargetId = BuildAcceptedItemCountLookup(featureAcceptedItems);
             var spawns = new List<CompiledSpawnData>();
             for (int i = 0; i < safeObjects.Length; i++)
             {
@@ -1523,7 +1523,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 }
 
                 bool runtimeOwnedDescriptorObject = IsDescriptorRuntimeOwnedObject(catalog, value.role);
-                string resolvedDesignId = ResolveSpawnDesignId(value, gameplayObjectId, scenarioObjectId, acceptedItemCountByTargetId);
+                string resolvedDesignId = value.designId;
                 int designIndex = -1;
                 if (!runtimeOwnedDescriptorObject)
                 {
@@ -1673,27 +1673,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 StringComparison.Ordinal);
         }
 
-        private static string ResolveSpawnDesignId(
-            ScenarioModelObjectDefinition value,
-            string gameplayObjectId,
-            string scenarioObjectId,
-            Dictionary<string, int> acceptedItemCountByTargetId)
-        {
-            return value.designId;
-        }
-
         private static ObjectDesignSelectionDefinition[] BuildObjectDesigns(
             CompiledSpawnData[] spawns,
             FeatureAcceptedItemDefinition[] featureAcceptedItems,
             FeatureOutputItemDefinition[] featureOutputItems,
+            PlayableScenarioFeatureOptionDefinition[] featureOptions,
             ItemPriceDefinition[] itemPrices,
             CurrencyDefinition[] currencies,
             PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
-            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, itemPrices, currencies, catalog);
+            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog);
             for (int i = 0; i < resolution.Errors.Count; i++)
                 result.Errors.Add(resolution.Errors[i]);
+            for (int i = 0; i < resolution.Warnings.Count; i++)
+                AddUniqueWarning(result.Warnings, resolution.Warnings[i]);
 
             var selections = new List<ObjectDesignSelectionDefinition>();
             for (int i = 0; i < resolution.RequiredObjectDesigns.Count; i++)
@@ -1717,6 +1711,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return selections.ToArray();
+        }
+
+        private static void AddUniqueWarning(List<string> warnings, string warning)
+        {
+            if (warnings == null || string.IsNullOrWhiteSpace(warning) || warnings.Contains(warning))
+                return;
+
+            warnings.Add(warning);
         }
 
         private static CurrencyDefinition[] BuildCurrencies(ScenarioModelCurrencyDefinition[] currencies)

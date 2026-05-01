@@ -242,7 +242,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     ? normalizedObjectId
                     : guidance.SuggestedObjectId;
                 guidance.AvailableDesignIds = TryGetAvailableDesignIdValues(catalog, guidanceObjectId);
-                if (string.IsNullOrEmpty(guidance.SuggestedDesignId) && guidance.AvailableDesignIds.Length > 0)
+                if (string.IsNullOrEmpty(guidance.SuggestedDesignId) && guidance.AvailableDesignIds.Length == 1)
                     guidance.SuggestedDesignId = guidance.AvailableDesignIds[0];
                 return guidance;
             }
@@ -294,12 +294,6 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             if (components.Count > 0)
                 return string.Join(", ", components);
-
-            if (guidance.AvailableDesignIds != null && guidance.AvailableDesignIds.Length > 0)
-                return "designId '" + guidance.AvailableDesignIds[0] + "'";
-
-            if (guidance.AvailableObjectIds != null && guidance.AvailableObjectIds.Length > 0)
-                return "objectId '" + guidance.AvailableObjectIds[0] + "'";
 
             return string.Empty;
         }
@@ -369,6 +363,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (availableDesignIds == null || availableDesignIds.Length == 0)
                 return string.Empty;
 
+            if (availableDesignIds.Length == 1)
+                return Normalize(availableDesignIds[0]);
+
             if (!string.IsNullOrEmpty(normalizedRequestedDesignId))
             {
                 for (int i = 0; i < availableDesignIds.Length; i++)
@@ -385,7 +382,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 }
             }
 
-            return availableDesignIds[0];
+            return string.Empty;
         }
 
         public static Dictionary<string, SerializableVector3> BuildDeterministicPositions(
@@ -429,7 +426,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
-                ResolveObjectFootprintOrDefault(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells);
+                if (!TryResolveObjectFootprint(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells))
+                    continue;
+
                 int playerGridX = basePlayerGridX + nextPlayerOffsetCells;
                 TryPlacePlayerWithSearch(
                     positions,
@@ -457,7 +456,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     continue;
                 }
 
-                ResolveObjectFootprintOrDefault(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells);
+                if (!TryResolveObjectFootprint(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells))
+                    continue;
+
                 TryPlaceWithoutOverlap(
                     positions,
                     occupiedCells,
@@ -478,7 +479,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (string.IsNullOrEmpty(objectId) || positions.ContainsKey(objectId))
                     continue;
 
-                ResolveObjectFootprintOrDefault(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells);
+                if (!TryResolveObjectFootprint(value, catalog, errors, "objects[" + i + "]", out int widthCells, out int depthCells))
+                    continue;
+
                 TryPlaceWithoutOverlap(
                     positions,
                     occupiedCells,
@@ -560,7 +563,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return new List<PackedPlacementEntry>();
         }
 
-        private static void ResolveObjectFootprintOrDefault(
+        private static bool TryResolveObjectFootprint(
             ScenarioModelObjectDefinition value,
             PlayableObjectCatalog catalog,
             List<string> errors,
@@ -568,23 +571,28 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             out int widthCells,
             out int depthCells)
         {
-            widthCells = 1;
-            depthCells = 1;
+            widthCells = 0;
+            depthCells = 0;
             if (value == null)
-                return;
+            {
+                if (errors != null)
+                    errors.Add(label + " placement footprint를 해석하지 못했습니다: object definition이 비어 있습니다.");
+                return false;
+            }
 
             if (!TryResolvePlacementFootprint(catalog, value.role, value.designId, null, out widthCells, out depthCells, out string error))
             {
                 if (errors != null)
-                    errors.Add(label + " placement footprint를 해석하지 못해 1x1로 처리합니다: " + error);
-                widthCells = 1;
-                depthCells = 1;
+                    errors.Add(label + " placement footprint를 해석하지 못했습니다: " + error);
+                return false;
             }
 
             if (widthCells < 1)
                 widthCells = 1;
             if (depthCells < 1)
                 depthCells = 1;
+
+            return true;
         }
 
         private static HashSet<string> BuildOccupiedCellSet(List<PackedPlacementEntry> entries, List<string> errors)

@@ -360,12 +360,90 @@ namespace Supercent.PlayableAI.Common.Contracts
                 if (!string.Equals(Normalize(descriptor != null ? descriptor.featureType : string.Empty), normalizedFeatureType, StringComparison.Ordinal))
                     continue;
 
-                FeatureInputOutputSemantics semantics = descriptor != null ? descriptor.inputOutputSemantics : null;
-                return ContainsString(semantics != null ? semantics.generatedItems : Array.Empty<string>(), normalizedObjectiveKind) ||
-                       ContainsString(semantics != null ? semantics.outputItems : Array.Empty<string>(), normalizedObjectiveKind);
+                return ObjectiveDefinesFeatureOutputItem(descriptor, normalizedObjectiveKind);
             }
 
             return false;
+        }
+
+        public static bool ObjectiveKindDefinesFeatureOutputItem(string objectiveKind)
+        {
+            string normalizedObjectiveKind = Normalize(objectiveKind);
+            if (string.IsNullOrEmpty(normalizedObjectiveKind))
+                return false;
+
+            FeatureDescriptor[] descriptors = GetEffectiveFeatureDescriptors();
+            for (int i = 0; i < descriptors.Length; i++)
+            {
+                FeatureDescriptor descriptor = descriptors[i];
+                if (ObjectiveDefinesFeatureOutputItem(descriptor, normalizedObjectiveKind))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ObjectiveDefinesFeatureOutputItem(FeatureDescriptor descriptor, string normalizedObjectiveKind)
+        {
+            if (descriptor == null || string.IsNullOrEmpty(normalizedObjectiveKind))
+                return false;
+
+            FeatureInputOutputSemantics semantics = descriptor.inputOutputSemantics;
+            if (ContainsString(semantics != null ? semantics.generatedItems : Array.Empty<string>(), normalizedObjectiveKind) ||
+                ContainsString(semantics != null ? semantics.outputItems : Array.Empty<string>(), normalizedObjectiveKind))
+            {
+                return true;
+            }
+
+            FeatureObjectiveDescriptor objective = FindObjectiveKind(descriptor, normalizedObjectiveKind);
+            if (objective == null ||
+                objective.requiresItem ||
+                !objective.requiresInputItem)
+            {
+                return false;
+            }
+
+            FeatureGameplaySignalDescriptor completionSignal = FindGameplaySignal(descriptor, objective.completionGameplaySignalId);
+            return completionSignal != null &&
+                   (completionSignal.requiresItem || completionSignal.supportsItem);
+        }
+
+        private static FeatureObjectiveDescriptor FindObjectiveKind(FeatureDescriptor descriptor, string normalizedObjectiveKind)
+        {
+            FeatureObjectiveDescriptor[] objectives = descriptor != null ? descriptor.objectiveKinds ?? Array.Empty<FeatureObjectiveDescriptor>() : Array.Empty<FeatureObjectiveDescriptor>();
+            for (int i = 0; i < objectives.Length; i++)
+            {
+                FeatureObjectiveDescriptor objective = objectives[i];
+                if (objective != null &&
+                    string.Equals(Normalize(objective.kind), normalizedObjectiveKind, StringComparison.Ordinal))
+                {
+                    return objective;
+                }
+            }
+
+            return null;
+        }
+
+        private static FeatureGameplaySignalDescriptor FindGameplaySignal(FeatureDescriptor descriptor, string signalId)
+        {
+            string normalizedSignalId = Normalize(signalId);
+            if (string.IsNullOrEmpty(normalizedSignalId))
+                return null;
+
+            FeatureGameplaySignalDescriptor[] signals = descriptor != null ? descriptor.gameplaySignals ?? Array.Empty<FeatureGameplaySignalDescriptor>() : Array.Empty<FeatureGameplaySignalDescriptor>();
+            for (int i = 0; i < signals.Length; i++)
+            {
+                FeatureGameplaySignalDescriptor signal = signals[i];
+                if (signal != null &&
+                    string.Equals(Normalize(signal.signalId), normalizedSignalId, StringComparison.Ordinal))
+                {
+                    return signal;
+                }
+            }
+
+            return null;
         }
 
         public static PromptIntentTargetSurfaceRuleDescriptor[] MergeTargetSurfaces(PromptIntentTargetSurfaceRuleDescriptor[] builtins)
