@@ -1,0 +1,300 @@
+using System;
+
+namespace Supercent.PlayableAI.Common.Format
+{
+    [Serializable]
+    public sealed class BakeBundleCatalogIdentity
+    {
+        public string themeId = string.Empty;
+        public string manifestContentHash = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class BakeBundleGenerationMetadata
+    {
+        public string sourceInputPath = string.Empty;
+        public string createdAtUtc = string.Empty;
+        public string mode = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class BakeBundleCoreResultData
+    {
+        public bool success;
+        public string stage = string.Empty;
+        public string failureCode = string.Empty;
+        public string message = string.Empty;
+        public string[] errors = new string[0];
+        public string[] warnings = new string[0];
+    }
+
+    [Serializable]
+    public sealed class BakeBundle
+    {
+        public const int CURRENT_BUNDLE_VERSION = 3;
+
+        public int bundleVersion = CURRENT_BUNDLE_VERSION;
+        public string sessionId = string.Empty;
+        public string playableRecipeId = string.Empty;
+        public BakeBundleCatalogIdentity catalogIdentity = new BakeBundleCatalogIdentity();
+        public BakeBundleGenerationMetadata generationMetadata = new BakeBundleGenerationMetadata();
+        public PlayablePromptIntent intent = new PlayablePromptIntent();
+        public CompiledPlayablePlan compiledPlan = new CompiledPlayablePlan();
+        public BakeBundleCoreResultData coreResult = new BakeBundleCoreResultData();
+        public PortableDraftLayoutDocument draftLayout = new PortableDraftLayoutDocument();
+        public PortableLayoutSpecDocument layoutSpec = new PortableLayoutSpecDocument();
+        public PortableLayoutIdMappingDocument idMapping = new PortableLayoutIdMappingDocument();
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutDocument
+    {
+        public int schemaVersion = 1;
+        public PortableDraftLayoutFloorBounds floorBounds = new PortableDraftLayoutFloorBounds();
+        public PortableDraftLayoutPlacementEntry[] placements = new PortableDraftLayoutPlacementEntry[0];
+        public PortableDraftLayoutPlayerStartEntry playerStart = new PortableDraftLayoutPlayerStartEntry();
+        public PortableDraftLayoutEnvironmentEntry[] environment = new PortableDraftLayoutEnvironmentEntry[0];
+        public PortableDraftLayoutCustomerPathEntry[] customerPaths = new PortableDraftLayoutCustomerPathEntry[0];
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutFloorBounds
+    {
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutPlacementBoundsEntry
+    {
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutPlacementEntry
+    {
+        public string objectId = string.Empty;
+        public string laneId = string.Empty;
+        public int? laneOrder;
+        public float? minGapToNextCells;
+        public float worldX;
+        public float worldZ;
+        public bool hasResolvedYaw;
+        public float resolvedYawDegrees;
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutPlayerStartEntry
+    {
+        public string objectId = string.Empty;
+        public float worldX;
+        public float worldZ;
+        public bool hasResolvedYaw;
+        public float resolvedYawDegrees;
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutEnvironmentEntry
+    {
+        public string objectId = string.Empty;
+        public string designId = string.Empty;
+        public string kind = string.Empty;
+        public int widthCells = 1;
+        public int depthCells = 1;
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+        public float rotationY;
+        public bool includeInBounds = true;
+        public bool singleLayer = true;
+        public bool isOuterBoundary;
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutCustomerPathPoint
+    {
+        public float worldX;
+        public float worldZ;
+    }
+
+    [Serializable]
+    public sealed class PortableDraftLayoutCustomerPathEntry
+    {
+        public string targetId = string.Empty;
+        public PortableDraftLayoutCustomerPathPoint spawnPoint = new PortableDraftLayoutCustomerPathPoint();
+        public PortableDraftLayoutCustomerPathPoint leavePoint = new PortableDraftLayoutCustomerPathPoint();
+        public PortableDraftLayoutCustomerPathPoint[] queuePoints = new PortableDraftLayoutCustomerPathPoint[0];
+        public PortableDraftLayoutCustomerPathPoint[] entryWaypoints = new PortableDraftLayoutCustomerPathPoint[0];
+        public PortableDraftLayoutCustomerPathPoint[] exitWaypoints = new PortableDraftLayoutCustomerPathPoint[0];
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecDocument
+    {
+        public PortableLayoutSpecSourceImageEntry[] sourceImages = new PortableLayoutSpecSourceImageEntry[0];
+        public PortableLayoutSpecPlayerStartEntry playerStart = new PortableLayoutSpecPlayerStartEntry();
+        public PortableLayoutSpecPlacementEntry[] placements = new PortableLayoutSpecPlacementEntry[0];
+        public PortableLayoutSpecEnvironmentEntry[] environment = new PortableLayoutSpecEnvironmentEntry[0];
+        public PortableLayoutSpecCustomerPathEntry[] customerPaths = new PortableLayoutSpecCustomerPathEntry[0];
+        public PortableLayoutSpecFloorBounds floorBounds = new PortableLayoutSpecFloorBounds();
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecSourceImageEntry
+    {
+        public string sourceImageId = string.Empty;
+        public string description = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecPlayerStartEntry
+    {
+        public string objectId = string.Empty;
+        public string sourceImageId = string.Empty;
+        public bool hasWorldPosition;
+        public float worldX;
+        public float worldZ;
+        public bool hasImageBounds;
+        public float centerPxX;
+        public float centerPxY;
+        public float bboxWidthPx;
+        public float bboxHeightPx;
+        public float bboxConfidence;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecFloorBounds
+    {
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecPlacementBoundsEntry
+    {
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+        public bool hasImageBounds;
+        public float centerPxX;
+        public float centerPxY;
+        public float bboxWidthPx;
+        public float bboxHeightPx;
+        public float bboxConfidence;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecPlacementEntry
+    {
+        public string objectId = string.Empty;
+        public string imageLabel = string.Empty;
+        public string sourceImageId = string.Empty;
+        public string laneId = string.Empty;
+        public bool hasLaneOrder;
+        public int laneOrder;
+        public bool hasMinGapToNextCells;
+        public float minGapToNextCells;
+        public int gridX;
+        public int gridZ;
+        public bool hasWorldPosition;
+        public float worldX;
+        public float worldZ;
+        public bool hasResolvedYaw;
+        public float resolvedYawDegrees;
+        public string solverPlacementSource = string.Empty;
+        public string orientationReason = string.Empty;
+        public float anchorDeltaCellsX;
+        public float anchorDeltaCellsZ;
+        public bool hasImageBounds;
+        public float centerPxX;
+        public float centerPxY;
+        public float bboxWidthPx;
+        public float bboxHeightPx;
+        public float bboxConfidence;
+        public FeatureJsonPayload featureLayout = new FeatureJsonPayload();
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecEnvironmentEntry
+    {
+        public string objectId = string.Empty;
+        public string designId = string.Empty;
+        public string sourceImageId = string.Empty;
+        public string kind = string.Empty;
+        public int gridX;
+        public int gridZ;
+        public int widthCells = 1;
+        public int depthCells = 1;
+        public bool hasWorldBounds;
+        public float worldX;
+        public float worldZ;
+        public float worldWidth;
+        public float worldDepth;
+        public float rotationY;
+        public string prefabPath = string.Empty;
+        public bool includeInBounds = true;
+        public bool singleLayer = true;
+        public bool isOuterBoundary;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecCustomerPathEntry
+    {
+        public string targetId = string.Empty;
+        public string sourceImageId = string.Empty;
+        public PortableLayoutSpecCustomerPathPoint spawnPoint = new PortableLayoutSpecCustomerPathPoint();
+        public PortableLayoutSpecCustomerPathPoint leavePoint = new PortableLayoutSpecCustomerPathPoint();
+        public PortableLayoutSpecCustomerPathPoint[] queuePoints = new PortableLayoutSpecCustomerPathPoint[0];
+        public PortableLayoutSpecCustomerPathPoint[] entryWaypoints = new PortableLayoutSpecCustomerPathPoint[0];
+        public PortableLayoutSpecCustomerPathPoint[] exitWaypoints = new PortableLayoutSpecCustomerPathPoint[0];
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutSpecCustomerPathPoint
+    {
+        public int gridX;
+        public int gridZ;
+        public bool hasWorldPosition;
+        public float worldX;
+        public float worldZ;
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutIdMappingDocument
+    {
+        public PortableLayoutIdMappingEntry[] mappings = new PortableLayoutIdMappingEntry[0];
+    }
+
+    [Serializable]
+    public sealed class PortableLayoutIdMappingEntry
+    {
+        public string imageLabel = string.Empty;
+        public string objectId = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class BakeOperationResult
+    {
+        public string status = string.Empty;
+        public string message = string.Empty;
+        public string bakedDataPath = string.Empty;
+        public string scenePath = string.Empty;
+        public string[] diagnostics = new string[0];
+    }
+}
+
