@@ -38,13 +38,20 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return result;
             }
 
+            HashSet<string> featureOutputItemTargets = BuildFeatureOutputItemTargets(featureOutputItems);
             for (int i = 0; i < safeSpawns.Length; i++)
             {
                 CompiledSpawnData spawn = safeSpawns[i];
                 if (spawn == null || string.IsNullOrWhiteSpace(spawn.objectId))
                     continue;
 
-                CollectDescriptorRuntimeOwnedObjectDesigns(catalog, spawn.objectId, requiredObjectDesignKeys, result.Errors);
+                CollectDescriptorRuntimeOwnedObjectDesigns(
+                    catalog,
+                    spawn.objectId,
+                    spawn.spawnKey,
+                    featureOutputItemTargets,
+                    requiredObjectDesignKeys,
+                    result.Errors);
 
                 if (spawn.designIndex < 0)
                     continue;
@@ -115,6 +122,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static void CollectDescriptorRuntimeOwnedObjectDesigns(
             PlayableObjectCatalog catalog,
             string gameplayObjectId,
+            string spawnKey,
+            HashSet<string> featureOutputItemTargets,
             HashSet<string> requiredObjectDesignKeys,
             List<string> errors)
         {
@@ -138,6 +147,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     CatalogIdentityRules.MONEY_OBJECT_ID,
                     CatalogIdentityRules.MONEY_DESIGN_ID,
                     requiredObjectDesignKeys);
+            }
+
+            if (RequiresFeatureOutputItem(descriptor) &&
+                !featureOutputItemTargets.Contains(FeatureDescriptorUtility.Normalize(spawnKey)))
+            {
+                errors.Add(
+                    "feature '" + spawnKey + "'에는 featureOutputItems entry가 필요합니다. " +
+                    "해당 feature의 output item objective를 input_intent.json에 선언한 뒤 재생성하세요.");
             }
         }
 
@@ -235,6 +252,40 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
                 AddRequiredObjectDesign(definition.item.familyId, definition.item.variantId, requiredObjectDesignKeys);
             }
+        }
+
+        private static HashSet<string> BuildFeatureOutputItemTargets(FeatureOutputItemDefinition[] featureOutputItems)
+        {
+            var targets = new HashSet<string>(System.StringComparer.Ordinal);
+            FeatureOutputItemDefinition[] safeDefinitions = featureOutputItems ?? new FeatureOutputItemDefinition[0];
+            for (int i = 0; i < safeDefinitions.Length; i++)
+            {
+                FeatureOutputItemDefinition definition = safeDefinitions[i];
+                string targetId = FeatureDescriptorUtility.Normalize(definition != null ? definition.targetId : string.Empty);
+                if (!string.IsNullOrEmpty(targetId))
+                    targets.Add(targetId);
+            }
+
+            return targets;
+        }
+
+        private static bool RequiresFeatureOutputItem(FeatureDescriptor descriptor)
+        {
+            FeatureInputOutputSemantics semantics = descriptor != null ? descriptor.inputOutputSemantics : null;
+            return HasAnyValue(semantics != null ? semantics.generatedItems : null) ||
+                   HasAnyValue(semantics != null ? semantics.outputItems : null);
+        }
+
+        private static bool HasAnyValue(string[] values)
+        {
+            string[] safeValues = values ?? new string[0];
+            for (int i = 0; i < safeValues.Length; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(safeValues[i]))
+                    return true;
+            }
+
+            return false;
         }
 
         private static void CollectPricedItems(

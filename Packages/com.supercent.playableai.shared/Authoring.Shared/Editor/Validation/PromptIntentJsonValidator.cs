@@ -1439,6 +1439,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             private static string BuildUnknownKeyMessage(string label, string key)
             {
+                if (label.StartsWith("contentSelections[", StringComparison.Ordinal) &&
+                    string.Equals(key, "designIndex", StringComparison.Ordinal))
+                {
+                    return label + ".designIndex는 intent contentSelections[]에 허용되지 않습니다. designIndex를 제거하고 objectId와 실제 catalog designId만 남겨야 합니다.";
+                }
+
                 if (string.Equals(key, "objectId", StringComparison.Ordinal) ||
                     string.Equals(key, "itemId", StringComparison.Ordinal))
                 {

@@ -263,6 +263,7 @@
 "status.aiResponseGenerating","AI 응답 생성이 진행 중입니다.","AI response generation is running.","Dang tao phan hoi AI.","Status label"
 "status.requesting","요청 중","Requesting","Dang yeu cau","Status label"
 "status.canceled","취소됨","Canceled","Da huy","Status label"
+"status.catalogUpdatePending","카탈로그 업데이트 대기","Catalog update pending","Dang cho cap nhat catalog","Status label"
 "status.catalogUpdateAvailable","최신 카탈로그 적용 가능","Latest catalog available","Co the ap dung catalog moi nhat","Status label"
 "auth.loginRequired","로그인이 필요합니다.","Login required.","Can dang nhap.","Web auth"
 "auth.loginFromUnity","Unity에서 AIPS로 Google 로그인 후 다시 시도해주세요.","Sign in with Google from AIPS in Unity, then try again.","Hay dang nhap Google tu AIPS trong Unity roi thu lai.","Web auth"
