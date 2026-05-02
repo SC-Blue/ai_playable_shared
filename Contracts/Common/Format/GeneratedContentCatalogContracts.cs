@@ -251,42 +251,61 @@ namespace Supercent.PlayableAI.Common.Format
 
         public static string ToToken(ContentCatalogCategory value)
         {
-            return value switch
+            switch (value)
             {
-                ContentCatalogCategory.core => "core",
-                ContentCatalogCategory.ui => "ui",
-                ContentCatalogCategory.feature => "feature",
-                ContentCatalogCategory.character => "character",
-                ContentCatalogCategory.environment => "environment",
-                ContentCatalogCategory.item => "item",
-                ContentCatalogCategory.guide => "guide",
-                ContentCatalogCategory.unlocker => "unlocker",
-                _ => "unknown",
-            };
+                case ContentCatalogCategory.core:
+                    return "core";
+                case ContentCatalogCategory.ui:
+                    return "ui";
+                case ContentCatalogCategory.feature:
+                    return "feature";
+                case ContentCatalogCategory.character:
+                    return "character";
+                case ContentCatalogCategory.environment:
+                    return "environment";
+                case ContentCatalogCategory.item:
+                    return "item";
+                case ContentCatalogCategory.guide:
+                    return "guide";
+                case ContentCatalogCategory.unlocker:
+                    return "unlocker";
+                default:
+                    return "unknown";
+            }
         }
 
         public static string ToToken(ContentCatalogSubscriptionType value)
         {
-            return value switch
+            switch (value)
             {
-                ContentCatalogSubscriptionType.@object => "object",
-                ContentCatalogSubscriptionType.design => "design",
-                ContentCatalogSubscriptionType.dependency => "dependency",
-                _ => "none",
-            };
+                case ContentCatalogSubscriptionType.@object:
+                    return "object";
+                case ContentCatalogSubscriptionType.design:
+                    return "design";
+                case ContentCatalogSubscriptionType.dependency:
+                    return "dependency";
+                default:
+                    return "none";
+            }
         }
 
         public static string ToToken(ContentCatalogPlacementMode value)
         {
-            return value switch
+            switch (value)
             {
-                ContentCatalogPlacementMode.free => "free",
-                ContentCatalogPlacementMode.fill => "fill",
-                ContentCatalogPlacementMode.perimeter => "perimeter",
-                ContentCatalogPlacementMode.path => "path",
-                ContentCatalogPlacementMode.guide => "guide",
-                _ => "none",
-            };
+                case ContentCatalogPlacementMode.free:
+                    return "free";
+                case ContentCatalogPlacementMode.fill:
+                    return "fill";
+                case ContentCatalogPlacementMode.perimeter:
+                    return "perimeter";
+                case ContentCatalogPlacementMode.path:
+                    return "path";
+                case ContentCatalogPlacementMode.guide:
+                    return "guide";
+                default:
+                    return "none";
+            }
         }
     }
 
@@ -470,4 +489,3 @@ namespace Supercent.PlayableAI.Common.Format
         public float footprintCenterOffsetZ;
     }
 }
-
