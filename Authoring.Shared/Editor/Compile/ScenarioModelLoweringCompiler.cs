@@ -93,8 +93,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
             FeatureJsonPayload[] featureLayouts = BuildFeatureLayouts(objects, spawnKeys, layoutSpec, result);
-            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog, result);
             ContentSelectionDefinition[] contentSelections = BuildContentSelections(model.contentSelections, catalog, result);
+            ObjectDesignSelectionDefinition[] objectDesigns = BuildObjectDesigns(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, model.contentSelections, catalog, result);
             if (result.Errors.Count > 0)
                 return FinalizeFailure(result);
 
@@ -157,7 +157,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             if (safeSelections.Length == 0)
                 return new ContentSelectionDefinition[0];
 
-            var compiledSelections = new ContentSelectionDefinition[safeSelections.Length];
+            var compiledSelections = new List<ContentSelectionDefinition>();
             for (int i = 0; i < safeSelections.Length; i++)
             {
                 ContentSelectionDefinition selection = safeSelections[i];
@@ -176,21 +176,39 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
                 if (!catalog.TryResolveContentSelectionDesignIndex(objectId, designId, out int resolvedDesignIndex))
                 {
+                    if (IsRuntimeOwnedContentSelectionDesign(catalog, objectId, designId))
+                        continue;
+
                     result.Errors.Add(
                         "contentSelections[" + i + "]에서 objectId '" + objectId + "'의 designId '" + designId +
                         "'를 content selection design으로 해석하지 못했습니다.");
                     continue;
                 }
 
-                compiledSelections[i] = new ContentSelectionDefinition
+                compiledSelections.Add(new ContentSelectionDefinition
                 {
                     objectId = objectId,
                     designId = designId,
                     designIndex = resolvedDesignIndex,
-                };
+                });
             }
 
-            return compiledSelections;
+            return compiledSelections.ToArray();
+        }
+
+        private static bool IsRuntimeOwnedContentSelectionDesign(
+            PlayableObjectCatalog catalog,
+            string objectId,
+            string designId)
+        {
+            if (catalog == null || string.IsNullOrWhiteSpace(objectId) || string.IsNullOrWhiteSpace(designId))
+                return false;
+
+            string normalizedObjectId = IntentAuthoringUtility.Normalize(objectId);
+            if (!string.Equals(normalizedObjectId, "customer", StringComparison.Ordinal))
+                return false;
+
+            return catalog.IsValidGameplayDesignId(normalizedObjectId, IntentAuthoringUtility.Normalize(designId));
         }
 
         private static FlowBeatDefinition[] BuildCompiledFlowBeats(
@@ -1680,10 +1698,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableScenarioFeatureOptionDefinition[] featureOptions,
             ItemPriceDefinition[] itemPrices,
             CurrencyDefinition[] currencies,
+            ContentSelectionDefinition[] contentSelections,
             PlayableObjectCatalog catalog,
             ScenarioModelLoweringResult result)
         {
-            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog);
+            RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog, contentSelections);
             for (int i = 0; i < resolution.Errors.Count; i++)
                 result.Errors.Add(resolution.Errors[i]);
             for (int i = 0; i < resolution.Warnings.Count; i++)

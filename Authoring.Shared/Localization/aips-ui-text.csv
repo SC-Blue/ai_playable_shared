@@ -562,6 +562,7 @@
 "contentStore.promoteBuiltin","기본 제공","Make built-in","Dat built-in","Web Content Store"
 "contentStore.alreadyInstalled","이미 있음","Already installed","Da co","Web Content Store"
 "contentStore.installedDifferentVersion","최신 버전으로 업데이트","Update to latest version","Cap nhat len phien ban moi nhat","Web Content Store"
+"contentStore.installSelectedVersion","이 버전으로 변경","Switch to this version","Doi sang phien ban nay","Web Content Store"
 "contentStore.updateRequired","업데이트 필요","Update required","Can cap nhat","Web Content Store"
 "contentStore.installQueued","설치 대기 중","Install queued","Cai dat dang cho","Web Content Store"
 "contentStore.installUnavailable","설치 불가","Install unavailable","Khong the cai","Web Content Store"

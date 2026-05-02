@@ -81,7 +81,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 ValidateSourceImageReferences(layoutSpec, declaredSourceImageIds, result);
                 ValidateEnvironmentPerimeterThickness(layoutSpec, catalog, result);
                 ValidatePlacementSpatialSemantics(layoutSpec, result);
-                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.featureOptions, plan.itemPrices, plan.currencies, objectDesignLookup, catalog, result);
+                ValidateRuntimeOwnedDesignSources(plan.spawns, plan.featureAcceptedItems, plan.featureOutputItems, plan.featureOptions, plan.itemPrices, plan.currencies, plan.contentSelections, plan.objectDesigns, objectDesignLookup, catalog, result);
                 ValidateImageLayoutEnvironmentPresence(layoutSpec, catalog, result);
             }
             finally
@@ -1850,9 +1850,9 @@ private static void ValidateEnvironmentSourceImageReferences(
             return string.Compare(source, start, literal, 0, literal.Length, StringComparison.Ordinal) == 0;
         }
 
-private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, PlayableScenarioFeatureOptionDefinition[] featureOptions, ItemPriceDefinition[] itemPrices, CurrencyDefinition[] currencies, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
+private static void ValidateRuntimeOwnedDesignSources(CompiledSpawnData[] spawns, FeatureAcceptedItemDefinition[] featureAcceptedItems, FeatureOutputItemDefinition[] featureOutputItems, PlayableScenarioFeatureOptionDefinition[] featureOptions, ItemPriceDefinition[] itemPrices, CurrencyDefinition[] currencies, ContentSelectionDefinition[] contentSelections, ObjectDesignSelectionDefinition[] objectDesigns, Dictionary<string, int> objectDesignLookup, PlayableObjectCatalog catalog, CompiledPlayablePlanValidationResult result)
 {
-    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog);
+    RuntimeOwnedObjectDesignResolution resolution = RuntimeOwnedObjectDesignResolver.Resolve(spawns, featureAcceptedItems, featureOutputItems, featureOptions, itemPrices, currencies, catalog, contentSelections, objectDesigns);
     for (int i = 0; i < resolution.Errors.Count; i++)
         Fail(result, resolution.Errors[i]);
 

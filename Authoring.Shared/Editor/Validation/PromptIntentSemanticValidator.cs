@@ -94,9 +94,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                if (!catalog.IsSupportedContentSelectionObject(objectId))
+                if (!IsSupportedAuthorableContentSelectionObject(catalog, objectId))
                 {
-                    Fail(result, label + ".objectId '" + objectId + "'는 selectable content catalog에 없습니다.");
+                    Fail(result, label + ".objectId '" + objectId + "'는 selectable content 또는 runtime-owned gameplay catalog에 없습니다.");
                     continue;
                 }
 
@@ -106,8 +106,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                if (!catalog.IsValidContentSelectionDesignId(objectId, designId))
-                    Fail(result, label + ".designId '" + designId + "'는 objectId '" + objectId + "'의 selectable content design이 아닙니다.");
+                if (!IsValidAuthorableContentSelectionDesign(catalog, objectId, designId))
+                    Fail(result, label + ".designId '" + designId + "'는 objectId '" + objectId + "'의 selectable content/runtime-owned design이 아닙니다.");
             }
 
             for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
@@ -122,6 +122,39 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 if (!seenObjectIds.Contains(objectId))
                     Fail(result, "필수 UI content '" + objectId + "'에 대한 contentSelections entry가 필요합니다.");
             }
+        }
+
+        private static bool IsSupportedAuthorableContentSelectionObject(PlayableObjectCatalog catalog, string objectId)
+        {
+            if (catalog == null || string.IsNullOrWhiteSpace(objectId))
+                return false;
+
+            string normalizedObjectId = Normalize(objectId);
+            return catalog.IsSupportedContentSelectionObject(normalizedObjectId) ||
+                   IsRuntimeOwnedContentSelectionObject(catalog, normalizedObjectId);
+        }
+
+        private static bool IsValidAuthorableContentSelectionDesign(
+            PlayableObjectCatalog catalog,
+            string objectId,
+            string designId)
+        {
+            if (catalog == null || string.IsNullOrWhiteSpace(objectId) || string.IsNullOrWhiteSpace(designId))
+                return false;
+
+            string normalizedObjectId = Normalize(objectId);
+            string normalizedDesignId = Normalize(designId);
+            return catalog.IsValidContentSelectionDesignId(normalizedObjectId, normalizedDesignId) ||
+                   (IsRuntimeOwnedContentSelectionObject(catalog, normalizedObjectId) &&
+                    catalog.IsValidGameplayDesignId(normalizedObjectId, normalizedDesignId));
+        }
+
+        private static bool IsRuntimeOwnedContentSelectionObject(PlayableObjectCatalog catalog, string objectId)
+        {
+            string normalizedObjectId = Normalize(objectId);
+            return string.Equals(normalizedObjectId, "customer", StringComparison.Ordinal) &&
+                   catalog != null &&
+                   catalog.IsSupportedGameplayObject(normalizedObjectId);
         }
 
         private static Dictionary<string, PromptIntentObjectDefinition> BuildObjectLookup(

@@ -29,7 +29,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             PlayableScenarioFeatureOptionDefinition[] featureOptions,
             ItemPriceDefinition[] itemPrices,
             CurrencyDefinition[] currencies,
-            PlayableObjectCatalog catalog)
+            PlayableObjectCatalog catalog,
+            ContentSelectionDefinition[] contentSelections = null,
+            ObjectDesignSelectionDefinition[] objectDesigns = null)
         {
             var result = new RuntimeOwnedObjectDesignResolution();
             var requiredObjectDesignKeys = new HashSet<string>(System.StringComparer.Ordinal);
@@ -41,6 +43,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 return result;
             }
 
+            Dictionary<string, string> preferredDesignsByObjectId = BuildPreferredDesignLookup(contentSelections, objectDesigns);
             HashSet<string> featureOutputItemTargets = BuildFeatureOutputItemTargets(featureOutputItems);
             for (int i = 0; i < safeSpawns.Length; i++)
             {
@@ -53,6 +56,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     spawn.objectId,
                     spawn.spawnKey,
                     featureOutputItemTargets,
+                    preferredDesignsByObjectId,
                     requiredObjectDesignKeys,
                     result.Errors,
                     result.Warnings);
@@ -79,6 +83,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     AddSingleAvailableObjectDesign(
                         catalog,
                         CatalogIdentityRules.CUSTOMER_OBJECT_ID,
+                        preferredDesignsByObjectId,
                         requiredObjectDesignKeys,
                         result.Errors,
                         result.Warnings,
@@ -100,6 +105,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     AddSingleAvailableObjectDesign(
                         catalog,
                         CatalogIdentityRules.MONEY_OBJECT_ID,
+                        preferredDesignsByObjectId,
                         requiredObjectDesignKeys,
                         result.Errors,
                         result.Warnings,
@@ -110,7 +116,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             CollectOutputItems(featureOutputItems, requiredObjectDesignKeys);
             CollectFeatureOptionItemRefs(featureOptions, catalog, requiredObjectDesignKeys, result.Errors);
             CollectPricedItems(itemPrices, requiredObjectDesignKeys);
-            CollectCurrencyVisuals(currencies, catalog, result.Errors, result.Warnings, requiredObjectDesignKeys);
+            CollectCurrencyVisuals(currencies, catalog, preferredDesignsByObjectId, result.Errors, result.Warnings, requiredObjectDesignKeys);
 
             var sortedKeys = new List<string>(requiredObjectDesignKeys);
             sortedKeys.Sort(System.StringComparer.Ordinal);
@@ -156,6 +162,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             string gameplayObjectId,
             string spawnKey,
             HashSet<string> featureOutputItemTargets,
+            Dictionary<string, string> preferredDesignsByObjectId,
             HashSet<string> requiredObjectDesignKeys,
             List<string> errors,
             List<string> warnings)
@@ -171,6 +178,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 AddSingleAvailableObjectDesign(
                     catalog,
                     CatalogIdentityRules.CUSTOMER_OBJECT_ID,
+                    preferredDesignsByObjectId,
                     requiredObjectDesignKeys,
                     errors,
                     warnings,
@@ -182,6 +190,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 AddSingleAvailableObjectDesign(
                     catalog,
                     CatalogIdentityRules.MONEY_OBJECT_ID,
+                    preferredDesignsByObjectId,
                     requiredObjectDesignKeys,
                     errors,
                     warnings,
@@ -266,6 +275,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static void AddSingleAvailableObjectDesign(
             PlayableObjectCatalog catalog,
             string objectId,
+            Dictionary<string, string> preferredDesignsByObjectId,
             HashSet<string> requiredObjectDesignKeys,
             List<string> errors,
             List<string> warnings,
@@ -310,9 +320,19 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             if (candidates.Count > 0)
             {
-                string resolvedDesignId = SelectRuntimeOwnedDesignId(normalizedObjectId, candidates);
+                string preferredDesignId = ResolvePreferredDesignId(normalizedObjectId, preferredDesignsByObjectId);
+                string resolvedDesignId = SelectRuntimeOwnedDesignId(normalizedObjectId, candidates, preferredDesignId);
                 AddRequiredObjectDesign(normalizedObjectId, resolvedDesignId, requiredObjectDesignKeys);
-                if (candidates.Count > 1 && warnings != null)
+                if (!string.IsNullOrEmpty(preferredDesignId) && !ContainsCandidate(candidates, preferredDesignId) && warnings != null)
+                {
+                    AddUniqueWarning(
+                        warnings,
+                        context + " runtime-owned object '" + normalizedObjectId +
+                        "'에 contentSelections design '" + preferredDesignId +
+                        "'가 지정됐지만 gameplay design 후보에 없어 '" + resolvedDesignId +
+                        "'를 선택했습니다.");
+                }
+                else if (candidates.Count > 1 && warnings != null)
                 {
                     AddUniqueWarning(
                         warnings,
@@ -327,10 +347,72 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 errors.Add(context + " runtime-owned object '" + normalizedObjectId + "'에 사용 가능한 catalog design이 없습니다.");
         }
 
-        private static string SelectRuntimeOwnedDesignId(string objectId, List<string> candidates)
+        private static Dictionary<string, string> BuildPreferredDesignLookup(
+            ContentSelectionDefinition[] contentSelections,
+            ObjectDesignSelectionDefinition[] objectDesigns)
+        {
+            var lookup = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            ContentSelectionDefinition[] safeSelections = contentSelections ?? new ContentSelectionDefinition[0];
+            for (int i = 0; i < safeSelections.Length; i++)
+            {
+                ContentSelectionDefinition selection = safeSelections[i];
+                string objectId = selection != null && selection.objectId != null ? selection.objectId.Trim() : string.Empty;
+                string designId = selection != null && selection.designId != null ? selection.designId.Trim() : string.Empty;
+                if (string.IsNullOrEmpty(objectId) || string.IsNullOrEmpty(designId))
+                    continue;
+
+                if (!lookup.ContainsKey(objectId))
+                    lookup.Add(objectId, designId);
+            }
+
+            ObjectDesignSelectionDefinition[] safeObjectDesigns = objectDesigns ?? new ObjectDesignSelectionDefinition[0];
+            for (int i = 0; i < safeObjectDesigns.Length; i++)
+            {
+                ObjectDesignSelectionDefinition selection = safeObjectDesigns[i];
+                string objectId = selection != null && selection.objectId != null ? selection.objectId.Trim() : string.Empty;
+                string designId = selection != null && selection.designId != null ? selection.designId.Trim() : string.Empty;
+                if (string.IsNullOrEmpty(objectId) || string.IsNullOrEmpty(designId))
+                    continue;
+
+                if (!lookup.ContainsKey(objectId))
+                    lookup.Add(objectId, designId);
+            }
+
+            return lookup;
+        }
+
+        private static string ResolvePreferredDesignId(string objectId, Dictionary<string, string> preferredDesignsByObjectId)
+        {
+            if (string.IsNullOrWhiteSpace(objectId) || preferredDesignsByObjectId == null)
+                return string.Empty;
+
+            return preferredDesignsByObjectId.TryGetValue(objectId.Trim(), out string designId)
+                ? designId ?? string.Empty
+                : string.Empty;
+        }
+
+        private static bool ContainsCandidate(List<string> candidates, string designId)
+        {
+            if (candidates == null || string.IsNullOrWhiteSpace(designId))
+                return false;
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (string.Equals(candidates[i], designId.Trim(), System.StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string SelectRuntimeOwnedDesignId(string objectId, List<string> candidates, string preferredDesignId)
         {
             if (candidates == null || candidates.Count == 0)
                 return string.Empty;
+
+            string normalizedPreferredDesignId = preferredDesignId != null ? preferredDesignId.Trim() : string.Empty;
+            if (!string.IsNullOrEmpty(normalizedPreferredDesignId) && ContainsCandidate(candidates, normalizedPreferredDesignId))
+                return normalizedPreferredDesignId;
 
             string normalizedObjectId = objectId != null ? objectId.Trim().ToLowerInvariant() : string.Empty;
             string best = candidates[0] ?? string.Empty;
@@ -944,6 +1026,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         private static void CollectCurrencyVisuals(
             CurrencyDefinition[] currencies,
             PlayableObjectCatalog catalog,
+            Dictionary<string, string> preferredDesignsByObjectId,
             List<string> errors,
             List<string> warnings,
             HashSet<string> requiredObjectDesignKeys)
@@ -962,6 +1045,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 AddSingleAvailableObjectDesign(
                     catalog,
                     CatalogIdentityRules.MONEY_OBJECT_ID,
+                    preferredDesignsByObjectId,
                     requiredObjectDesignKeys,
                     errors,
                     warnings,
