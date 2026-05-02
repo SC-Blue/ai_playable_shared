@@ -48,6 +48,31 @@ namespace Supercent.PlayableAI.Common.Contracts
             return false;
         }
 
+        public static bool HasVerifiedCapability(CatalogPrefabMetadata metadata, string capability)
+        {
+            string normalizedCapability = Normalize(capability);
+            if (metadata == null || string.IsNullOrEmpty(normalizedCapability))
+                return false;
+
+            switch (normalizedCapability)
+            {
+                case CatalogPrefabCapabilityIds.CUSTOMER_FEATURE:
+                    return metadata.supportsCustomerFeature;
+                case CatalogPrefabCapabilityIds.CUSTOMER_SINGLE_LINE:
+                    return metadata.containsCustomerSingleLine;
+                case CatalogPrefabCapabilityIds.MONEY_HANDLER:
+                    return metadata.containsMoneyHandler;
+                case CatalogPrefabCapabilityIds.RUNTIME_ITEM_DESIGN_SOURCE:
+                    return metadata.supportsRuntimeItemDesignSource;
+                case CatalogPrefabCapabilityIds.ITEM_DUMMY_IMAGE_SPRITE:
+                    return metadata.supportsItemDummyImageSprite;
+                case CatalogPrefabCapabilityIds.CONTENT_PATH_OPTION:
+                    return metadata.supportsContentPathOption;
+                default:
+                    return HasCapability(metadata, normalizedCapability);
+            }
+        }
+
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();

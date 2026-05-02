@@ -146,7 +146,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < requiredCapabilities.Length; i++)
             {
                 string capability = requiredCapabilities[i];
-                if (!CatalogPrefabMetadataCapabilityUtility.HasCapability(metadata, capability))
+                if (!CatalogPrefabMetadataCapabilityUtility.HasVerifiedCapability(metadata, capability))
                     errors.Add("feature '" + spawnKey + "' design에는 catalog capability '" + capability + "'가 필요합니다.");
             }
         }
@@ -525,7 +525,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             for (int i = 0; i < normalizedCapabilities.Length; i++)
             {
                 string capability = normalizedCapabilities[i];
-                if (!CatalogPrefabMetadataCapabilityUtility.HasCapability(metadata, capability))
+                if (!CatalogPrefabMetadataCapabilityUtility.HasVerifiedCapability(metadata, capability))
                 {
                     errors.Add(context + "가 참조하는 item '" + itemKey + "'에는 catalog capability '" + capability + "'가 필요합니다.");
                 }

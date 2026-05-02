@@ -384,9 +384,13 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public string designId = string.Empty;
         public string description = string.Empty;
+        public string prefabAssetPath = string.Empty;
+        public string prefabAssetGuid = string.Empty;
+        public GeneratedContentCatalogPathAssets pathAssets = new GeneratedContentCatalogPathAssets();
         public string[] generatedItems = new string[0];
         public string[] outputItems = new string[0];
         public string[] capabilities = new string[0];
+        public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
         public GeneratedContentCatalogFootprint footprint = null;
         public string[] pathShape = new string[0];
     }
@@ -459,6 +463,7 @@ namespace Supercent.PlayableAI.Common.Format
         public string[] generatedItems = new string[0];
         public string[] outputItems = new string[0];
         public string[] capabilities = new string[0];
+        public CatalogPrefabMetadata prefabMetadata = new CatalogPrefabMetadata();
         public int footprintWidthCells = 1;
         public int footprintDepthCells = 1;
         public float footprintCenterOffsetX;

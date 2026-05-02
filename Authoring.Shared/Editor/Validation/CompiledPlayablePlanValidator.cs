@@ -1419,6 +1419,7 @@ private static void ValidateEnvironmentSourceImageReferences(
                 if (!string.IsNullOrEmpty(featureType) && !string.IsNullOrEmpty(targetId) && !seen.Add(key))
                     Fail(result, "중복된 featureLayouts(featureType, targetId) '" + featureType + "', '" + targetId + "'입니다.");
             }
+
         }
 
         private static void ValidateDescriptorDrivenLayoutBakeParity(
@@ -1482,7 +1483,7 @@ private static void ValidateEnvironmentSourceImageReferences(
                 if (string.IsNullOrEmpty(capability))
                     continue;
 
-                if (!CatalogPrefabMetadataCapabilityUtility.HasCapability(metadata, capability))
+                if (!CatalogPrefabMetadataCapabilityUtility.HasVerifiedCapability(metadata, capability))
                     Fail(result, label + " targetId '" + targetId + "'의 selected design에는 descriptor requiredDesignCapabilities '" + capability + "'가 필요합니다.");
             }
         }
@@ -1516,7 +1517,19 @@ private static void ValidateEnvironmentSourceImageReferences(
                 return;
 
             if (!TryCountJsonArrayItems(layout != null ? layout.json : null, cellsField, out int itemCount) || itemCount < 2)
+            {
                 Fail(result, label + " targetId '" + targetId + "'의 descriptor editorPreview.path.cellsField '" + cellsField + "'에는 최소 2개 이상의 path cell이 필요합니다.");
+                return;
+            }
+
+            if (!TryReadJsonPathAnchorCells(layout != null ? layout.json : null, cellsField, out FeaturePathAnchorDefinition[] pathCells, out string parseError))
+            {
+                Fail(result, label + " targetId '" + targetId + "'의 descriptor editorPreview.path.cellsField '" + cellsField + "'는 worldX/worldZ object array여야 합니다." + (string.IsNullOrWhiteSpace(parseError) ? string.Empty : " " + parseError));
+                return;
+            }
+
+            if (!FeaturePathAuthoringUtility.TryResolveConnectedPathCells(pathCells, out _, out string pathError))
+                Fail(result, label + " targetId '" + targetId + "'의 descriptor editorPreview.path.cellsField '" + cellsField + "' bake path 검증 실패: " + pathError);
         }
 
         private static void ValidateEditorPreviewBoundsLayout(
@@ -1625,6 +1638,61 @@ private static void ValidateEnvironmentSourceImageReferences(
             if (hasValue)
                 count++;
 
+            return true;
+        }
+
+        private static bool TryReadJsonPathAnchorCells(string json, string propertyName, out FeaturePathAnchorDefinition[] cells, out string errorMessage)
+        {
+            cells = new FeaturePathAnchorDefinition[0];
+            errorMessage = string.Empty;
+            if (!TryFindJsonPropertyValueStart(json, propertyName, out int valueStart))
+                return false;
+
+            string source = json ?? string.Empty;
+            if (valueStart < 0 || valueStart >= source.Length || source[valueStart] != '[')
+                return false;
+
+            int end = FindMatchingJsonToken(source, valueStart, '[', ']');
+            if (end <= valueStart)
+                return false;
+
+            var resolved = new List<FeaturePathAnchorDefinition>();
+            int cursor = valueStart + 1;
+            while (cursor < end)
+            {
+                while (cursor < end && (char.IsWhiteSpace(source[cursor]) || source[cursor] == ','))
+                    cursor++;
+
+                if (cursor >= end)
+                    break;
+
+                if (source[cursor] != '{')
+                {
+                    errorMessage = "path cell은 object여야 합니다.";
+                    return false;
+                }
+
+                int objectEnd = FindMatchingJsonToken(source, cursor, '{', '}');
+                if (objectEnd <= cursor || objectEnd > end)
+                    return false;
+
+                string objectJson = source.Substring(cursor, objectEnd - cursor + 1);
+                if (!TryReadJsonNumber(objectJson, "worldX", out float worldX) ||
+                    !TryReadJsonNumber(objectJson, "worldZ", out float worldZ))
+                {
+                    errorMessage = "path cell에는 worldX/worldZ가 필요합니다.";
+                    return false;
+                }
+
+                resolved.Add(new FeaturePathAnchorDefinition
+                {
+                    worldX = worldX,
+                    worldZ = worldZ,
+                });
+                cursor = objectEnd + 1;
+            }
+
+            cells = resolved.ToArray();
             return true;
         }
 
