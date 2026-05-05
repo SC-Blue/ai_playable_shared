@@ -25,6 +25,8 @@ namespace Supercent.PlayableAI.Common.Format
         public int designIndex = -1;
         public bool startActive = true;
         public SerializableVector3 localPosition;
+        public bool hasLocalRotation;
+        public SerializableQuaternion localRotation;
     }
 
     [Serializable]
@@ -36,6 +38,8 @@ namespace Supercent.PlayableAI.Common.Format
         public string spawnKey;
         public bool startActive = true;
         public SerializableVector3 localPosition;
+        public bool hasLocalRotation;
+        public SerializableQuaternion localRotation;
         public string optionsJson = "{}";
         public string layoutJson = "{}";
     }

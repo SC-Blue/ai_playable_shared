@@ -12,6 +12,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string REVEAL_ENDCARD = "reveal_endcard";
         public const string END_GAME = "end_game";
         public const string HIDE_GUIDE = "hide_guide";
+        public const string SET_CAPABILITY_LEVEL = "set_capability_level";
 
         public static string[] GetSupportedKinds()
         {

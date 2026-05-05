@@ -124,6 +124,33 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
+    public struct SerializableQuaternion
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float w;
+
+        public SerializableQuaternion(float xValue, float yValue, float zValue, float wValue)
+        {
+            x = xValue;
+            y = yValue;
+            z = zValue;
+            w = wValue;
+        }
+
+        public Quaternion ToQuaternion()
+        {
+            return new Quaternion(x, y, z, w);
+        }
+
+        public static SerializableQuaternion FromQuaternion(Quaternion quaternion)
+        {
+            return new SerializableQuaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+        }
+    }
+
+    [Serializable]
     public sealed class ObjectDesignSelectionDefinition
     {
         public string objectId;
@@ -139,6 +166,7 @@ namespace Supercent.PlayableAI.Common.Format
         public const string DRAG_TO_MOVE_OBJECT_ID = "drag_to_move";
         public const string ENDCARD_CONTENT_OBJECT_ID = "endcard";
         public const string JOYSTICK_OBJECT_ID = "joystick";
+        public const string PLAYER_BILLBOARD_MESSAGE_OBJECT_ID = "player_billboard_message";
 
         public static readonly string[] REQUIRED_OBJECT_IDS =
         {
@@ -147,6 +175,7 @@ namespace Supercent.PlayableAI.Common.Format
             DRAG_TO_MOVE_OBJECT_ID,
             ENDCARD_CONTENT_OBJECT_ID,
             JOYSTICK_OBJECT_ID,
+            PLAYER_BILLBOARD_MESSAGE_OBJECT_ID,
         };
 
         public static bool IsManagedObjectId(string objectId)
@@ -276,6 +305,7 @@ namespace Supercent.PlayableAI.Common.Format
         public float movingTime = 0.5f;
         public float startDelay;
         public float returnDelay;
+        public bool completeOnArrival;
     }
 
     [Serializable]
@@ -291,6 +321,8 @@ namespace Supercent.PlayableAI.Common.Format
     {
         public string kind;
         public string id;
+        public string capabilityId;
+        public int level;
     }
 
     [Serializable]
@@ -307,12 +339,21 @@ namespace Supercent.PlayableAI.Common.Format
     }
 
     [Serializable]
+    public sealed class FeatureActionPayload
+    {
+        public string targetId;
+        public string eventKey;
+        public int designIndex = -1;
+    }
+
+    [Serializable]
     public sealed class FlowActionPayloadDefinition
     {
         public CameraFocusActionPayload cameraFocus = new CameraFocusActionPayload();
         public ArrowGuideActionPayload arrowGuide = new ArrowGuideActionPayload();
         public RevealActionPayload reveal = new RevealActionPayload();
         public CustomerSpawnActionPayload customerSpawn = new CustomerSpawnActionPayload();
+        public FeatureActionPayload featureAction = new FeatureActionPayload();
     }
 
     [Serializable]

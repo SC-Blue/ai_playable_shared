@@ -50,6 +50,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string completionStepConditionType;
         public string completionGameplaySignalId;
         public string targetEventKey;
+        public bool supportsProjectedCurrencyGuide;
         public bool requiresAbsorbedArrow;
         public string requiredArrowEventKey;
     }
@@ -86,6 +87,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentSystemActionRuleDescriptor { authoringId = SystemActionIds.FOCUS_CAMERA_ON_TARGET, summary = "Focus camera on target", requiresTargetObjectId = true, defaultEventKey = FlowTargetEventKeys.ROOT },
             new PromptIntentSystemActionRuleDescriptor { authoringId = SystemActionIds.SHOW_ARROW_ON_TARGET, summary = "Show arrow on target", requiresTargetObjectId = true, defaultEventKey = FlowTargetEventKeys.ROOT },
             new PromptIntentSystemActionRuleDescriptor { authoringId = SystemActionIds.HIDE_GUIDE, summary = "Hide guide", requiresTargetObjectId = false, defaultEventKey = string.Empty },
+            new PromptIntentSystemActionRuleDescriptor { authoringId = SystemActionIds.SET_CAPABILITY_LEVEL, summary = "Set a generic runtime capability level", requiresTargetObjectId = true, defaultEventKey = string.Empty },
         };
 
         private static readonly PromptIntentConditionCapabilityDescriptor[] CONDITION_CAPABILITIES =
@@ -94,6 +96,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentConditionCapabilityDescriptor { kind = PromptIntentConditionKinds.STAGE_COMPLETED, summary = "Wait for previous stage's final beat to complete", supportedTargetRoles = new string[0], allowAnyTargetRole = false, gameplaySignalId = string.Empty, stepConditionType = StepConditionRules.BEAT_COMPLETED, reactiveConditionType = ReactiveConditionRules.BEAT_COMPLETED },
             new PromptIntentConditionCapabilityDescriptor { kind = PromptIntentConditionKinds.BALANCE_AT_LEAST, summary = "Enter at balance threshold", supportedTargetRoles = new string[0], allowAnyTargetRole = false, gameplaySignalId = string.Empty, stepConditionType = StepConditionRules.CURRENCY_AT_LEAST, reactiveConditionType = StepConditionRules.CURRENCY_AT_LEAST },
             new PromptIntentConditionCapabilityDescriptor { kind = PromptIntentConditionKinds.UNLOCK_COMPLETED, summary = "Unlock pad completed", supportedTargetRoles = new[] { PromptIntentObjectRoles.UNLOCK_PAD }, allowAnyTargetRole = false, gameplaySignalId = string.Empty, stepConditionType = StepConditionRules.UNLOCKER_UNLOCKED, reactiveConditionType = StepConditionRules.UNLOCKER_UNLOCKED },
+            new PromptIntentConditionCapabilityDescriptor { kind = PromptIntentConditionKinds.CAPABILITY_LEVEL_AT_LEAST, summary = "Wait for a generic runtime capability level", supportedTargetRoles = new string[0], allowAnyTargetRole = false, gameplaySignalId = string.Empty, stepConditionType = StepConditionRules.CAPABILITY_LEVEL_AT_LEAST, reactiveConditionType = StepConditionRules.CAPABILITY_LEVEL_AT_LEAST },
         };
 
         private static readonly PromptIntentObjectiveCapabilityDescriptor[] OBJECTIVE_CAPABILITIES =
@@ -112,6 +115,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentEffectCapabilityDescriptor { kind = PromptIntentEffectKinds.REVEAL_ENDCARD, summary = "Reveal endcard system action target", supportedTargetRoles = new string[0], allowAnyTargetRole = false, systemActionId = SystemActionIds.REVEAL_ENDCARD_UI, runtimeEventKey = string.Empty, buildsSceneActivationTarget = false, buildsSystemActionTarget = true },
             new PromptIntentEffectCapabilityDescriptor { kind = PromptIntentEffectKinds.END_GAME, summary = "End game system action target", supportedTargetRoles = new string[0], allowAnyTargetRole = false, systemActionId = SystemActionIds.END_GAME, runtimeEventKey = string.Empty, buildsSceneActivationTarget = false, buildsSystemActionTarget = true },
             new PromptIntentEffectCapabilityDescriptor { kind = PromptIntentEffectKinds.HIDE_GUIDE, summary = "Hide guide system action target", supportedTargetRoles = new string[0], allowAnyTargetRole = false, systemActionId = SystemActionIds.HIDE_GUIDE, runtimeEventKey = string.Empty, buildsSceneActivationTarget = false, buildsSystemActionTarget = true },
+            new PromptIntentEffectCapabilityDescriptor { kind = PromptIntentEffectKinds.SET_CAPABILITY_LEVEL, summary = "Set a generic runtime capability level", supportedTargetRoles = new string[0], allowAnyTargetRole = false, systemActionId = SystemActionIds.SET_CAPABILITY_LEVEL, runtimeEventKey = string.Empty, buildsSceneActivationTarget = false, buildsSystemActionTarget = true },
         };
         // </generated-capability-registry-data>
 
@@ -286,6 +290,12 @@ namespace Supercent.PlayableAI.Common.Contracts
             return descriptor != null ? descriptor.targetEventKey : string.Empty;
         }
 
+        public static bool ObjectiveSupportsProjectedCurrencyGuide(string kind)
+        {
+            PromptIntentObjectiveCapabilityDescriptor descriptor = FindObjectiveCapability(kind);
+            return descriptor != null && descriptor.supportsProjectedCurrencyGuide;
+        }
+
         public static bool ObjectiveRequiresAbsorbedArrow(string kind)
         {
             PromptIntentObjectiveCapabilityDescriptor descriptor = FindObjectiveCapability(kind);
@@ -332,6 +342,37 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             PromptIntentEffectCapabilityDescriptor descriptor = FindEffectCapability(kind);
             return descriptor != null && ContainsValue(descriptor.semanticTags, tag);
+        }
+
+        public static string[] GetEffectSemanticTags(string kind)
+        {
+            PromptIntentEffectCapabilityDescriptor descriptor = FindEffectCapability(kind);
+            return descriptor != null ? CloneStrings(descriptor.semanticTags) : new string[0];
+        }
+
+        public static bool IsSupportedFeatureActionKind(string actionKind)
+        {
+            string normalizedActionKind = Normalize(actionKind);
+            if (string.IsNullOrEmpty(normalizedActionKind))
+                return false;
+
+            PromptIntentEffectCapabilityDescriptor[] capabilities = GetEffectCapabilitiesInternal();
+            for (int i = 0; i < capabilities.Length; i++)
+            {
+                PromptIntentEffectCapabilityDescriptor descriptor = capabilities[i];
+                if (descriptor == null ||
+                    !string.IsNullOrEmpty(descriptor.systemActionId) ||
+                    descriptor.buildsSceneActivationTarget ||
+                    descriptor.buildsSystemActionTarget)
+                {
+                    continue;
+                }
+
+                if (ContainsValue(descriptor.semanticTags, normalizedActionKind))
+                    return true;
+            }
+
+            return false;
         }
 
         public static bool IsCameraFocusEffectKind(string kind)
@@ -563,6 +604,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     completionStepConditionType = values[i].completionStepConditionType,
                     completionGameplaySignalId = values[i].completionGameplaySignalId,
                     targetEventKey = values[i].targetEventKey,
+                    supportsProjectedCurrencyGuide = values[i].supportsProjectedCurrencyGuide,
                     requiresAbsorbedArrow = values[i].requiresAbsorbedArrow,
                     requiredArrowEventKey = values[i].requiredArrowEventKey,
                 };

@@ -639,7 +639,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
             RequireEmptyItem(value.item, label + ".item", result, kind);
             RequireEmpty(value.currencyId, label + ".currencyId", result, kind);
-            if (value.amountValue != 0)
+            if (string.Equals(kind, PromptIntentEffectKinds.SET_CAPABILITY_LEVEL, StringComparison.Ordinal))
+            {
+                if (value.amountValue < 0)
+                    Fail(result, PlayableFailureCode.InvalidValue, label + ".amountValue는 kind '" + kind + "'에서 0 이상이어야 합니다.");
+            }
+            else if (value.amountValue != 0)
                 Fail(result, PlayableFailureCode.InvalidValue, label + ".amountValue는 kind '" + kind + "'에서 허용되지 않습니다.");
             if (value.seconds != 0f)
                 Fail(result, PlayableFailureCode.InvalidValue, label + ".seconds는 kind '" + kind + "'에서 허용되지 않습니다.");

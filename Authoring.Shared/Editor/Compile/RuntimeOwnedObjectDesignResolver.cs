@@ -323,6 +323,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 string preferredDesignId = ResolvePreferredDesignId(normalizedObjectId, preferredDesignsByObjectId);
                 string resolvedDesignId = SelectRuntimeOwnedDesignId(normalizedObjectId, candidates, preferredDesignId);
                 AddRequiredObjectDesign(normalizedObjectId, resolvedDesignId, requiredObjectDesignKeys);
+                if (!string.IsNullOrEmpty(preferredDesignId) && ContainsCandidate(candidates, preferredDesignId))
+                {
+                    return;
+                }
+
                 if (!string.IsNullOrEmpty(preferredDesignId) && !ContainsCandidate(candidates, preferredDesignId) && warnings != null)
                 {
                     AddUniqueWarning(

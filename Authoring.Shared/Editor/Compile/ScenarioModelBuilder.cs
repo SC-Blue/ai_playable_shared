@@ -230,6 +230,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             {
                 result.Errors.Add(label + ".amountValue 검증에 실패했습니다: " + error);
             }
+            else if (UsesCapabilityLevelAmount(kind))
+            {
+                validatedAmountValue = Math.Max(0, condition.amountValue);
+            }
 
             return new ScenarioModelConditionDefinition
             {
@@ -310,6 +314,10 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     !TryValidateCurrencyAmountValue(value.currencyId, value.amountValue, currencyById, out validatedAmountValue, out string error))
                 {
                     result.Errors.Add(label + "[" + i + "].amountValue 검증에 실패했습니다: " + error);
+                }
+                else if (UsesCapabilityLevelAmount(kind))
+                {
+                    validatedAmountValue = Math.Max(0, value.amountValue);
                 }
 
                 values.Add(new ScenarioModelEffectDefinition
@@ -549,7 +557,16 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         {
             string normalizedKind = Normalize(kind);
             return normalizedKind == PromptIntentConditionKinds.BALANCE_AT_LEAST ||
-                   normalizedKind == PromptIntentObjectiveKinds.UNLOCK_OBJECT;
+                   normalizedKind == PromptIntentObjectiveKinds.UNLOCK_OBJECT ||
+                   PromptIntentContractRegistry.ConditionSupportsAmountValue(normalizedKind) ||
+                   PromptIntentContractRegistry.ObjectiveSupportsAmountValue(normalizedKind);
+        }
+
+        private static bool UsesCapabilityLevelAmount(string kind)
+        {
+            string normalizedKind = Normalize(kind);
+            return normalizedKind == PromptIntentConditionKinds.CAPABILITY_LEVEL_AT_LEAST ||
+                   normalizedKind == PromptIntentEffectKinds.SET_CAPABILITY_LEVEL;
         }
 
         private static bool TryValidateCurrencyAmountValue(

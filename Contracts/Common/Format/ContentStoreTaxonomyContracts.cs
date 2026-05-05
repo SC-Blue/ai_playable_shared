@@ -6,6 +6,7 @@ namespace Supercent.PlayableAI.Common.Format
 {
     public static class ContentStoreBoundaryIds
     {
+        public const string AssetStore = "asset_store";
         public const string BuiltIn = "built_in";
         public const string FeatureRuntime = "feature_runtime";
         public const string FeatureVariant = "features";
@@ -14,6 +15,7 @@ namespace Supercent.PlayableAI.Common.Format
 
     public static class ContentStoreContentKindIds
     {
+        public const string AssetStore = "asset_store";
         public const string BuiltIn = "built_in";
         public const string FeatureRuntime = "feature_runtime";
         public const string FeatureVariant = "feature_variant";
@@ -22,10 +24,17 @@ namespace Supercent.PlayableAI.Common.Format
 
     public static class ContentStorePackageKindIds
     {
+        public const string AssetStore = "asset_store";
         public const string BuiltIn = "built_in";
         public const string FeatureRuntime = "feature_runtime";
         public const string FeatureVariant = "feature_variant";
         public const string SharedAsset = "shared_asset";
+    }
+
+    public static class ContentStoreAssetStoreCategoryIds
+    {
+        public const string Sound = "sound";
+        public const string SoundsPathToken = "sounds";
     }
 
     public static class ContentStoreSharedCategoryIds
@@ -33,7 +42,9 @@ namespace Supercent.PlayableAI.Common.Format
         public const string Asset = "asset";
         public const string AssetsPathToken = "assets";
         public const string Font = "font";
-        public const string FontsPathToken = "fonts";
+        public const string FontsPathToken = "font";
+        public const string PlayerBillboardMessage = "player_billboard_message";
+        public const string PlayerBillboardMessagePathToken = "player_billboard_message";
     }
 
     public static class ContentStoreThemeIds
@@ -130,10 +141,11 @@ namespace Supercent.PlayableAI.Common.Format
 
         private static readonly ContentStoreTaxonomyOption[] ContentKindOptions =
         {
-            Option(ContentStoreContentKindIds.BuiltIn, "Built-in"),
-            Option(ContentStoreContentKindIds.FeatureRuntime, "Feature Runtime"),
-            Option(ContentStoreContentKindIds.FeatureVariant, "Feature Variant"),
-            Option(ContentStoreContentKindIds.SharedAsset, "Shared Asset"),
+            Option(ContentStoreContentKindIds.AssetStore, "에셋 스토어"),
+            Option(ContentStoreContentKindIds.BuiltIn, "기본 콘텐츠"),
+            Option(ContentStoreContentKindIds.FeatureRuntime, "기능 런타임"),
+            Option(ContentStoreContentKindIds.FeatureVariant, "기능 콘텐츠"),
+            Option(ContentStoreContentKindIds.SharedAsset, "공유 에셋"),
         };
 
         private static readonly ContentStoreTaxonomyOption[] BuiltInGroupOptions =
@@ -151,8 +163,9 @@ namespace Supercent.PlayableAI.Common.Format
 
         private static readonly ContentStoreTaxonomyOption[] SharedAssetGroupOptions =
         {
-            Option(ContentStoreSharedCategoryIds.Asset, "Theme Assets", aliases: new[] { ContentStoreSharedCategoryIds.AssetsPathToken, "shared_asset", "shared_assets" }),
-            Option(ContentStoreSharedCategoryIds.Font, "Font", aliases: new[] { ContentStoreSharedCategoryIds.FontsPathToken }),
+            Option(ContentStoreSharedCategoryIds.Asset, "공유 에셋", aliases: new[] { ContentStoreSharedCategoryIds.AssetsPathToken, "shared_asset", "shared_assets" }),
+            Option(ContentStoreSharedCategoryIds.Font, "폰트", aliases: new[] { ContentStoreSharedCategoryIds.FontsPathToken, "fonts" }),
+            Option(ContentStoreSharedCategoryIds.PlayerBillboardMessage, "플레이어 메시지 UI", aliases: new[] { ContentStoreSharedCategoryIds.PlayerBillboardMessagePathToken }),
         };
 
         private static readonly ContentStoreTaxonomySubcategoryGroup[] BuiltInSubcategoryGroups =
@@ -162,7 +175,8 @@ namespace Supercent.PlayableAI.Common.Format
                 Option("joystick", "조이스틱"),
                 Option("arrow", "화살표"),
                 Option("currency_hud", "재화 HUD"),
-                Option("drag_to_move", "드래그 유도")),
+                Option("drag_to_move", "드래그 유도"),
+                Option(ContentStoreSharedCategoryIds.PlayerBillboardMessagePathToken, "플레이어 메시지 UI")),
             Group(CatalogCategoryIds.CHARACTER,
                 Option("player_model", "플레이어"),
                 Option("customer", "손님")),
@@ -176,6 +190,7 @@ namespace Supercent.PlayableAI.Common.Format
                 Option("cola", "콜라"),
                 Option(CatalogIdentityRules.MONEY_OBJECT_ID, "돈"),
                 Option("flour", "밀가루"),
+                Option("tomato", "토마토"),
                 Option("dish", "접시"),
                 Option("meat", "고기"),
                 Option("patty", "패티"),
@@ -204,6 +219,16 @@ namespace Supercent.PlayableAI.Common.Format
             string normalizedFeatureType = Normalize(featureType);
             string normalizedObjectId = Normalize(objectId);
             string kind = ResolveContentKind(normalizedBoundary, normalizedCategory, normalizedFeatureType);
+
+            if (string.Equals(kind, ContentStoreContentKindIds.AssetStore, StringComparison.Ordinal))
+            {
+                return new ContentStorePackageTaxonomy
+                {
+                    kind = kind,
+                    group = normalizedCategory,
+                    subcategory = normalizedObjectId,
+                };
+            }
 
             if (string.Equals(kind, ContentStoreContentKindIds.SharedAsset, StringComparison.Ordinal))
             {
@@ -248,6 +273,8 @@ namespace Supercent.PlayableAI.Common.Format
             string normalizedBoundary = Normalize(boundary);
             string normalizedCategory = Normalize(category);
             string normalizedFeatureType = Normalize(featureType);
+            if (IsAssetStoreBoundary(normalizedBoundary))
+                return ContentStoreContentKindIds.AssetStore;
             if (IsSharedBoundary(normalizedBoundary))
                 return ContentStoreContentKindIds.SharedAsset;
             if (IsBuiltInBoundary(normalizedBoundary))
@@ -266,7 +293,8 @@ namespace Supercent.PlayableAI.Common.Format
         public static bool IsSupportedUploadBoundary(string boundary)
         {
             string normalized = Normalize(boundary);
-            return IsBuiltInBoundary(normalized) ||
+            return IsAssetStoreBoundary(normalized) ||
+                IsBuiltInBoundary(normalized) ||
                 IsFeatureRuntimeBoundary(normalized) ||
                 IsFeatureVariantBoundary(normalized) ||
                 IsSharedBoundary(normalized);
@@ -293,6 +321,11 @@ namespace Supercent.PlayableAI.Common.Format
             return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.BuiltIn, StringComparison.Ordinal);
         }
 
+        public static bool IsAssetStoreBoundary(string boundary)
+        {
+            return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.AssetStore, StringComparison.Ordinal);
+        }
+
         public static bool IsSharedBoundary(string boundary)
         {
             return string.Equals(Normalize(boundary), ContentStoreBoundaryIds.Shared, StringComparison.Ordinal);
@@ -313,8 +346,12 @@ namespace Supercent.PlayableAI.Common.Format
                 string.Equals(normalized, ContentStoreSharedCategoryIds.AssetsPathToken, StringComparison.Ordinal))
                 return ContentStoreSharedCategoryIds.AssetsPathToken;
             if (string.Equals(normalized, ContentStoreSharedCategoryIds.Font, StringComparison.Ordinal) ||
-                string.Equals(normalized, ContentStoreSharedCategoryIds.FontsPathToken, StringComparison.Ordinal))
+                string.Equals(normalized, ContentStoreSharedCategoryIds.FontsPathToken, StringComparison.Ordinal) ||
+                string.Equals(normalized, "fonts", StringComparison.Ordinal))
                 return ContentStoreSharedCategoryIds.FontsPathToken;
+            if (string.Equals(normalized, ContentStoreSharedCategoryIds.PlayerBillboardMessage, StringComparison.Ordinal) ||
+                string.Equals(normalized, ContentStoreSharedCategoryIds.PlayerBillboardMessagePathToken, StringComparison.Ordinal))
+                return ContentStoreSharedCategoryIds.PlayerBillboardMessagePathToken;
             return normalized;
         }
 
@@ -344,9 +381,11 @@ namespace Supercent.PlayableAI.Common.Format
                 case CatalogCategoryIds.UNLOCKER:
                     return "Unlocker";
                 case ContentStoreSharedCategoryIds.FontsPathToken:
-                    return "Fonts";
+                    return "font";
                 case ContentStoreSharedCategoryIds.AssetsPathToken:
                     return string.Empty;
+                case ContentStoreSharedCategoryIds.PlayerBillboardMessagePathToken:
+                    return "player_billboard_message";
                 default:
                     return normalized;
             }

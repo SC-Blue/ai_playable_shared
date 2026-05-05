@@ -34,11 +34,9 @@ namespace Supercent.PlayableAI.Common.Contracts
 
         // Compiled playable plan validator
         public const string COMPILED_PLAN_GENERIC = "COMPILED_PLAN.GENERIC";
-        public const string COMPILED_PLAN_WARNING_GENERIC = "COMPILED_PLAN.WARNING_GENERIC";
 
         // Layout / draft validator (server side via DraftLayoutPreflightValidator)
         public const string LAYOUT_GENERIC = "LAYOUT.GENERIC";
-        public const string LAYOUT_WARNING_GENERIC = "LAYOUT.WARNING_GENERIC";
 
         public static bool IsRegistered(string ruleId)
         {
@@ -64,9 +62,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                 case INTENT_AUDIT_GENERIC:
                 case SCENARIO_MODEL_GENERIC:
                 case COMPILED_PLAN_GENERIC:
-                case COMPILED_PLAN_WARNING_GENERIC:
                 case LAYOUT_GENERIC:
-                case LAYOUT_WARNING_GENERIC:
                     return true;
                 default:
                     return false;

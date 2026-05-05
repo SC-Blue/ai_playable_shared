@@ -11,7 +11,9 @@ namespace Supercent.PlayableAI.Common.Contracts
         {
             StepConditionRules.ALWAYS,
             StepConditionRules.CURRENCY_AT_LEAST,
+            StepConditionRules.PROJECTED_CURRENCY_AT_LEAST,
             StepConditionRules.UNLOCKER_UNLOCKED,
+            StepConditionRules.CAPABILITY_LEVEL_AT_LEAST,
             BEAT_COMPLETED,
             SYSTEM_ACTION_ACTIVATED,
             StepConditionRules.ACTION_STARTED,
@@ -41,9 +43,23 @@ namespace Supercent.PlayableAI.Common.Contracts
                     return condition.amount < 0
                         ? label + ".amount는 0 이상이어야 합니다."
                         : null;
+                case StepConditionRules.PROJECTED_CURRENCY_AT_LEAST:
+                    if (string.IsNullOrWhiteSpace(condition.targetId))
+                        return label + ".targetId가 필요합니다.";
+                    if (string.IsNullOrWhiteSpace(condition.currencyId))
+                        return label + ".currencyId가 필요합니다.";
+                    return condition.amount <= 0
+                        ? label + ".amount는 0보다 커야 합니다."
+                        : null;
                 case StepConditionRules.UNLOCKER_UNLOCKED:
                     return string.IsNullOrWhiteSpace(condition.unlockerId)
                         ? label + ".unlockerId가 필요합니다."
+                        : null;
+                case StepConditionRules.CAPABILITY_LEVEL_AT_LEAST:
+                    if (string.IsNullOrWhiteSpace(condition.targetId))
+                        return label + ".targetId(capabilityId)가 필요합니다.";
+                    return condition.amount < 0
+                        ? label + ".amount는 0 이상이어야 합니다."
                         : null;
                 case BEAT_COMPLETED:
                 case StepConditionRules.ACTION_STARTED:

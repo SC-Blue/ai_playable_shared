@@ -471,7 +471,6 @@ namespace Supercent.PlayableAI.AuthoringCore
     {
         public float score;
         public string grade = string.Empty;
-        public int warningCount;
         public int entryCount;
         public int bboxEntryCount;
         public int worldAnchorEntryCount;

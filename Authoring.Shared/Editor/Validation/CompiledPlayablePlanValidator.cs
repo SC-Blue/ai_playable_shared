@@ -279,7 +279,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
 
                     if (!IsEmptyArrowGuidePayload(payload.arrowGuide) ||
-                        !IsEmptyRevealPayload(payload.reveal))
+                        !IsEmptyRevealPayload(payload.reveal) ||
+                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
+                        !IsEmptyFeatureActionPayload(payload.featureAction))
                     {
                         Fail(result, label + "에는 camera focus 외 payload가 함께 들어있습니다.");
                     }
@@ -295,7 +297,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
 
                     if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyRevealPayload(payload.reveal))
+                        !IsEmptyRevealPayload(payload.reveal) ||
+                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
+                        !IsEmptyFeatureActionPayload(payload.featureAction))
                     {
                         Fail(result, label + "에는 arrow guide 외 payload가 함께 들어있습니다.");
                     }
@@ -305,7 +309,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 case FlowActionKinds.REVEAL:
                     if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
-                        !IsEmptyArrowGuidePayload(payload.arrowGuide))
+                        !IsEmptyArrowGuidePayload(payload.arrowGuide) ||
+                        !IsEmptyCustomerSpawnPayload(payload.customerSpawn) ||
+                        !IsEmptyFeatureActionPayload(payload.featureAction))
                     {
                         Fail(result, label + "에는 reveal 외 payload가 함께 들어있습니다.");
                     }
@@ -341,8 +347,43 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     break;
 
                 default:
+                    ValidateFeatureActionPayload(kind, payload, label, spawnLookup, result);
                     break;
             }
+        }
+
+        private static void ValidateFeatureActionPayload(
+            string kind,
+            FlowActionPayloadDefinition payload,
+            string label,
+            Dictionary<string, CompiledSpawnData> spawnLookup,
+            CompiledPlayablePlanValidationResult result)
+        {
+            if (!PromptIntentCapabilityRegistry.IsSupportedFeatureActionKind(kind))
+            {
+                Fail(result, label + ".kind '" + kind + "'는 descriptor semanticTags에 선언되지 않은 feature action입니다.");
+                return;
+            }
+
+            if (IsEmptyFeatureActionPayload(payload.featureAction))
+            {
+                Fail(result, label + ".payload.featureAction이 필요합니다.");
+                return;
+            }
+
+            if (!IsEmptyCameraFocusPayload(payload.cameraFocus) ||
+                !IsEmptyArrowGuidePayload(payload.arrowGuide) ||
+                !IsEmptyRevealPayload(payload.reveal) ||
+                !IsEmptyCustomerSpawnPayload(payload.customerSpawn))
+            {
+                Fail(result, label + "에는 feature action 외 payload가 함께 들어있습니다.");
+            }
+
+            string targetId = payload.featureAction.targetId != null ? payload.featureAction.targetId.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(targetId))
+                Fail(result, label + ".payload.featureAction.targetId가 필요합니다.");
+            else if (!spawnLookup.ContainsKey(targetId))
+                Fail(result, label + ".payload.featureAction.targetId '" + targetId + "'를 compiled spawns에서 찾지 못했습니다.");
         }
 
         private static void ValidateBeatConditionTarget(
@@ -360,9 +401,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             switch (type)
             {
                 case StepConditionRules.CURRENCY_AT_LEAST:
+                case StepConditionRules.PROJECTED_CURRENCY_AT_LEAST:
                     int unitValue = ResolveCurrencyUnitValue(currencyUnits, condition.currencyId);
                     if (!IsMoneyMultiple(condition.amount, unitValue))
                         Fail(result, label + ".amount는 currency unitValue의 배수여야 합니다.");
+                    if (string.Equals(type, StepConditionRules.PROJECTED_CURRENCY_AT_LEAST, StringComparison.Ordinal) &&
+                        string.IsNullOrWhiteSpace(condition.targetId))
+                        Fail(result, label + ".targetId가 필요합니다.");
                     break;
                 case StepConditionRules.BEAT_COMPLETED:
                     if (!string.IsNullOrWhiteSpace(condition.targetId) && !beatIds.Contains(condition.targetId.Trim()))
@@ -395,9 +440,13 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 switch (type)
                 {
                     case StepConditionRules.CURRENCY_AT_LEAST:
+                    case StepConditionRules.PROJECTED_CURRENCY_AT_LEAST:
                         int unitValue = ResolveCurrencyUnitValue(currencyUnits, condition.currencyId);
                         if (!IsMoneyMultiple(condition.amount, unitValue))
                             Fail(result, label + ".conditions[" + i + "].amount는 currency unitValue의 배수여야 합니다.");
+                        if (string.Equals(type, StepConditionRules.PROJECTED_CURRENCY_AT_LEAST, StringComparison.Ordinal) &&
+                            string.IsNullOrWhiteSpace(condition.targetId))
+                            Fail(result, label + ".conditions[" + i + "].targetId가 필요합니다.");
                         break;
                     case ReactiveConditionRules.BEAT_COMPLETED:
                         if (!string.IsNullOrWhiteSpace(condition.targetId) && !beatIds.Contains(condition.targetId.Trim()))
@@ -492,6 +541,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 (string.IsNullOrWhiteSpace(payload.targetId) &&
                  string.IsNullOrWhiteSpace(payload.eventKey) &&
                  payload.autoHideOnBeatExit);
+        }
+
+        private static bool IsEmptyCustomerSpawnPayload(CustomerSpawnActionPayload payload)
+        {
+            return payload == null ||
+                (string.IsNullOrWhiteSpace(payload.targetId) &&
+                 payload.customerDesignIndex < 0);
+        }
+
+        private static bool IsEmptyFeatureActionPayload(FeatureActionPayload payload)
+        {
+            return payload == null ||
+                (string.IsNullOrWhiteSpace(payload.targetId) &&
+                 string.IsNullOrWhiteSpace(payload.eventKey) &&
+                 payload.designIndex < 0);
         }
 
         private static HashSet<string> ValidateSourceImages(
@@ -1367,7 +1431,11 @@ private static void ValidateEnvironmentSourceImageReferences(
                 {
                     Fail(result, "featureOptions[" + i + "].options.optionsJson은 JSON object 문자열이어야 합니다.");
                 }
-                else if (catalog != null && catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor))
+                else if (catalog == null || !catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor))
+                {
+                    Fail(result, "featureOptions[" + i + "].featureType '" + featureType + "'에 대응되는 feature descriptor를 catalog에서 찾지 못했습니다.");
+                }
+                else
                 {
                     var schemaErrors = new List<string>();
                     FeatureOptionsSchemaValidator.ValidateCompiledOptions(
@@ -1437,9 +1505,54 @@ private static void ValidateEnvironmentSourceImageReferences(
             if (catalog == null || !catalog.TryGetFeatureDescriptor(featureType, out FeatureDescriptor descriptor) || descriptor == null)
                 return;
 
+            ValidateDeclaredFeatureLayoutKeys(layout, descriptor, label, result);
             ValidateRequiredTargetDesignCapabilities(descriptor, targetId, spawnLookup, catalog, label, result);
             ValidateEditorPreviewPathLayout(layout, descriptor, targetId, label, result);
             ValidateEditorPreviewBoundsLayout(layout, descriptor, targetId, label, result);
+        }
+
+        private static void ValidateDeclaredFeatureLayoutKeys(
+            FeatureJsonPayload layout,
+            FeatureDescriptor descriptor,
+            string label,
+            CompiledPlayablePlanValidationResult result)
+        {
+            string json = layout != null ? layout.json : null;
+            if (string.IsNullOrWhiteSpace(json))
+                return;
+
+            if (!TryReadTopLevelJsonPropertyNames(json, out string[] propertyNames, out string parseError))
+            {
+                Fail(result, label + ".json property key 검사 실패: " + parseError);
+                return;
+            }
+
+            var allowed = new HashSet<string>(StringComparer.Ordinal);
+            FeatureEditorPreviewDescriptor preview = descriptor != null ? descriptor.editorPreview : null;
+            string renderer = FeatureDescriptorUtility.Normalize(preview != null ? preview.renderer : string.Empty);
+            if (string.Equals(renderer, FeatureDescriptorContracts.EDITOR_PREVIEW_RENDERER_PATH, StringComparison.Ordinal))
+            {
+                string cellsField = FeatureDescriptorUtility.Normalize(preview != null && preview.path != null ? preview.path.cellsField : string.Empty);
+                if (!string.IsNullOrEmpty(cellsField))
+                    allowed.Add(cellsField);
+            }
+            else if (string.Equals(renderer, FeatureDescriptorContracts.EDITOR_PREVIEW_RENDERER_BOUNDS, StringComparison.Ordinal))
+            {
+                FeatureEditorPreviewBoundsDescriptor[] bounds = preview != null ? preview.bounds ?? new FeatureEditorPreviewBoundsDescriptor[0] : new FeatureEditorPreviewBoundsDescriptor[0];
+                for (int i = 0; i < bounds.Length; i++)
+                {
+                    string field = FeatureDescriptorUtility.Normalize(bounds[i] != null ? bounds[i].field : string.Empty);
+                    if (!string.IsNullOrEmpty(field))
+                        allowed.Add(field);
+                }
+            }
+
+            for (int i = 0; i < propertyNames.Length; i++)
+            {
+                string propertyName = FeatureDescriptorUtility.Normalize(propertyNames[i]);
+                if (!string.IsNullOrEmpty(propertyName) && !allowed.Contains(propertyName))
+                    Fail(result, label + ".json에 descriptor editorPreview가 선언하지 않은 key가 있습니다: " + propertyName);
+            }
         }
 
         private static void ValidateRequiredTargetDesignCapabilities(
@@ -1750,6 +1863,147 @@ private static void ValidateEnvironmentSourceImageReferences(
             }
 
             return false;
+        }
+
+        private static bool TryReadTopLevelJsonPropertyNames(string json, out string[] propertyNames, out string errorMessage)
+        {
+            var names = new List<string>();
+            propertyNames = new string[0];
+            errorMessage = string.Empty;
+
+            string source = json != null ? json.Trim() : string.Empty;
+            if (source.Length < 2 || source[0] != '{' || source[source.Length - 1] != '}')
+            {
+                errorMessage = "JSON object 문자열이 필요합니다.";
+                return false;
+            }
+
+            int index = 1;
+            while (index < source.Length - 1)
+            {
+                while (index < source.Length - 1 && char.IsWhiteSpace(source[index]))
+                    index++;
+
+                if (index >= source.Length - 1)
+                    break;
+
+                if (source[index] != '"')
+                {
+                    errorMessage = "property key 문자열이 필요합니다. index=" + index;
+                    return false;
+                }
+
+                if (!TryReadJsonString(source, ref index, out string key))
+                {
+                    errorMessage = "property key 파싱 실패. index=" + index;
+                    return false;
+                }
+
+                while (index < source.Length && char.IsWhiteSpace(source[index]))
+                    index++;
+
+                if (index >= source.Length || source[index] != ':')
+                {
+                    errorMessage = "property '" + key + "' 뒤에 ':'가 필요합니다.";
+                    return false;
+                }
+
+                index++;
+                while (index < source.Length && char.IsWhiteSpace(source[index]))
+                    index++;
+
+                if (!TrySkipJsonValue(source, ref index))
+                {
+                    errorMessage = "property '" + key + "' value 파싱 실패.";
+                    return false;
+                }
+
+                names.Add(key);
+                while (index < source.Length - 1 && char.IsWhiteSpace(source[index]))
+                    index++;
+
+                if (index < source.Length - 1)
+                {
+                    if (source[index] != ',')
+                    {
+                        errorMessage = "property separator ','가 필요합니다. index=" + index;
+                        return false;
+                    }
+
+                    index++;
+                }
+            }
+
+            propertyNames = names.ToArray();
+            return true;
+        }
+
+        private static bool TryReadJsonString(string source, ref int index, out string value)
+        {
+            value = string.Empty;
+            if (source == null || index >= source.Length || source[index] != '"')
+                return false;
+
+            int start = ++index;
+            bool escaping = false;
+            while (index < source.Length)
+            {
+                char ch = source[index];
+                if (escaping)
+                {
+                    escaping = false;
+                    index++;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaping = true;
+                    index++;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    value = source.Substring(start, index - start);
+                    index++;
+                    return true;
+                }
+
+                index++;
+            }
+
+            return false;
+        }
+
+        private static bool TrySkipJsonValue(string source, ref int index)
+        {
+            if (source == null || index >= source.Length)
+                return false;
+
+            char first = source[index];
+            if (first == '"')
+                return TryReadJsonString(source, ref index, out _);
+            if (first == '{')
+            {
+                int end = FindMatchingJsonToken(source, index, '{', '}');
+                if (end < index)
+                    return false;
+                index = end + 1;
+                return true;
+            }
+            if (first == '[')
+            {
+                int end = FindMatchingJsonToken(source, index, '[', ']');
+                if (end < index)
+                    return false;
+                index = end + 1;
+                return true;
+            }
+
+            while (index < source.Length && source[index] != ',' && source[index] != '}')
+                index++;
+            return true;
         }
 
         private static int FindMatchingJsonToken(string source, int start, char open, char close)

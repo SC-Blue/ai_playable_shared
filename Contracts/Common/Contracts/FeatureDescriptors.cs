@@ -17,11 +17,259 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string VALUE_TYPE_INT = "int";
         public const string VALUE_TYPE_INT_RANGE = "int_range";
         public const string VALUE_TYPE_FLOAT = "float";
+        public const string VALUE_TYPE_STRING = "string";
+        public const string VALUE_TYPE_BOOL = "bool";
         public const string VALUE_TYPE_ITEM_REF = "item_ref";
         public const string VALUE_TYPE_TARGET_OBJECT_ID = "target_object_id";
+        public const string VALUE_TYPE_AUDIO_CLIP_REF = "audio_clip_ref";
+        public const string AUTHORING_STAGE_GENERATE_BAKE = "generate_bake";
+        public const string AUTHORING_STAGE_POST_BAKE = "post_bake";
+        public const string AUTHORING_STAGE_BOTH = "both";
+        public const string POST_BAKE_EDIT_MODE_EDITABLE = "editable";
+        public const string POST_BAKE_EDIT_MODE_READ_ONLY = "read_only";
+        public const string POST_BAKE_EDIT_MODE_HIDDEN = "hidden";
+        public const string EDITOR_CONTROL_ITEM_PICKER = "item_picker";
+        public const string EDITOR_CONTROL_TARGET_OBJECT_PICKER = "target_object_picker";
+        public const string EDITOR_CONTROL_INT = "int";
+        public const string EDITOR_CONTROL_FLOAT = "float";
+        public const string EDITOR_CONTROL_STRING = "string";
+        public const string EDITOR_CONTROL_TOGGLE = "toggle";
+        public const string EDITOR_CONTROL_AUDIO_CLIP_PICKER = "audio_clip_picker";
         public const string EDITOR_PREVIEW_RENDERER_PATH = "path";
         public const string EDITOR_PREVIEW_RENDERER_BOUNDS = "bounds";
         public const string EDITOR_PREVIEW_VISUAL_OPTION_ITEM_REF = "option_item_ref";
+
+        public static bool IsSupportedValueType(string value)
+        {
+            return Contains(Normalize(value), new[]
+            {
+                VALUE_TYPE_INT,
+                VALUE_TYPE_INT_RANGE,
+                VALUE_TYPE_FLOAT,
+                VALUE_TYPE_STRING,
+                VALUE_TYPE_BOOL,
+                VALUE_TYPE_ITEM_REF,
+                VALUE_TYPE_TARGET_OBJECT_ID,
+                VALUE_TYPE_AUDIO_CLIP_REF,
+            });
+        }
+
+        public static bool IsSupportedAuthoringStage(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                AUTHORING_STAGE_GENERATE_BAKE,
+                AUTHORING_STAGE_POST_BAKE,
+                AUTHORING_STAGE_BOTH,
+            });
+        }
+
+        public static bool IsSupportedPostBakeEditMode(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                POST_BAKE_EDIT_MODE_EDITABLE,
+                POST_BAKE_EDIT_MODE_READ_ONLY,
+                POST_BAKE_EDIT_MODE_HIDDEN,
+            });
+        }
+
+        public static bool IsSupportedEditorControl(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                EDITOR_CONTROL_ITEM_PICKER,
+                EDITOR_CONTROL_TARGET_OBJECT_PICKER,
+                EDITOR_CONTROL_INT,
+                EDITOR_CONTROL_FLOAT,
+                EDITOR_CONTROL_STRING,
+                EDITOR_CONTROL_TOGGLE,
+                EDITOR_CONTROL_AUDIO_CLIP_PICKER,
+            });
+        }
+
+        public static bool IsSupportedEditorControlForValueType(string editorControl, string valueType)
+        {
+            string control = Normalize(editorControl);
+            if (string.IsNullOrEmpty(control))
+                return true;
+
+            string type = Normalize(valueType);
+            switch (type)
+            {
+                case VALUE_TYPE_ITEM_REF:
+                    return string.Equals(control, EDITOR_CONTROL_ITEM_PICKER, StringComparison.Ordinal);
+                case VALUE_TYPE_TARGET_OBJECT_ID:
+                    return string.Equals(control, EDITOR_CONTROL_TARGET_OBJECT_PICKER, StringComparison.Ordinal);
+                case VALUE_TYPE_INT:
+                case VALUE_TYPE_INT_RANGE:
+                    return string.Equals(control, EDITOR_CONTROL_INT, StringComparison.Ordinal);
+                case VALUE_TYPE_FLOAT:
+                    return string.Equals(control, EDITOR_CONTROL_FLOAT, StringComparison.Ordinal);
+                case VALUE_TYPE_STRING:
+                    return string.Equals(control, EDITOR_CONTROL_STRING, StringComparison.Ordinal);
+                case VALUE_TYPE_BOOL:
+                    return string.Equals(control, EDITOR_CONTROL_TOGGLE, StringComparison.Ordinal);
+                case VALUE_TYPE_AUDIO_CLIP_REF:
+                    return string.Equals(control, EDITOR_CONTROL_AUDIO_CLIP_PICKER, StringComparison.Ordinal);
+                default:
+                    return false;
+            }
+        }
+
+        public static bool IsSupportedEditorPreviewRenderer(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                EDITOR_PREVIEW_RENDERER_PATH,
+                EDITOR_PREVIEW_RENDERER_BOUNDS,
+            });
+        }
+
+        public static bool IsSupportedEditorPreviewVisualSourceKind(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) ||
+                   string.Equals(normalized, EDITOR_PREVIEW_VISUAL_OPTION_ITEM_REF, StringComparison.Ordinal);
+        }
+
+        public static bool IsSupportedDesignMode(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                GeneratedContentCatalogContracts.DESIGN_MODE_SINGLE_PREFAB,
+                GeneratedContentCatalogContracts.DESIGN_MODE_ASSEMBLED_PATH,
+                GeneratedContentCatalogContracts.DESIGN_MODE_ENVIRONMENT,
+            });
+        }
+
+        public static bool IsSupportedPlacementMode(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, new[]
+            {
+                PlacementModeIds.FILL,
+                PlacementModeIds.PERIMETER,
+                PlacementModeIds.PATH,
+                "free",
+                "guide",
+            });
+        }
+
+        public static bool IsSupportedStepConditionType(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, StepConditionRules.GetSupportedTypes());
+        }
+
+        public static bool IsSupportedReactiveConditionType(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || Contains(normalized, ReactiveConditionRules.GetSupportedTypes());
+        }
+
+        public static bool IsSupportedSystemActionId(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || SystemActionIds.IsSupportedAuthoring(normalized);
+        }
+
+        public static bool IsSupportedRuntimeEventKey(string value)
+        {
+            string normalized = Normalize(value);
+            return string.IsNullOrEmpty(normalized) || FlowTargetEventKeys.IsSupported(normalized);
+        }
+
+        public static bool IsLowerSnakeCaseToken(string value)
+        {
+            string normalized = Normalize(value);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+            if (!IsAsciiLower(normalized[0]))
+                return false;
+            if (normalized[normalized.Length - 1] == '_')
+                return false;
+
+            bool previousUnderscore = false;
+            for (int i = 0; i < normalized.Length; i++)
+            {
+                char current = normalized[i];
+                if (current == '_')
+                {
+                    if (previousUnderscore)
+                        return false;
+                    previousUnderscore = true;
+                    continue;
+                }
+
+                previousUnderscore = false;
+                if (!IsAsciiLower(current) && !IsAsciiDigit(current))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool IsStableIdentifierToken(string value)
+        {
+            string normalized = Normalize(value);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+            if (!IsAsciiLower(normalized[0]))
+                return false;
+
+            for (int i = 0; i < normalized.Length; i++)
+            {
+                char current = normalized[i];
+                if (!IsAsciiLower(current) &&
+                    !IsAsciiUpper(current) &&
+                    !IsAsciiDigit(current) &&
+                    current != '_')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool Contains(string value, string[] supported)
+        {
+            string normalized = Normalize(value);
+            string[] safeSupported = supported ?? new string[0];
+            for (int i = 0; i < safeSupported.Length; i++)
+            {
+                if (string.Equals(normalized, Normalize(safeSupported[i]), StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string Normalize(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        private static bool IsAsciiLower(char value)
+        {
+            return value >= 'a' && value <= 'z';
+        }
+
+        private static bool IsAsciiUpper(char value)
+        {
+            return value >= 'A' && value <= 'Z';
+        }
+
+        private static bool IsAsciiDigit(char value)
+        {
+            return value >= '0' && value <= '9';
+        }
     }
 
     [Serializable]
@@ -86,6 +334,10 @@ namespace Supercent.PlayableAI.Common.Contracts
         public bool required;
         public string[] requiredItemDesignCapabilities = new string[0];
         public int minIntValue;
+        public string authoringStage = string.Empty;
+        public string postBakeEditMode = string.Empty;
+        public string editorControl = string.Empty;
+        public string sourceCategory = string.Empty;
     }
 
     [Serializable]
@@ -141,6 +393,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public bool requiresItem;
         public bool requiresInputItem;
         public bool requiresCurrencyId;
+        public bool supportsAmountValue;
         public bool requiresAmountValue;
         public bool requiresSeconds;
         public bool canAbsorbArrow;
@@ -149,6 +402,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public string completionStepConditionType = string.Empty;
         public string completionGameplaySignalId = string.Empty;
         public string targetEventKey = string.Empty;
+        public bool supportsProjectedCurrencyGuide;
         public bool requiresAbsorbedArrow;
         public string requiredArrowEventKey = string.Empty;
     }
@@ -385,6 +639,10 @@ namespace Supercent.PlayableAI.Common.Contracts
                     required = value.required,
                     requiredItemDesignCapabilities = CloneStrings(value.requiredItemDesignCapabilities),
                     minIntValue = value.minIntValue,
+                    authoringStage = Normalize(value.authoringStage),
+                    postBakeEditMode = Normalize(value.postBakeEditMode),
+                    editorControl = Normalize(value.editorControl),
+                    sourceCategory = Normalize(value.sourceCategory),
                 };
             }
 
@@ -480,6 +738,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     requiresItem = value.requiresItem,
                     requiresInputItem = value.requiresInputItem,
                     requiresCurrencyId = value.requiresCurrencyId,
+                    supportsAmountValue = value.supportsAmountValue,
                     requiresAmountValue = value.requiresAmountValue,
                     requiresSeconds = value.requiresSeconds,
                     canAbsorbArrow = value.canAbsorbArrow,
@@ -488,6 +747,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     completionStepConditionType = Normalize(value.completionStepConditionType),
                     completionGameplaySignalId = Normalize(value.completionGameplaySignalId),
                     targetEventKey = Normalize(value.targetEventKey),
+                    supportsProjectedCurrencyGuide = value.supportsProjectedCurrencyGuide,
                     requiresAbsorbedArrow = value.requiresAbsorbedArrow,
                     requiredArrowEventKey = Normalize(value.requiredArrowEventKey),
                 };
@@ -704,24 +964,31 @@ namespace Supercent.PlayableAI.Common.Contracts
             string featureType = FeatureDescriptorUtility.Normalize(descriptor.featureType);
             if (!featureTypes.Add(featureType))
                 errors.Add("featureType이 중복되었습니다: " + featureType);
+            ValidateLowerSnakeToken("featureType", featureType, featureType, errors);
 
             var roles = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("role", featureType, ExtractRoles(descriptor), roles, errors);
+            ValidateLowerSnakeTokens("role", featureType, ExtractRoles(descriptor), errors);
 
             var signals = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("gameplaySignalId", featureType, ExtractSignals(descriptor), signals, errors);
+            ValidateLowerSnakeTokens("gameplaySignalId", featureType, ExtractSignals(descriptor), errors);
 
             var conditions = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("conditionKind", featureType, ExtractConditionKinds(descriptor), conditions, errors);
+            ValidateLowerSnakeTokens("conditionKind", featureType, ExtractConditionKinds(descriptor), errors);
 
             var objectives = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("objectiveKind", featureType, ExtractObjectiveKinds(descriptor), objectives, errors);
+            ValidateLowerSnakeTokens("objectiveKind", featureType, ExtractObjectiveKinds(descriptor), errors);
 
             var effects = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("effectKind", featureType, ExtractEffectKinds(descriptor), effects, errors);
+            ValidateLowerSnakeTokens("effectKind", featureType, ExtractEffectKinds(descriptor), errors);
 
             var eventKeys = new HashSet<string>(StringComparer.Ordinal);
             AddUniqueValues("eventKey", featureType, ExtractEventKeys(descriptor), eventKeys, errors);
+            ValidateLowerSnakeTokens("eventKey", featureType, ExtractEventKeys(descriptor), errors);
 
             FeatureCatalogExposure exposure = descriptor.catalogExposure ?? new FeatureCatalogExposure();
             if (exposure.exposeToAuthoring)
@@ -737,6 +1004,345 @@ namespace Supercent.PlayableAI.Common.Contracts
             ValidateSignalReferences(featureType, descriptor.objectiveKinds, signals, errors);
             ValidateRoleReferences(featureType, descriptor.compiledGameplayRoleMappings, roles, errors);
             ValidateInputOutputReferences(featureType, descriptor.inputOutputSemantics, objectives, errors);
+            ValidateOptionSchema(featureType, descriptor.optionSchema, errors);
+            ValidateTargetSurfaces(featureType, descriptor.targetSurfaces, roles, errors);
+            ValidateGameplaySignals(featureType, descriptor.gameplaySignals, eventKeys, errors);
+            ValidateConditions(featureType, descriptor.conditionKinds, roles, errors);
+            ValidateObjectives(featureType, descriptor.objectiveKinds, roles, eventKeys, errors);
+            ValidateEffects(featureType, descriptor.effectKinds, roles, errors);
+            ValidateCompiledGameplayRoleMappings(featureType, descriptor.compiledGameplayRoleMappings, roles, errors);
+            ValidateInputOutputRoles(featureType, descriptor.inputOutputSemantics, errors);
+            ValidateLayoutRequirements(featureType, descriptor.layoutRequirements, errors);
+            ValidateEditorPreview(featureType, descriptor.editorPreview, descriptor.optionSchema, errors);
+        }
+
+        private static void ValidateLowerSnakeTokens(string label, string featureType, string[] values, List<string> errors)
+        {
+            string[] safeValues = values ?? new string[0];
+            for (int i = 0; i < safeValues.Length; i++)
+                ValidateLowerSnakeToken(label, featureType, safeValues[i], errors);
+        }
+
+        private static void ValidateLowerSnakeToken(string label, string featureType, string value, List<string> errors)
+        {
+            string normalized = FeatureDescriptorUtility.Normalize(value);
+            if (string.IsNullOrEmpty(normalized))
+                return;
+            if (!FeatureDescriptorContracts.IsLowerSnakeCaseToken(normalized))
+                errors.Add(label + "는 lower_snake_case stable token이어야 합니다: " + featureType + "/" + normalized);
+        }
+
+        private static void ValidateStableIdentifierToken(string label, string featureType, string value, List<string> errors)
+        {
+            string normalized = FeatureDescriptorUtility.Normalize(value);
+            if (string.IsNullOrEmpty(normalized))
+                return;
+            if (!FeatureDescriptorContracts.IsStableIdentifierToken(normalized))
+                errors.Add(label + "는 공백/구두점이 없는 stable identifier여야 합니다: " + featureType + "/" + normalized);
+        }
+
+        private static void ValidateOptionSchema(string featureType, FeatureOptionSchema optionSchema, List<string> errors)
+        {
+            FeatureOptionFieldDescriptor[] fields = optionSchema != null
+                ? optionSchema.fields ?? new FeatureOptionFieldDescriptor[0]
+                : new FeatureOptionFieldDescriptor[0];
+            var fieldIds = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < fields.Length; i++)
+            {
+                FeatureOptionFieldDescriptor field = fields[i];
+                if (field == null)
+                    continue;
+
+                string fieldId = FeatureDescriptorUtility.Normalize(field.fieldId);
+                if (string.IsNullOrEmpty(fieldId))
+                {
+                    errors.Add("optionSchema.fields[" + i + "].fieldId가 필요합니다: " + featureType);
+                    continue;
+                }
+
+                if (!fieldIds.Add(fieldId))
+                    errors.Add("fieldId가 중복되었습니다: " + featureType + "/" + fieldId);
+                ValidateStableIdentifierToken("fieldId", featureType, fieldId, errors);
+
+                string valueType = FeatureDescriptorUtility.Normalize(field.valueType);
+                if (string.IsNullOrEmpty(valueType))
+                    errors.Add("option field valueType이 필요합니다: " + featureType + "/" + fieldId);
+                else if (!FeatureDescriptorContracts.IsSupportedValueType(valueType))
+                    errors.Add("option field valueType이 지원되지 않습니다: " + featureType + "/" + fieldId + "=" + valueType);
+
+                string authoringStage = FeatureDescriptorUtility.Normalize(field.authoringStage);
+                if (!FeatureDescriptorContracts.IsSupportedAuthoringStage(authoringStage))
+                    errors.Add("option field authoringStage가 지원되지 않습니다: " + featureType + "/" + fieldId + "=" + authoringStage);
+
+                string postBakeEditMode = FeatureDescriptorUtility.Normalize(field.postBakeEditMode);
+                if (!FeatureDescriptorContracts.IsSupportedPostBakeEditMode(postBakeEditMode))
+                    errors.Add("option field postBakeEditMode가 지원되지 않습니다: " + featureType + "/" + fieldId + "=" + postBakeEditMode);
+
+                string editorControl = FeatureDescriptorUtility.Normalize(field.editorControl);
+                if (!FeatureDescriptorContracts.IsSupportedEditorControl(editorControl))
+                    errors.Add("option field editorControl이 지원되지 않습니다: " + featureType + "/" + fieldId + "=" + editorControl);
+                else if (!FeatureDescriptorContracts.IsSupportedEditorControlForValueType(editorControl, valueType))
+                    errors.Add("option field editorControl이 valueType과 맞지 않습니다: " + featureType + "/" + fieldId + " editorControl=" + editorControl + " valueType=" + valueType);
+            }
+        }
+
+        private static void ValidateTargetSurfaces(
+            string featureType,
+            FeatureTargetSurfaceDescriptor[] targetSurfaces,
+            HashSet<string> declaredRoles,
+            List<string> errors)
+        {
+            FeatureTargetSurfaceDescriptor[] safeSurfaces = targetSurfaces ?? new FeatureTargetSurfaceDescriptor[0];
+            for (int i = 0; i < safeSurfaces.Length; i++)
+            {
+                FeatureTargetSurfaceDescriptor surface = safeSurfaces[i];
+                string role = FeatureDescriptorUtility.Normalize(surface != null ? surface.role : string.Empty);
+                if (string.IsNullOrEmpty(role))
+                {
+                    errors.Add("targetSurfaces[" + i + "].role이 필요합니다: " + featureType);
+                    continue;
+                }
+
+                if (!IsDeclaredOrCoreRole(role, declaredRoles))
+                    errors.Add("targetSurface role이 선언된 feature role 또는 core role이 아닙니다: " + featureType + "/" + role);
+            }
+        }
+
+        private static void ValidateGameplaySignals(
+            string featureType,
+            FeatureGameplaySignalDescriptor[] gameplaySignals,
+            HashSet<string> declaredEventKeys,
+            List<string> errors)
+        {
+            FeatureGameplaySignalDescriptor[] safeSignals = gameplaySignals ?? new FeatureGameplaySignalDescriptor[0];
+            for (int i = 0; i < safeSignals.Length; i++)
+            {
+                string eventKey = FeatureDescriptorUtility.Normalize(safeSignals[i] != null ? safeSignals[i].requiredTargetEventKey : string.Empty);
+                if (!string.IsNullOrEmpty(eventKey) && !declaredEventKeys.Contains(eventKey))
+                    errors.Add("gameplaySignal.requiredTargetEventKey가 선언되지 않은 eventKey를 참조합니다: " + featureType + "/" + eventKey);
+            }
+        }
+
+        private static void ValidateConditions(
+            string featureType,
+            FeatureConditionDescriptor[] conditionKinds,
+            HashSet<string> declaredRoles,
+            List<string> errors)
+        {
+            FeatureConditionDescriptor[] safeConditions = conditionKinds ?? new FeatureConditionDescriptor[0];
+            for (int i = 0; i < safeConditions.Length; i++)
+            {
+                FeatureConditionDescriptor condition = safeConditions[i];
+                string kind = FeatureDescriptorUtility.Normalize(condition != null ? condition.kind : string.Empty);
+                string stepType = FeatureDescriptorUtility.Normalize(condition != null ? condition.stepConditionType : string.Empty);
+                if (!FeatureDescriptorContracts.IsSupportedStepConditionType(stepType))
+                    errors.Add("condition stepConditionType이 지원되지 않습니다: " + featureType + "/" + kind + "=" + stepType);
+
+                string reactiveType = FeatureDescriptorUtility.Normalize(condition != null ? condition.reactiveConditionType : string.Empty);
+                if (!FeatureDescriptorContracts.IsSupportedReactiveConditionType(reactiveType))
+                    errors.Add("condition reactiveConditionType이 지원되지 않습니다: " + featureType + "/" + kind + "=" + reactiveType);
+
+                ValidateSupportedTargetRoles(featureType, "condition.supportedTargetRoles", kind, condition != null ? condition.supportedTargetRoles : null, declaredRoles, errors);
+            }
+        }
+
+        private static void ValidateObjectives(
+            string featureType,
+            FeatureObjectiveDescriptor[] objectiveKinds,
+            HashSet<string> declaredRoles,
+            HashSet<string> declaredEventKeys,
+            List<string> errors)
+        {
+            FeatureObjectiveDescriptor[] safeObjectives = objectiveKinds ?? new FeatureObjectiveDescriptor[0];
+            for (int i = 0; i < safeObjectives.Length; i++)
+            {
+                FeatureObjectiveDescriptor objective = safeObjectives[i];
+                string kind = FeatureDescriptorUtility.Normalize(objective != null ? objective.kind : string.Empty);
+                string completionType = FeatureDescriptorUtility.Normalize(objective != null ? objective.completionStepConditionType : string.Empty);
+                if (!FeatureDescriptorContracts.IsSupportedStepConditionType(completionType))
+                    errors.Add("objective completionStepConditionType이 지원되지 않습니다: " + featureType + "/" + kind + "=" + completionType);
+                if (objective != null && objective.requiresAmountValue && !objective.supportsAmountValue)
+                    errors.Add("objective requiresAmountValue는 supportsAmountValue 없이 사용할 수 없습니다: " + featureType + "/" + kind);
+
+                ValidateEventKeyReference(featureType, "objective.targetEventKey", kind, objective != null ? objective.targetEventKey : string.Empty, declaredEventKeys, errors);
+                ValidateEventKeyReference(featureType, "objective.requiredArrowEventKey", kind, objective != null ? objective.requiredArrowEventKey : string.Empty, declaredEventKeys, errors);
+                ValidateSupportedTargetRoles(featureType, "objective.supportedTargetRoles", kind, objective != null ? objective.supportedTargetRoles : null, declaredRoles, errors);
+            }
+        }
+
+        private static void ValidateEffects(
+            string featureType,
+            FeatureEffectDescriptor[] effectKinds,
+            HashSet<string> declaredRoles,
+            List<string> errors)
+        {
+            FeatureEffectDescriptor[] safeEffects = effectKinds ?? new FeatureEffectDescriptor[0];
+            for (int i = 0; i < safeEffects.Length; i++)
+            {
+                FeatureEffectDescriptor effect = safeEffects[i];
+                string kind = FeatureDescriptorUtility.Normalize(effect != null ? effect.kind : string.Empty);
+                string systemActionId = FeatureDescriptorUtility.Normalize(effect != null ? effect.systemActionId : string.Empty);
+                if (!FeatureDescriptorContracts.IsSupportedSystemActionId(systemActionId))
+                    errors.Add("effect systemActionId가 지원되지 않습니다: " + featureType + "/" + kind + "=" + systemActionId);
+
+                string runtimeEventKey = FeatureDescriptorUtility.Normalize(effect != null ? effect.runtimeEventKey : string.Empty);
+                if (!FeatureDescriptorContracts.IsSupportedRuntimeEventKey(runtimeEventKey))
+                    errors.Add("effect runtimeEventKey가 shared flow target event key가 아닙니다: " + featureType + "/" + kind + "=" + runtimeEventKey);
+
+                ValidateSupportedTargetRoles(featureType, "effect.supportedTargetRoles", kind, effect != null ? effect.supportedTargetRoles : null, declaredRoles, errors);
+            }
+        }
+
+        private static void ValidateCompiledGameplayRoleMappings(
+            string featureType,
+            FeatureCompiledGameplayRoleDescriptor[] mappings,
+            HashSet<string> declaredRoles,
+            List<string> errors)
+        {
+            FeatureCompiledGameplayRoleDescriptor[] safeMappings = mappings ?? new FeatureCompiledGameplayRoleDescriptor[0];
+            for (int i = 0; i < safeMappings.Length; i++)
+            {
+                FeatureCompiledGameplayRoleDescriptor mapping = safeMappings[i];
+                ValidateLowerSnakeToken("compiledGameplayRoleMappings.gameplayObjectId", featureType, mapping != null ? mapping.gameplayObjectId : string.Empty, errors);
+                string role = FeatureDescriptorUtility.Normalize(mapping != null ? mapping.role : string.Empty);
+                if (!string.IsNullOrEmpty(role) && !IsDeclaredOrCoreRole(role, declaredRoles))
+                    errors.Add("compiledGameplayRoleMappings.role이 선언된 feature role 또는 core role이 아닙니다: " + featureType + "/" + role);
+            }
+        }
+
+        private static void ValidateInputOutputRoles(
+            string featureType,
+            FeatureInputOutputSemantics semantics,
+            List<string> errors)
+        {
+            string[] acceptedTargetRoles = semantics != null ? semantics.acceptedTargetRoles ?? new string[0] : new string[0];
+            for (int i = 0; i < acceptedTargetRoles.Length; i++)
+            {
+                string role = FeatureDescriptorUtility.Normalize(acceptedTargetRoles[i]);
+                if (string.IsNullOrEmpty(role))
+                    continue;
+                if (!FeatureDescriptorContracts.IsLowerSnakeCaseToken(role))
+                    errors.Add("inputOutputSemantics.acceptedTargetRoles는 lower_snake_case stable token이어야 합니다: " + featureType + "/" + role);
+            }
+        }
+
+        private static void ValidateLayoutRequirements(string featureType, FeatureLayoutRequirementDescriptor layout, List<string> errors)
+        {
+            if (layout == null)
+                return;
+
+            string designMode = FeatureDescriptorUtility.Normalize(layout.designMode);
+            if (!FeatureDescriptorContracts.IsSupportedDesignMode(designMode))
+                errors.Add("layoutRequirements.designMode가 지원되지 않습니다: " + featureType + "/" + designMode);
+
+            string placementMode = FeatureDescriptorUtility.Normalize(layout.placementMode);
+            if (!FeatureDescriptorContracts.IsSupportedPlacementMode(placementMode))
+                errors.Add("layoutRequirements.placementMode가 지원되지 않습니다: " + featureType + "/" + placementMode);
+
+            ValidateLowerSnakeTokens("layoutRequirements.pathShape", featureType, layout.pathShape, errors);
+        }
+
+        private static void ValidateEditorPreview(
+            string featureType,
+            FeatureEditorPreviewDescriptor preview,
+            FeatureOptionSchema optionSchema,
+            List<string> errors)
+        {
+            if (preview == null)
+                return;
+
+            string renderer = FeatureDescriptorUtility.Normalize(preview.renderer);
+            if (!FeatureDescriptorContracts.IsSupportedEditorPreviewRenderer(renderer))
+                errors.Add("editorPreview.renderer가 지원되지 않습니다: " + featureType + "/" + renderer);
+
+            if (preview.path != null)
+            {
+                ValidateStableIdentifierToken("editorPreview.path.cellsField", featureType, preview.path.cellsField, errors);
+                ValidateStableIdentifierToken("editorPreview.path.sinkTargetField", featureType, preview.path.sinkTargetField, errors);
+                ValidateLowerSnakeToken("editorPreview.path.straightDesignSlot", featureType, preview.path.straightDesignSlot, errors);
+                ValidateLowerSnakeToken("editorPreview.path.cornerDesignSlot", featureType, preview.path.cornerDesignSlot, errors);
+            }
+
+            FeatureEditorPreviewBoundsDescriptor[] bounds = preview.bounds ?? new FeatureEditorPreviewBoundsDescriptor[0];
+            for (int i = 0; i < bounds.Length; i++)
+            {
+                ValidateStableIdentifierToken("editorPreview.bounds.field", featureType, bounds[i] != null ? bounds[i].field : string.Empty, errors);
+                ValidateLowerSnakeToken("editorPreview.bounds.zoneKind", featureType, bounds[i] != null ? bounds[i].zoneKind : string.Empty, errors);
+            }
+
+            FeatureEditorPreviewVisualSourceDescriptor visualSource = preview.visualSource;
+            string visualKind = FeatureDescriptorUtility.Normalize(visualSource != null ? visualSource.kind : string.Empty);
+            if (!FeatureDescriptorContracts.IsSupportedEditorPreviewVisualSourceKind(visualKind))
+                errors.Add("editorPreview.visualSource.kind가 지원되지 않습니다: " + featureType + "/" + visualKind);
+            if (string.Equals(visualKind, FeatureDescriptorContracts.EDITOR_PREVIEW_VISUAL_OPTION_ITEM_REF, StringComparison.Ordinal))
+            {
+                string optionFieldId = FeatureDescriptorUtility.Normalize(visualSource != null ? visualSource.optionFieldId : string.Empty);
+                if (!OptionFieldExists(optionSchema, optionFieldId))
+                    errors.Add("editorPreview.visualSource.optionFieldId가 optionSchema.fields에 없습니다: " + featureType + "/" + optionFieldId);
+            }
+        }
+
+        private static void ValidateSupportedTargetRoles(
+            string featureType,
+            string label,
+            string owner,
+            string[] roles,
+            HashSet<string> declaredRoles,
+            List<string> errors)
+        {
+            string[] safeRoles = roles ?? new string[0];
+            for (int i = 0; i < safeRoles.Length; i++)
+            {
+                string role = FeatureDescriptorUtility.Normalize(safeRoles[i]);
+                if (string.IsNullOrEmpty(role))
+                    continue;
+                if (!IsDeclaredOrCoreRole(role, declaredRoles))
+                    errors.Add(label + "이 선언된 feature role 또는 core role이 아닙니다: " + featureType + "/" + owner + "/" + role);
+            }
+        }
+
+        private static void ValidateEventKeyReference(
+            string featureType,
+            string label,
+            string owner,
+            string eventKey,
+            HashSet<string> declaredEventKeys,
+            List<string> errors)
+        {
+            string normalized = FeatureDescriptorUtility.Normalize(eventKey);
+            if (string.IsNullOrEmpty(normalized))
+                return;
+            if (!declaredEventKeys.Contains(normalized))
+                errors.Add(label + "가 선언되지 않은 eventKey를 참조합니다: " + featureType + "/" + owner + "/" + normalized);
+        }
+
+        private static bool IsDeclaredOrCoreRole(string role, HashSet<string> declaredRoles)
+        {
+            string normalized = FeatureDescriptorUtility.Normalize(role);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+            if (declaredRoles != null && declaredRoles.Contains(normalized))
+                return true;
+            return string.Equals(normalized, PromptIntentObjectRoles.PLAYER, StringComparison.Ordinal) ||
+                   string.Equals(normalized, PromptIntentObjectRoles.UNLOCK_PAD, StringComparison.Ordinal);
+        }
+
+        private static bool OptionFieldExists(FeatureOptionSchema optionSchema, string fieldId)
+        {
+            string normalized = FeatureDescriptorUtility.Normalize(fieldId);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+
+            FeatureOptionFieldDescriptor[] fields = optionSchema != null
+                ? optionSchema.fields ?? new FeatureOptionFieldDescriptor[0]
+                : new FeatureOptionFieldDescriptor[0];
+            for (int i = 0; i < fields.Length; i++)
+            {
+                if (string.Equals(FeatureDescriptorUtility.Normalize(fields[i] != null ? fields[i].fieldId : string.Empty), normalized, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         private static void AddUniqueValues(

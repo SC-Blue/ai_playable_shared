@@ -7,7 +7,7 @@ using Supercent.PlayableAI.Common.Format;
 
 namespace Supercent.PlayableAI.Generation.Editor.Validation
 {
-    internal static class FeatureOptionsSchemaValidator
+    public static class FeatureOptionsSchemaValidator
     {
         private enum JsonTokenKind
         {
@@ -45,6 +45,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 optionsJson,
                 label,
                 targetIdExists: value => spawnLookup != null && spawnLookup.ContainsKey(value),
+                itemRefIsValid: null,
                 errors: errors);
         }
 
@@ -55,11 +56,45 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             Func<string, bool> targetIdExists,
             List<string> errors)
         {
+            ValidateOptionsJson(
+                descriptor,
+                optionsJson,
+                label,
+                targetIdExists,
+                itemRefIsValid: null,
+                errors: errors);
+        }
+
+        public static void ValidateOptionsJson(
+            FeatureDescriptor descriptor,
+            string optionsJson,
+            string label,
+            Func<string, bool> targetIdExists,
+            Func<string, string, string[], bool> itemRefIsValid,
+            List<string> errors)
+        {
+            ValidateOptionsJson(
+                descriptor,
+                optionsJson,
+                label,
+                targetIdExists,
+                itemRefIsValid,
+                assetRefIsValid: null,
+                errors: errors);
+        }
+
+        public static void ValidateOptionsJson(
+            FeatureDescriptor descriptor,
+            string optionsJson,
+            string label,
+            Func<string, bool> targetIdExists,
+            Func<string, string, string[], bool> itemRefIsValid,
+            Func<string, string, string, bool> assetRefIsValid,
+            List<string> errors)
+        {
             FeatureOptionFieldDescriptor[] fields = descriptor != null && descriptor.optionSchema != null
                 ? descriptor.optionSchema.fields ?? new FeatureOptionFieldDescriptor[0]
                 : new FeatureOptionFieldDescriptor[0];
-            if (fields.Length == 0)
-                return;
 
             string trimmedJson = optionsJson != null ? optionsJson.Trim() : string.Empty;
             if (!TryParseTopLevelProperties(trimmedJson, out Dictionary<string, JsonToken> properties, out string parseError))
@@ -67,6 +102,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 AddError(errors, label + ".optionsJson 파싱 실패: " + parseError);
                 return;
             }
+
+            ValidateNoUnknownProperties(fields, properties, label, errors);
 
             for (int i = 0; i < fields.Length; i++)
             {
@@ -87,7 +124,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
                 }
 
-                ValidateToken(token, valueType, field.minIntValue, context, targetIdExists, errors);
+                ValidateToken(token, valueType, field.minIntValue, field.requiredItemDesignCapabilities, context, targetIdExists, itemRefIsValid, assetRefIsValid, errors);
             }
         }
 
@@ -95,13 +132,22 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             JsonToken token,
             string valueType,
             int minIntValue,
+            string[] requiredItemDesignCapabilities,
             string context,
             Func<string, bool> targetIdExists,
+            Func<string, string, string[], bool> itemRefIsValid,
+            Func<string, string, string, bool> assetRefIsValid,
             List<string> errors)
         {
             if (string.Equals(valueType, FeatureDescriptorContracts.VALUE_TYPE_ITEM_REF, StringComparison.Ordinal))
             {
-                ValidateItemRefToken(token, context, errors);
+                ValidateItemRefToken(token, requiredItemDesignCapabilities, context, itemRefIsValid, errors);
+                return;
+            }
+
+            if (string.Equals(valueType, FeatureDescriptorContracts.VALUE_TYPE_AUDIO_CLIP_REF, StringComparison.Ordinal))
+            {
+                ValidateAssetRefToken(token, "UnityEngine.AudioClip", context, assetRefIsValid, errors);
                 return;
             }
 
@@ -152,14 +198,94 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 return;
             }
 
-            if (string.Equals(valueType, "bool", StringComparison.Ordinal))
+            if (string.Equals(valueType, FeatureDescriptorContracts.VALUE_TYPE_STRING, StringComparison.Ordinal))
+            {
+                if (token == null || token.Kind != JsonTokenKind.String)
+                    AddError(errors, context + "은 string 값이어야 합니다.");
+
+                return;
+            }
+
+            if (string.Equals(valueType, FeatureDescriptorContracts.VALUE_TYPE_BOOL, StringComparison.Ordinal))
             {
                 if (token == null || token.Kind != JsonTokenKind.Bool)
                     AddError(errors, context + "은 bool 값이어야 합니다.");
             }
         }
 
-        private static void ValidateItemRefToken(JsonToken token, string context, List<string> errors)
+        private static void ValidateNoUnknownProperties(
+            FeatureOptionFieldDescriptor[] fields,
+            Dictionary<string, JsonToken> properties,
+            string label,
+            List<string> errors)
+        {
+            var allowed = new HashSet<string>(StringComparer.Ordinal);
+            FeatureOptionFieldDescriptor[] safeFields = fields ?? new FeatureOptionFieldDescriptor[0];
+            for (int i = 0; i < safeFields.Length; i++)
+            {
+                string fieldId = FeatureDescriptorUtility.Normalize(safeFields[i] != null ? safeFields[i].fieldId : string.Empty);
+                if (!string.IsNullOrEmpty(fieldId))
+                    allowed.Add(fieldId);
+            }
+
+            if (properties == null)
+                return;
+
+            foreach (KeyValuePair<string, JsonToken> pair in properties)
+            {
+                string key = FeatureDescriptorUtility.Normalize(pair.Key);
+                if (!string.IsNullOrEmpty(key) && !allowed.Contains(key))
+                    AddError(errors, label + ".optionsJson에 descriptor optionSchema.fields에 없는 key가 있습니다: " + key);
+            }
+        }
+
+        private static void ValidateAssetRefToken(
+            JsonToken token,
+            string expectedAssetType,
+            string context,
+            Func<string, string, string, bool> assetRefIsValid,
+            List<string> errors)
+        {
+            if (token == null || token.Kind != JsonTokenKind.Object)
+            {
+                AddError(errors, context + "은 asset reference object여야 합니다.");
+                return;
+            }
+
+            string raw = GetRaw(token);
+            if (!TryParseTopLevelProperties(raw, out Dictionary<string, JsonToken> properties, out string parseError))
+            {
+                AddError(errors, context + " asset reference 파싱 실패: " + parseError);
+                return;
+            }
+
+            string assetGuid = ReadStringProperty(properties, "assetGuid");
+            string assetPath = ReadStringProperty(properties, "assetPath");
+            string assetType = ReadStringProperty(properties, "assetType");
+            if (string.IsNullOrEmpty(assetGuid) && string.IsNullOrEmpty(assetPath))
+            {
+                AddError(errors, context + "은 assetGuid 또는 assetPath가 필요합니다.");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(assetType) &&
+                !string.Equals(assetType, expectedAssetType, StringComparison.Ordinal) &&
+                !string.Equals(assetType, "AudioClip", StringComparison.Ordinal))
+            {
+                AddError(errors, context + " assetType이 audio clip이 아닙니다: " + assetType);
+                return;
+            }
+
+            if (assetRefIsValid != null && !assetRefIsValid(assetGuid, assetPath, expectedAssetType))
+                AddError(errors, context + " asset resolve 검증에 실패했습니다.");
+        }
+
+        private static void ValidateItemRefToken(
+            JsonToken token,
+            string[] requiredItemDesignCapabilities,
+            string context,
+            Func<string, string, string[], bool> itemRefIsValid,
+            List<string> errors)
         {
             if (token == null || token.Kind != JsonTokenKind.Object)
             {
@@ -177,7 +303,16 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             string familyId = ReadStringProperty(properties, "familyId");
             string variantId = ReadStringProperty(properties, "variantId");
             if (string.IsNullOrEmpty(familyId) || string.IsNullOrEmpty(variantId))
+            {
                 AddError(errors, context + "은 familyId와 variantId가 모두 필요합니다.");
+                return;
+            }
+
+            if (itemRefIsValid != null &&
+                !itemRefIsValid(familyId, variantId, requiredItemDesignCapabilities ?? new string[0]))
+            {
+                AddError(errors, context + "이 catalog item 또는 required capability 검증에 실패했습니다: " + familyId + "/" + variantId);
+            }
         }
 
         private static void ValidateIntRangeToken(JsonToken token, int minIntValue, string context, List<string> errors)

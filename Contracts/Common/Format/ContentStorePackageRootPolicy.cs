@@ -34,6 +34,7 @@ namespace Supercent.PlayableAI.Common.Format
         public bool isFeatureRuntimePackage;
         public bool isFeatureVariantPackage;
         public bool isSharedPackage;
+        public bool isAssetStorePackage;
 
         public static ContentStorePackageRootPolicy Resolve(
             string themeId,
@@ -49,8 +50,9 @@ namespace Supercent.PlayableAI.Common.Format
             string normalizedFeatureType = FirstNonEmpty(Normalize(featureType), Normalize(objectId));
             string normalizedObjectId = Normalize(objectId);
             string normalizedDesignId = FirstNonEmpty(Normalize(designId), "basic");
-            string packageId = ResolvePackageId(normalizedThemeId, normalizedBoundary, category, normalizedObjectId, normalizedDesignId, normalizedFeatureType);
-            string primaryRoot = FirstNonEmpty(NormalizeAssetPath(installedPath).TrimEnd('/'), ResolvePrimaryRoot(normalizedThemeId, normalizedBoundary, normalizedObjectId, normalizedDesignId, normalizedFeatureType));
+            string normalizedCategory = ContentStoreTaxonomyRules.ResolveSharedCategoryPathToken(category);
+            string packageId = ResolvePackageId(normalizedThemeId, normalizedBoundary, normalizedCategory, normalizedObjectId, normalizedDesignId, normalizedFeatureType);
+            string primaryRoot = FirstNonEmpty(NormalizeAssetPath(installedPath).TrimEnd('/'), ResolvePrimaryRoot(normalizedThemeId, normalizedBoundary, normalizedCategory, normalizedObjectId, normalizedDesignId, normalizedFeatureType));
             var roots = new List<string>();
             var referenceRoots = new List<string>();
             AddRoot(roots, primaryRoot);
@@ -62,13 +64,16 @@ namespace Supercent.PlayableAI.Common.Format
                 featureType = normalizedFeatureType,
                 themeId = normalizedThemeId,
                 designId = normalizedDesignId,
+                isAssetStorePackage = ContentStoreTaxonomyRules.IsAssetStoreBoundary(normalizedBoundary),
                 isBuiltInPackage = ContentStoreTaxonomyRules.IsBuiltInBoundary(normalizedBoundary),
                 isFeatureRuntimePackage = ContentStoreTaxonomyRules.IsFeatureRuntimeBoundary(normalizedBoundary),
                 isFeatureVariantPackage = ContentStoreTaxonomyRules.IsFeatureBoundary(normalizedBoundary),
                 isSharedPackage = ContentStoreTaxonomyRules.IsSharedBoundary(normalizedBoundary),
             };
             policy.isFeaturePackage = policy.isFeatureRuntimePackage || policy.isFeatureVariantPackage;
-            policy.packageKind = policy.isSharedPackage
+            policy.packageKind = policy.isAssetStorePackage
+                ? ContentStorePackageKindIds.AssetStore
+                : policy.isSharedPackage
                 ? ContentStorePackageKindIds.SharedAsset
                 : policy.isFeatureRuntimePackage
                     ? ContentStorePackageKindIds.FeatureRuntime
@@ -77,6 +82,12 @@ namespace Supercent.PlayableAI.Common.Format
                         : policy.isBuiltInPackage
                             ? ContentStorePackageKindIds.BuiltIn
                             : normalizedBoundary;
+
+            if (policy.isAssetStorePackage)
+            {
+                policy.sharedPackageRoot = primaryRoot;
+                AddRoot(referenceRoots, policy.sharedPackageRoot);
+            }
 
             if (policy.isFeatureRuntimePackage)
             {
@@ -115,15 +126,19 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string normalizedBoundary = Normalize(boundary).Trim('/');
             string normalizedThemeId = ContentStoreTaxonomyRules.ResolveThemeContentPathToken(themeId);
+            string normalizedCategory = ContentStoreTaxonomyRules.ResolveSharedCategoryPathToken(category).Trim('/');
             string normalizedObjectId = Normalize(objectId).Trim('/');
             string normalizedDesignId = FirstNonEmpty(Normalize(designId).Trim('/'), "basic");
             string normalizedFeatureType = FirstNonEmpty(Normalize(featureType), normalizedObjectId);
+
+            if (ContentStoreTaxonomyRules.IsAssetStoreBoundary(normalizedBoundary))
+                return "asset_store/sounds/" + normalizedObjectId;
 
             if (ContentStoreTaxonomyRules.IsFeatureRuntimeBoundary(normalizedBoundary))
                 return "feature_runtime/" + normalizedFeatureType;
 
             if (ContentStoreTaxonomyRules.IsSharedBoundary(normalizedBoundary))
-                return "shared/" + normalizedThemeId + "/assets/theme/all";
+                return "shared/" + normalizedThemeId + "/" + normalizedCategory + "/" + normalizedObjectId + "/" + normalizedDesignId;
 
             if (ContentStoreTaxonomyRules.IsFeatureBoundary(normalizedBoundary))
             {
@@ -140,6 +155,7 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string normalized = NormalizeAssetPath(packageId).Trim('/');
             if (string.IsNullOrWhiteSpace(normalized) ||
+                normalized.StartsWith("asset_store/", StringComparison.Ordinal) ||
                 normalized.StartsWith("feature_runtime/", StringComparison.Ordinal) ||
                 normalized.StartsWith("shared/", StringComparison.Ordinal))
             {
@@ -157,6 +173,9 @@ namespace Supercent.PlayableAI.Common.Format
         public static string ResolveMarkerRoot(string packageId)
         {
             string normalizedPackageId = NormalizePackageId(packageId);
+            if (normalizedPackageId.StartsWith("asset_store/", StringComparison.Ordinal))
+                return "Assets/AIPS/AssetStore/.store_installed";
+
             if (normalizedPackageId.StartsWith("feature_runtime/", StringComparison.Ordinal))
             {
                 string featureType = ResolveRuntimeFeatureType(normalizedPackageId);
@@ -189,6 +208,8 @@ namespace Supercent.PlayableAI.Common.Format
         {
             string normalizedPackageId = NormalizePackageId(packageId);
             string[] parts = normalizedPackageId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 1 && string.Equals(parts[0], "asset_store", StringComparison.Ordinal))
+                return string.Empty;
             if (parts.Length >= 2 && string.Equals(parts[0], "shared", StringComparison.Ordinal))
                 return ContentStoreTaxonomyRules.ResolveThemeContentPathToken(parts[1]);
             if (parts.Length >= 1 && !string.Equals(parts[0], "shared", StringComparison.Ordinal) && !string.Equals(parts[0], "feature_runtime", StringComparison.Ordinal))
@@ -199,6 +220,26 @@ namespace Supercent.PlayableAI.Common.Format
         public static bool IsSharedPackageId(string packageId)
         {
             return NormalizePackageId(packageId).StartsWith("shared/", StringComparison.Ordinal);
+        }
+
+        public static bool IsAssetStorePackageId(string packageId)
+        {
+            return NormalizePackageId(packageId).StartsWith("asset_store/", StringComparison.Ordinal);
+        }
+
+        public static bool IsSoundAssetPackageId(string packageId)
+        {
+            return NormalizePackageId(packageId).StartsWith("asset_store/sounds/", StringComparison.Ordinal);
+        }
+
+        public static string ResolveSoundAssetKey(string packageId)
+        {
+            string[] parts = NormalizePackageId(packageId).Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 3 &&
+                string.Equals(parts[0], "asset_store", StringComparison.Ordinal) &&
+                string.Equals(parts[1], "sounds", StringComparison.Ordinal)
+                ? parts[2]
+                : string.Empty;
         }
 
         public static bool IsFeatureRuntimePackageId(string packageId)
@@ -228,6 +269,8 @@ namespace Supercent.PlayableAI.Common.Format
         public static string[] ResolvePrimaryRootPrefixes(string themeId, string boundary, string category)
         {
             string normalizedBoundary = Normalize(boundary).Trim('/');
+            if (ContentStoreTaxonomyRules.IsAssetStoreBoundary(normalizedBoundary))
+                return new[] { "Assets/AIPS/AssetStore/Sounds/" };
             if (ContentStoreTaxonomyRules.IsFeatureRuntimeBoundary(normalizedBoundary))
                 return new[] { "Assets/AIPS/Features/runtime/" };
             if (ContentStoreTaxonomyRules.IsSharedBoundary(normalizedBoundary))
@@ -269,12 +312,14 @@ namespace Supercent.PlayableAI.Common.Format
             return (path ?? string.Empty).Trim().Replace('\\', '/');
         }
 
-        private static string ResolvePrimaryRoot(string themeId, string boundary, string objectId, string designId, string featureType)
+        private static string ResolvePrimaryRoot(string themeId, string boundary, string category, string objectId, string designId, string featureType)
         {
+            if (ContentStoreTaxonomyRules.IsAssetStoreBoundary(boundary))
+                return "Assets/AIPS/AssetStore/Sounds/" + objectId;
             if (ContentStoreTaxonomyRules.IsFeatureRuntimeBoundary(boundary))
                 return "Assets/AIPS/Features/runtime/" + featureType;
             if (ContentStoreTaxonomyRules.IsSharedBoundary(boundary))
-                return "Assets/AIPS/Shared/" + themeId;
+                return "Assets/AIPS/Shared/" + themeId + "/" + category + "/" + objectId + "/" + designId;
             if (ContentStoreTaxonomyRules.IsFeatureBoundary(boundary))
                 return "Assets/AIPS/Contents/" + themeId + "/features/" + featureType + "/" + designId;
             return "Assets/AIPS/Contents/" + themeId + "/built_in/" + objectId + "/" + designId;

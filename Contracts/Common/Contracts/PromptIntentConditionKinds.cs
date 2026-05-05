@@ -8,6 +8,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string STAGE_COMPLETED = "stage_completed";
         public const string BALANCE_AT_LEAST = "balance_at_least";
         public const string UNLOCK_COMPLETED = "unlock_completed";
+        public const string CAPABILITY_LEVEL_AT_LEAST = "capability_level_at_least";
 
         public static string[] GetSupportedKinds()
         {

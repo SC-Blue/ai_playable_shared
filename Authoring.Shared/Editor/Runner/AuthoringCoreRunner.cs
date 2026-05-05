@@ -21,7 +21,6 @@ namespace PlayableAI.AuthoringCore
         public PlayableFailureCode FailureCode = PlayableFailureCode.InvalidValue;
         public string Message = string.Empty;
         public List<string> Errors = new List<string>();
-        public List<string> Warnings = new List<string>();
         public PlayablePromptIntent Intent = null;
         public PlayableScenarioModel Model = null;
         public CompiledPlayablePlan Plan = null;
@@ -130,7 +129,8 @@ namespace PlayableAI.AuthoringCore
             ScenarioModelLoweringResult lowering = ScenarioModelLoweringCompiler.Compile(modelBuild.Model, catalog, layoutSpec);
             if (!lowering.IsValid)
                 return Fail(result, GenerationStageNames.LOWERING, lowering.FailureCode, lowering.Message, lowering.Errors);
-            AddWarnings(result.Warnings, lowering.Warnings);
+            if (HasWarnings(lowering.Warnings))
+                return Fail(result, GenerationStageNames.LOWERING, PlayableFailureCode.InvalidValue, "lowering blocker가 있습니다.", lowering.Warnings);
 
             result.Plan = lowering.Plan;
 
@@ -138,28 +138,31 @@ namespace PlayableAI.AuthoringCore
             if (!audit.IsValid)
                 return Fail(result, GenerationStageNames.INTENT_AUDIT, audit.FailureCode, audit.Message, audit.Errors);
 
-            if (profile == AuthoringCoreExecutionProfile.Validate)
-                return Success(result, GenerationStageNames.INTENT_AUDIT, "검증이 완료되었습니다.");
-
             CompiledPlayablePlanValidationResult compiledValidation = CompiledPlayablePlanValidator.Validate(lowering.Plan, catalog, layoutSpec);
             if (!compiledValidation.IsValid)
                 return Fail(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, compiledValidation.FailureCode, compiledValidation.Message, compiledValidation.Errors);
+            if (HasWarnings(compiledValidation.Warnings))
+                return Fail(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, PlayableFailureCode.InvalidValue, "compiled plan blocker가 있습니다.", compiledValidation.Warnings);
 
-            AddWarnings(result.Warnings, compiledValidation.Warnings);
+            if (profile == AuthoringCoreExecutionProfile.Validate)
+                return Success(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, "검증이 완료되었습니다.");
+
             return Success(result, GenerationStageNames.COMPILED_PLAN_VALIDATION, "검증 및 컴파일이 완료되었습니다.");
         }
 
-        private static void AddWarnings(List<string> target, IReadOnlyList<string> warnings)
+        private static bool HasWarnings(IReadOnlyList<string> warnings)
         {
-            if (target == null || warnings == null)
-                return;
+            if (warnings == null)
+                return false;
 
             for (int i = 0; i < warnings.Count; i++)
             {
                 string warning = warnings[i] ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(warning) && !target.Contains(warning))
-                    target.Add(warning);
+                if (!string.IsNullOrWhiteSpace(warning))
+                    return true;
             }
+
+            return false;
         }
 
         private static AuthoringCoreExecutionProfile ResolveProfile(string mode)

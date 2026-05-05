@@ -29,7 +29,6 @@ namespace PlayableAI.AuthoringCore
         public string Stage = string.Empty;
         public string Message = string.Empty;
         public string[] Blockers = new string[0];
-        public string[] Warnings = new string[0];
         public string validationPath = string.Empty;
         public string[] completedStages = new string[0];
         public string terminalStageKind = string.Empty;
@@ -93,7 +92,6 @@ namespace PlayableAI.AuthoringCore
             DraftLayoutPreflightDiagnostic[] filteredDiagnostics = FilterOverlapDiagnostics(diagnostics);
             result.diagnostics = filteredDiagnostics;
             result.Blockers = BuildDisplayMessages(result.diagnostics, "blocker");
-            result.Warnings = BuildDisplayMessages(result.diagnostics, "warning");
             result.IsValid = result.Blockers.Length == 0;
             if (string.IsNullOrWhiteSpace(result.Message))
             {
@@ -151,12 +149,6 @@ namespace PlayableAI.AuthoringCore
             {
                 ApplyFailure(result, runResult.Stage, runResult.Message, runResult.Errors, diagnostics);
                 return;
-            }
-
-            if (runResult.Warnings != null)
-            {
-                for (int i = 0; i < runResult.Warnings.Count; i++)
-                    AddDiagnostic(diagnostics, "warning", GenerationStageNames.COMPILED_PLAN_VALIDATION, runResult.Warnings[i]);
             }
 
             result.Stage = GenerationStageNames.COMPILED_PLAN_VALIDATION;

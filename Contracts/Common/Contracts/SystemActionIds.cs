@@ -9,6 +9,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string FOCUS_CAMERA_ON_TARGET = "focus_camera_on_target";
         public const string SHOW_ARROW_ON_TARGET = "show_arrow_on_target";
         public const string HIDE_GUIDE = "hide_guide";
+        public const string SET_CAPABILITY_LEVEL = "set_capability_level";
         public const string ENDCARD_UI_OBJECT_ID = "endcard_ui";
         public const string RUNTIME_TARGET_SEPARATOR = "::";
 

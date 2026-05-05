@@ -50,6 +50,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public bool requiresItem;
         public bool requiresInputItem;
         public bool requiresCurrencyId;
+        public bool supportsAmountValue;
         public bool requiresAmountValue;
         public bool requiresSeconds;
         public bool canAbsorbArrow;
@@ -109,12 +110,13 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.STAGE_COMPLETED, summary = "Enter after previous stage completion", supportsStageId = true, requiresStageId = true, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.BALANCE_AT_LEAST, summary = "Enter when balance reaches threshold", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = false, requiresTargetObjectId = false, supportsItem = false, requiresItem = false, supportsCurrencyId = true, requiresCurrencyId = true, supportsAmountValue = true, requiresPositiveAmountValue = true },
             new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.UNLOCK_COMPLETED, summary = "Unlock pad completed", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = false, requiresPositiveAmountValue = false },
+            new PromptIntentConditionKindDescriptor { value = PromptIntentConditionKinds.CAPABILITY_LEVEL_AT_LEAST, summary = "Enter when a generic runtime capability reaches a level", supportsStageId = false, requiresStageId = false, supportsTargetObjectId = true, requiresTargetObjectId = true, supportsItem = false, requiresItem = false, supportsCurrencyId = false, requiresCurrencyId = false, supportsAmountValue = true, requiresPositiveAmountValue = false },
         };
 
         private static readonly PromptIntentObjectiveKindDescriptor[] OBJECTIVE_KINDS =
         {
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.UNLOCK_OBJECT, summary = "Interact with unlock pad", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, requiresAmountValue = true, requiresSeconds = false, canAbsorbArrow = true },
-            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.WAIT_SECONDS, summary = "Wait for specified duration", requiresTargetObjectId = false, requiresItem = false, requiresInputItem = false, requiresCurrencyId = false, requiresAmountValue = false, requiresSeconds = true, canAbsorbArrow = false },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.UNLOCK_OBJECT, summary = "Interact with unlock pad", requiresTargetObjectId = true, requiresItem = false, requiresInputItem = false, requiresCurrencyId = true, supportsAmountValue = true, requiresAmountValue = true, requiresSeconds = false, canAbsorbArrow = true },
+            new PromptIntentObjectiveKindDescriptor { value = PromptIntentObjectiveKinds.WAIT_SECONDS, summary = "Wait for specified duration", requiresTargetObjectId = false, requiresItem = false, requiresInputItem = false, requiresCurrencyId = false, supportsAmountValue = false, requiresAmountValue = false, requiresSeconds = true, canAbsorbArrow = false },
         };
 
         private static readonly PromptIntentEffectKindDescriptor[] EFFECT_KINDS =
@@ -127,6 +129,7 @@ namespace Supercent.PlayableAI.Common.Contracts
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.REVEAL_ENDCARD, summary = "Reveal endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.END_GAME, summary = "End game immediately and trigger CTA without endcard", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
             new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.HIDE_GUIDE, summary = "Hide guide", requiresTargetObjectId = false, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = true },
+            new PromptIntentEffectKindDescriptor { value = PromptIntentEffectKinds.SET_CAPABILITY_LEVEL, summary = "Set a generic runtime capability level", requiresTargetObjectId = true, supportsTiming = false, requiresEventKey = false, supportsEventKey = false, isNonBlockingSystemAction = false },
         };
 
         private static readonly PromptIntentValueDescriptor[] EFFECT_TIMING_KINDS =
@@ -410,7 +413,7 @@ namespace Supercent.PlayableAI.Common.Contracts
         public static bool ObjectiveSupportsAmountValue(string kind)
         {
             PromptIntentObjectiveKindDescriptor descriptor = FindObjectiveKind(kind);
-            return descriptor != null && descriptor.requiresAmountValue;
+            return descriptor != null && (descriptor.supportsAmountValue || descriptor.requiresAmountValue);
         }
 
         public static bool ObjectiveRequiresPositiveAmountValue(string kind)
@@ -770,6 +773,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                     requiresItem = values[i].requiresItem,
                     requiresInputItem = values[i].requiresInputItem,
                     requiresCurrencyId = values[i].requiresCurrencyId,
+                    supportsAmountValue = values[i].supportsAmountValue,
                     requiresAmountValue = values[i].requiresAmountValue,
                     requiresSeconds = values[i].requiresSeconds,
                     canAbsorbArrow = values[i].canAbsorbArrow,

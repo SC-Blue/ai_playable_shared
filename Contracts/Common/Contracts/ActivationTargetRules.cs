@@ -23,12 +23,24 @@ namespace Supercent.PlayableAI.Common.Contracts
                 case ActivationTargetKinds.SCENE_REF:
                     return null;
                 case ActivationTargetKinds.SYSTEM_ACTION:
+                    if (string.Equals(Normalize(target.id), SystemActionIds.SET_CAPABILITY_LEVEL, StringComparison.Ordinal))
+                    {
+                        if (string.IsNullOrWhiteSpace(target.capabilityId))
+                            return label + ".capabilityId가 필요합니다.";
+                        return target.level < 0 ? label + ".level은 0 이상이어야 합니다." : null;
+                    }
+
                     return SystemActionIds.IsSupportedRuntimeTargetId(target.id)
                         ? null
                         : label + ".id '" + target.id + "'는 지원하지 않는 system action입니다.";
                 default:
                     return label + ".kind '" + kind + "'는 지원하지 않습니다.";
             }
+        }
+
+        private static string Normalize(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
         }
     }
 

@@ -57,6 +57,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             ValidateFirstBeatGating(model.stages, plan.beats, result);
             ValidateIntroBeatSequencing(model.stages, plan.beats, plan.actions, result);
             ValidateStageInternalBeatSequencing(model.stages, plan.beats, plan.actions, result);
+            ValidateDescriptorSemanticEffectLowering(model.stages, model.objects, plan.actions, result);
             ValidateStageCompletedEntryRules(model.stages, plan.beats, plan.actions, plan.stageFirstBeatIds, result);
             ValidateUnlockStageCompletionRules(model.stages, plan.unlocks, plan.beats, plan.actions, result);
             return FinalizeResult(result);
@@ -209,6 +210,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
                 List<string> introBeatIds = BuildEntryFocusBeatIds(stage);
                 List<string> entryGuideBeatIds = BuildEntryGuideBeatIds(stage);
+                List<string> entryFeatureActionBeatIds = BuildEntryFeatureActionBeatIds(stage);
                 for (int introIndex = 1; introIndex < introBeatIds.Count; introIndex++)
                 {
                     string prerequisiteActionId = GetPrimaryOwnedActionId(actions, introBeatIds[introIndex - 1], FlowActionKinds.CAMERA_FOCUS);
@@ -243,9 +245,29 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     }
                 }
 
-                string lastEntrySetupBeatId = entryGuideBeatIds.Count > 0
+                string expectedFirstFeatureActionPrerequisite = entryGuideBeatIds.Count > 0
                     ? entryGuideBeatIds[entryGuideBeatIds.Count - 1]
                     : (introBeatIds.Count > 0 ? introBeatIds[introBeatIds.Count - 1] : string.Empty);
+                if (entryFeatureActionBeatIds.Count > 0)
+                {
+                    if (!string.IsNullOrEmpty(expectedFirstFeatureActionPrerequisite) &&
+                        !HasBeatCompletedEnterWhen(beatById, entryFeatureActionBeatIds[0], expectedFirstFeatureActionPrerequisite))
+                    {
+                        Fail(result, "stages[" + i + "]의 첫 descriptor semantic feature action beat는 마지막 entry setup beat 이후에만 시작되어야 합니다.");
+                    }
+
+                    for (int featureActionIndex = 1; featureActionIndex < entryFeatureActionBeatIds.Count; featureActionIndex++)
+                    {
+                        if (!HasBeatCompletedEnterWhen(beatById, entryFeatureActionBeatIds[featureActionIndex], entryFeatureActionBeatIds[featureActionIndex - 1]))
+                        {
+                            Fail(result, "stages[" + i + "]의 descriptor semantic feature action beat는 이전 feature action beat 완료 후에만 시작되어야 합니다.");
+                        }
+                    }
+                }
+
+                string lastEntrySetupBeatId = entryFeatureActionBeatIds.Count > 0
+                    ? entryFeatureActionBeatIds[entryFeatureActionBeatIds.Count - 1]
+                    : expectedFirstFeatureActionPrerequisite;
 
                 if (string.IsNullOrEmpty(lastEntrySetupBeatId))
                     continue;
@@ -439,6 +461,92 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                 }
 
             }
+        }
+
+        private static void ValidateDescriptorSemanticEffectLowering(
+            ScenarioModelStageDefinition[] stages,
+            ScenarioModelObjectDefinition[] objects,
+            FlowActionDefinition[] actions,
+            IntentAuditValidationResult result)
+        {
+            Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
+            ScenarioModelStageDefinition[] safeStages = stages ?? new ScenarioModelStageDefinition[0];
+            for (int stageIndex = 0; stageIndex < safeStages.Length; stageIndex++)
+            {
+                ScenarioModelStageDefinition stage = safeStages[stageIndex];
+                if (stage == null || string.IsNullOrWhiteSpace(stage.id))
+                    continue;
+
+                string stageId = stage.id.Trim();
+                ScenarioModelEffectDefinition[] effects = stage.entryEffects ?? new ScenarioModelEffectDefinition[0];
+                for (int effectIndex = 0; effectIndex < effects.Length; effectIndex++)
+                {
+                    ScenarioModelEffectDefinition effect = effects[effectIndex];
+                    if (effect == null || !TryResolveDescriptorSemanticActionKind(effect.kind, out string actionKind))
+                        continue;
+
+                    string beatId = stageId + "__entry_feature_action_" + effectIndex.ToString("00");
+                    if (!TryGetOwnedAction(actions, beatId, actionKind, out FlowActionDefinition action))
+                    {
+                        Fail(result, "stages[" + stageIndex + "].entryEffects[" + effectIndex + "] descriptor semantic effect '" + effect.kind + "'가 feature action '" + actionKind + "'으로 lowering되지 않았습니다.");
+                        continue;
+                    }
+
+                    string expectedTargetId = ResolveExpectedFeatureActionTargetId(spawnKeys, effect.targetObjectId);
+                    string actualTargetId = action.payload != null && action.payload.featureAction != null
+                        ? (action.payload.featureAction.targetId ?? string.Empty).Trim()
+                        : string.Empty;
+                    if (!string.Equals(expectedTargetId, actualTargetId, StringComparison.Ordinal))
+                    {
+                        Fail(result, "stages[" + stageIndex + "].entryEffects[" + effectIndex + "] feature action targetId가 descriptor targetObjectId와 같은 spawn으로 lowering되지 않았습니다. expected='" + expectedTargetId + "', actual='" + actualTargetId + "'.");
+                    }
+
+                    string expectedEventKey = IntentAuthoringUtility.Normalize(effect.eventKey);
+                    string actualEventKey = action.payload != null && action.payload.featureAction != null
+                        ? IntentAuthoringUtility.Normalize(action.payload.featureAction.eventKey)
+                        : string.Empty;
+                    if (!string.Equals(expectedEventKey, actualEventKey, StringComparison.Ordinal))
+                    {
+                        Fail(result, "stages[" + stageIndex + "].entryEffects[" + effectIndex + "] feature action eventKey가 descriptor effect와 같은 값으로 lowering되지 않았습니다.");
+                    }
+                }
+            }
+        }
+
+        private static bool TryResolveDescriptorSemanticActionKind(string effectKind, out string actionKind)
+        {
+            actionKind = string.Empty;
+            string normalizedEffectKind = IntentAuthoringUtility.Normalize(effectKind);
+            if (string.IsNullOrEmpty(normalizedEffectKind))
+                return false;
+            if (PromptIntentCapabilityRegistry.TryGetEffectSystemActionAuthoringId(normalizedEffectKind, out string _))
+                return false;
+            if (PromptIntentCapabilityRegistry.EffectBuildsActivationTarget(normalizedEffectKind))
+                return false;
+
+            string[] semanticTags = PromptIntentCapabilityRegistry.GetEffectSemanticTags(normalizedEffectKind);
+            for (int i = 0; i < semanticTags.Length; i++)
+            {
+                string tag = IntentAuthoringUtility.Normalize(semanticTags[i]);
+                if (string.IsNullOrEmpty(tag))
+                    continue;
+
+                actionKind = tag;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string ResolveExpectedFeatureActionTargetId(Dictionary<string, string> spawnKeys, string targetObjectId)
+        {
+            string normalizedTargetObjectId = IntentAuthoringUtility.Normalize(targetObjectId);
+            if (string.IsNullOrEmpty(normalizedTargetObjectId))
+                return string.Empty;
+
+            return spawnKeys != null && spawnKeys.TryGetValue(normalizedTargetObjectId, out string spawnKey)
+                ? spawnKey
+                : IntentAuthoringUtility.BuildSpawnKey(normalizedTargetObjectId);
         }
 
         private static Dictionary<string, FlowBeatDefinition> BuildBeatLookup(FlowBeatDefinition[] beats)
@@ -831,6 +939,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
             if (PromptIntentCapabilityRegistry.EffectBuildsSystemActionTarget(kind) &&
                 PromptIntentCapabilityRegistry.TryGetEffectSystemActionAuthoringId(kind, out string _))
             {
+                if (string.Equals(kind, PromptIntentEffectKinds.SET_CAPABILITY_LEVEL, StringComparison.Ordinal))
+                    return ActivationTargetKinds.SYSTEM_ACTION + ":" + SystemActionIds.SET_CAPABILITY_LEVEL;
+
                 return ActivationTargetKinds.SYSTEM_ACTION + ":" + IntentAuthoringUtility.BuildRuntimeSystemActionTargetId(kind, string.Empty);
             }
 
@@ -911,11 +1022,21 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
 
         private static string ResolveLastEntrySetupBeatId(ScenarioModelStageDefinition stage)
         {
+            string lastEntryFeatureActionBeatId = ResolveLastEntryFeatureActionBeatId(stage);
+            if (!string.IsNullOrEmpty(lastEntryFeatureActionBeatId))
+                return lastEntryFeatureActionBeatId;
+
             string lastEntryGuideBeatId = ResolveLastEntryGuideBeatId(stage);
             if (!string.IsNullOrEmpty(lastEntryGuideBeatId))
                 return lastEntryGuideBeatId;
 
             return ResolveLastEntryFocusBeatId(stage);
+        }
+
+        private static string ResolveLastEntryFeatureActionBeatId(ScenarioModelStageDefinition stage)
+        {
+            List<string> beatIds = BuildEntryFeatureActionBeatIds(stage);
+            return beatIds.Count == 0 ? string.Empty : beatIds[beatIds.Count - 1];
         }
 
         private static string ResolveLastEntryGuideBeatId(ScenarioModelStageDefinition stage)
@@ -1225,6 +1346,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Validation
                     continue;
 
                 beatIds.Add(stageId + "__entry_guide_" + i.ToString("00"));
+            }
+
+            return beatIds;
+        }
+
+        private static List<string> BuildEntryFeatureActionBeatIds(ScenarioModelStageDefinition stage)
+        {
+            var beatIds = new List<string>();
+            if (stage == null || string.IsNullOrWhiteSpace(stage.id))
+                return beatIds;
+
+            string stageId = stage.id.Trim();
+            ScenarioModelEffectDefinition[] entryEffects = stage.entryEffects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < entryEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = entryEffects[i];
+                if (effect == null || !TryResolveDescriptorSemanticActionKind(effect.kind, out string _))
+                    continue;
+
+                beatIds.Add(stageId + "__entry_feature_action_" + i.ToString("00"));
             }
 
             return beatIds;

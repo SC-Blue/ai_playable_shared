@@ -31,6 +31,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         public UnlockDefinition UnlockDefinition;
     }
 
+    internal sealed class ObjectiveGuideCapability
+    {
+        public string TargetEventKey;
+        public string CompletionStepConditionType;
+        public string CompletionGameplaySignalId;
+        public bool SupportsProjectedCurrencyGuide;
+    }
+
     public static class ScenarioModelLoweringCompiler
     {
         public static ScenarioModelLoweringResult Compile(PlayableScenarioModel model, PlayableObjectCatalog catalog)
@@ -62,6 +70,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, SerializableVector3> positions = LayoutSpecGeometryUtility.BuildPositionLookup(objects, layoutSpec, result.Errors);
             Dictionary<string, string> spawnKeys = BuildSpawnKeyLookup(objects);
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId = BuildSaleValueLookup(model.saleValues);
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities = BuildObjectiveGuideCapabilities(catalog);
             FeatureOutputItemDefinition[] featureOutputItems = BuildFeatureOutputItems(model, spawnKeys, result);
             Dictionary<string, ItemRef> outputItemsByTargetId = BuildFeatureOutputItemLookup(featureOutputItems);
             Dictionary<string, LoweredStageState> stageStatesById = new Dictionary<string, LoweredStageState>(StringComparer.Ordinal);
@@ -75,7 +84,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (stage == null)
                     continue;
 
-                LoweredStageState loweredStage = LowerStage(stage, previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, result);
+                LoweredStageState loweredStage = LowerStage(stage, FindNextStage(stages, i), FindNthNextStage(stages, i, 2), previousStageId, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, objectiveGuideCapabilities, result);
                 if (loweredStage == null)
                     continue;
 
@@ -154,10 +163,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             ScenarioModelLoweringResult result)
         {
             ContentSelectionDefinition[] safeSelections = selections ?? new ContentSelectionDefinition[0];
-            if (safeSelections.Length == 0)
-                return new ContentSelectionDefinition[0];
-
             var compiledSelections = new List<ContentSelectionDefinition>();
+            var selectedObjectIds = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < safeSelections.Length; i++)
             {
                 ContentSelectionDefinition selection = safeSelections[i];
@@ -191,9 +198,44 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     designId = designId,
                     designIndex = resolvedDesignIndex,
                 });
+                selectedObjectIds.Add(objectId);
             }
 
+            AppendMissingRequiredContentSelections(compiledSelections, selectedObjectIds, catalog, result);
             return compiledSelections.ToArray();
+        }
+
+        private static void AppendMissingRequiredContentSelections(
+            List<ContentSelectionDefinition> compiledSelections,
+            HashSet<string> selectedObjectIds,
+            PlayableObjectCatalog catalog,
+            ScenarioModelLoweringResult result)
+        {
+            if (compiledSelections == null || selectedObjectIds == null || catalog == null)
+                return;
+
+            for (int i = 0; i < ContentSelectionRules.REQUIRED_OBJECT_IDS.Length; i++)
+            {
+                string objectId = IntentAuthoringUtility.Normalize(ContentSelectionRules.REQUIRED_OBJECT_IDS[i]);
+                if (string.IsNullOrEmpty(objectId) || selectedObjectIds.Contains(objectId))
+                    continue;
+
+                if (!catalog.TryResolveContentSelectionDesign(objectId, 0, out DesignVariantEntry design, out int resolvedDesignIndex) ||
+                    design == null ||
+                    string.IsNullOrWhiteSpace(design.designId))
+                {
+                    result.Errors.Add("필수 UI content '" + objectId + "'의 기본 catalog design을 해석하지 못했습니다.");
+                    continue;
+                }
+
+                compiledSelections.Add(new ContentSelectionDefinition
+                {
+                    objectId = objectId,
+                    designId = IntentAuthoringUtility.Normalize(design.designId),
+                    designIndex = resolvedDesignIndex,
+                });
+                selectedObjectIds.Add(objectId);
+            }
         }
 
         private static bool IsRuntimeOwnedContentSelectionDesign(
@@ -473,13 +515,109 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return false;
         }
 
+        private static ScenarioModelStageDefinition FindNextStage(ScenarioModelStageDefinition[] stages, int currentIndex)
+        {
+            return FindNthNextStage(stages, currentIndex, 1);
+        }
+
+        private static ScenarioModelStageDefinition FindNthNextStage(ScenarioModelStageDefinition[] stages, int currentIndex, int ordinal)
+        {
+            if (ordinal <= 0)
+                return null;
+
+            ScenarioModelStageDefinition[] safeStages = stages ?? new ScenarioModelStageDefinition[0];
+            int found = 0;
+            for (int i = currentIndex + 1; i < safeStages.Length; i++)
+            {
+                if (safeStages[i] == null)
+                    continue;
+
+                found++;
+                if (found == ordinal)
+                    return safeStages[i];
+            }
+
+            return null;
+        }
+
+        private static Dictionary<string, ObjectiveGuideCapability> BuildObjectiveGuideCapabilities(PlayableObjectCatalog catalog)
+        {
+            var capabilities = new Dictionary<string, ObjectiveGuideCapability>(StringComparer.Ordinal);
+            PromptIntentObjectiveCapabilityDescriptor[] registryCapabilities = PromptIntentCapabilityRegistry.GetObjectiveCapabilities();
+            for (int i = 0; i < registryCapabilities.Length; i++)
+            {
+                PromptIntentObjectiveCapabilityDescriptor capability = registryCapabilities[i];
+                string kind = IntentAuthoringUtility.Normalize(capability != null ? capability.kind : string.Empty);
+                if (string.IsNullOrEmpty(kind))
+                    continue;
+
+                capabilities[kind] = new ObjectiveGuideCapability
+                {
+                    TargetEventKey = IntentAuthoringUtility.Normalize(capability.targetEventKey),
+                    CompletionStepConditionType = IntentAuthoringUtility.Normalize(capability.completionStepConditionType),
+                    CompletionGameplaySignalId = IntentAuthoringUtility.Normalize(capability.completionGameplaySignalId),
+                    SupportsProjectedCurrencyGuide = capability.supportsProjectedCurrencyGuide,
+                };
+            }
+
+            FeatureDescriptor[] featureDescriptors = catalog != null ? catalog.FeatureDescriptors ?? new FeatureDescriptor[0] : new FeatureDescriptor[0];
+            for (int i = 0; i < featureDescriptors.Length; i++)
+            {
+                FeatureObjectiveDescriptor[] objectives = featureDescriptors[i] != null ? featureDescriptors[i].objectiveKinds ?? new FeatureObjectiveDescriptor[0] : new FeatureObjectiveDescriptor[0];
+                for (int j = 0; j < objectives.Length; j++)
+                {
+                    FeatureObjectiveDescriptor objective = objectives[j];
+                    string kind = IntentAuthoringUtility.Normalize(objective != null ? objective.kind : string.Empty);
+                    if (string.IsNullOrEmpty(kind))
+                        continue;
+
+                    if (!capabilities.TryGetValue(kind, out ObjectiveGuideCapability capability))
+                    {
+                        capability = new ObjectiveGuideCapability();
+                        capabilities[kind] = capability;
+                    }
+
+                    capability.TargetEventKey = PreferNormalized(objective != null ? objective.targetEventKey : string.Empty, capability.TargetEventKey);
+                    capability.CompletionStepConditionType = PreferNormalized(objective != null ? objective.completionStepConditionType : string.Empty, capability.CompletionStepConditionType);
+                    capability.CompletionGameplaySignalId = PreferNormalized(objective != null ? objective.completionGameplaySignalId : string.Empty, capability.CompletionGameplaySignalId);
+                    capability.SupportsProjectedCurrencyGuide = capability.SupportsProjectedCurrencyGuide || (objective != null && objective.supportsProjectedCurrencyGuide);
+                }
+            }
+
+            return capabilities;
+        }
+
+        private static bool TryGetObjectiveGuideCapability(
+            Dictionary<string, ObjectiveGuideCapability> capabilities,
+            string kind,
+            out ObjectiveGuideCapability capability)
+        {
+            capability = null;
+            string normalizedKind = IntentAuthoringUtility.Normalize(kind);
+            return !string.IsNullOrEmpty(normalizedKind) &&
+                capabilities != null &&
+                capabilities.TryGetValue(normalizedKind, out capability) &&
+                capability != null;
+        }
+
+        private static string PreferNormalized(string candidate, string fallback)
+        {
+            string normalizedCandidate = IntentAuthoringUtility.Normalize(candidate);
+            return !string.IsNullOrEmpty(normalizedCandidate)
+                ? normalizedCandidate
+                : IntentAuthoringUtility.Normalize(fallback);
+        }
+
         private static LoweredStageState LowerStage(
             ScenarioModelStageDefinition stage,
+            ScenarioModelStageDefinition nextStage,
+            ScenarioModelStageDefinition followingStage,
             string previousStageId,
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
             Dictionary<string, ItemRef> outputItemsByTargetId,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
             ScenarioModelLoweringResult result)
         {
             string stageId = IntentAuthoringUtility.Normalize(stage.id);
@@ -492,11 +630,15 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             FlowBeatDefinition[] introBeats = BuildIntroBeats(stage, stageStatesById, spawnKeys, stageId, loweredStage.Actions, result);
             string lastIntroBeatId = introBeats.Length > 0 ? introBeats[introBeats.Length - 1].id : string.Empty;
-            FlowBeatDefinition[] entryGuideBeats = BuildEntryGuideBeats(stage, stageStatesById, spawnKeys, stageId, lastIntroBeatId, loweredStage.Actions, result);
+            FlowBeatDefinition[] entryGuideBeats = BuildEntryGuideBeats(stage, nextStage, followingStage, stageStatesById, spawnKeys, objectiveGuideCapabilities, stageId, lastIntroBeatId, loweredStage.Actions, result);
             string lastEntrySetupBeatId = entryGuideBeats.Length > 0
                 ? entryGuideBeats[entryGuideBeats.Length - 1].id
                 : lastIntroBeatId;
-            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
+            FlowBeatDefinition[] entryFeatureActionBeats = BuildEntryFeatureActionBeats(stage, stageStatesById, spawnKeys, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
+            lastEntrySetupBeatId = entryFeatureActionBeats.Length > 0
+                ? entryFeatureActionBeats[entryFeatureActionBeats.Length - 1].id
+                : lastEntrySetupBeatId;
+            FlowBeatDefinition[] objectiveBeats = BuildObjectiveBeats(stage, stageStatesById, spawnKeys, saleValuesByObjectId, outputItemsByTargetId, objectiveGuideCapabilities, stageId, lastEntrySetupBeatId, loweredStage.Actions, result);
             string lastObjectiveOrEntrySetupBeatId = objectiveBeats.Length > 0
                 ? objectiveBeats[objectiveBeats.Length - 1].id
                 : lastEntrySetupBeatId;
@@ -509,6 +651,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 loweredStage.Beats.Add(introBeats[i]);
             for (int i = 0; i < entryGuideBeats.Length; i++)
                 loweredStage.Beats.Add(entryGuideBeats[i]);
+            for (int i = 0; i < entryFeatureActionBeats.Length; i++)
+                loweredStage.Beats.Add(entryFeatureActionBeats[i]);
             for (int i = 0; i < objectiveBeats.Length; i++)
                 loweredStage.Beats.Add(objectiveBeats[i]);
             for (int i = 0; i < completionFocusBeats.Length; i++)
@@ -567,6 +711,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                             movingTime = DefaultProperties.CameraMovingTime,
                             startDelay = 0f,
                             returnDelay = DefaultProperties.CameraReturnDelay,
+                            completeOnArrival =
+                                ShouldCompleteFocusOnArrivalForGuide(entryEffects, i) ||
+                                ShouldCompleteFocusOnArrivalForFirstObjective(stage, entryEffects, i),
                         },
                     },
                 });
@@ -575,12 +722,85 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             return beats.ToArray();
         }
 
+        private static bool ShouldCompleteFocusOnArrivalForGuide(ScenarioModelEffectDefinition[] effects, int focusEffectIndex)
+        {
+            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = focusEffectIndex + 1; i < safeEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = safeEffects[i];
+                if (effect == null)
+                    continue;
+
+                if (PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
+                    return false;
+
+                if (!string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal))
+                    continue;
+
+                return string.Equals(
+                    IntentAuthoringUtility.Normalize(effect.timing),
+                    PromptIntentEffectTimingKinds.ARRIVAL,
+                    StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+
+        private static bool ShouldCompleteFocusOnArrivalForFirstObjective(
+            ScenarioModelStageDefinition stage,
+            ScenarioModelEffectDefinition[] effects,
+            int focusEffectIndex)
+        {
+            if (!IsLastCameraFocusEffect(effects, focusEffectIndex) || HasEntrySetupBeatAfterIntro(effects))
+                return false;
+
+            ScenarioModelObjectiveDefinition[] objectives = stage != null ? stage.objectives ?? new ScenarioModelObjectiveDefinition[0] : new ScenarioModelObjectiveDefinition[0];
+            if (objectives.Length == 0 || objectives[0] == null || !objectives[0].absorbsArrow)
+                return false;
+
+            return string.Equals(
+                ResolveArrowTiming(objectives[0]),
+                PromptIntentEffectTimingKinds.ARRIVAL,
+                StringComparison.Ordinal);
+        }
+
+        private static bool IsLastCameraFocusEffect(ScenarioModelEffectDefinition[] effects, int focusEffectIndex)
+        {
+            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = focusEffectIndex + 1; i < safeEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = safeEffects[i];
+                if (effect != null && PromptIntentCapabilityRegistry.IsCameraFocusEffectKind(effect.kind))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool HasEntrySetupBeatAfterIntro(ScenarioModelEffectDefinition[] effects)
+        {
+            ScenarioModelEffectDefinition[] safeEffects = effects ?? new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < safeEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = safeEffects[i];
+                if (effect == null)
+                    continue;
+
+                if (string.Equals(effect.kind, PromptIntentEffectKinds.SHOW_GUIDE_ARROW, StringComparison.Ordinal) ||
+                    TryResolveFeatureActionKind(effect.kind, out string _))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static FlowBeatDefinition[] BuildObjectiveBeats(
             ScenarioModelStageDefinition stage,
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
             Dictionary<string, ItemRef> outputItemsByTargetId,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
             string stageId,
             string lastEntrySetupBeatId,
             List<FlowActionDefinition> actions,
@@ -616,11 +836,102 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     spawnKeys,
                     saleValuesByObjectId,
                     outputItemsByTargetId,
+                    objectiveGuideCapabilities,
                     actions,
                     result));
             }
 
             return beats.ToArray();
+        }
+
+        private static FlowBeatDefinition[] BuildEntryFeatureActionBeats(
+            ScenarioModelStageDefinition stage,
+            Dictionary<string, LoweredStageState> stageStatesById,
+            Dictionary<string, string> spawnKeys,
+            string stageId,
+            string firstPrerequisiteBeatId,
+            List<FlowActionDefinition> actions,
+            ScenarioModelLoweringResult result)
+        {
+            var beats = new List<FlowBeatDefinition>();
+            ScenarioModelEffectDefinition[] entryEffects = stage != null ? stage.entryEffects ?? new ScenarioModelEffectDefinition[0] : new ScenarioModelEffectDefinition[0];
+            for (int i = 0; i < entryEffects.Length; i++)
+            {
+                ScenarioModelEffectDefinition effect = entryEffects[i];
+                if (effect == null || !TryResolveFeatureActionKind(effect.kind, out string actionKind))
+                    continue;
+
+                string beatId = stageId + "__entry_feature_action_" + i.ToString("00");
+                string actionId = BuildBeatScopedFlowActionId(beatId, string.Empty, actionKind);
+                beats.Add(new FlowBeatDefinition
+                {
+                    id = beatId,
+                    enterWhen = beats.Count == 0
+                        ? BuildEntryActionBeatEnterWhen(stage, stageStatesById, spawnKeys, firstPrerequisiteBeatId, result)
+                        : BuildBeatCompletedShowWhen(beats[beats.Count - 1].id),
+                    completeWhen = BuildActionCompletedShowWhen(actionId),
+                });
+
+                actions.Add(new FlowActionDefinition
+                {
+                    id = actionId,
+                    ownerBeatId = beatId,
+                    kind = actionKind,
+                    triggerMode = FlowActionTriggerModes.ON_BEAT_ENTER,
+                    when = new ReactiveConditionGroupDefinition(),
+                    payload = new FlowActionPayloadDefinition
+                    {
+                        featureAction = new FeatureActionPayload
+                        {
+                            targetId = ResolveSpawnKey(spawnKeys, effect.targetObjectId, result, beatId + ".actions." + actionKind + ".payload.featureAction.targetId"),
+                            eventKey = IntentAuthoringUtility.Normalize(effect.eventKey),
+                            designIndex = -1,
+                        },
+                    },
+                });
+            }
+
+            return beats.ToArray();
+        }
+
+        private static bool TryResolveFeatureActionKind(string effectKind, out string actionKind)
+        {
+            actionKind = string.Empty;
+            string normalizedEffectKind = IntentAuthoringUtility.Normalize(effectKind);
+            if (string.IsNullOrEmpty(normalizedEffectKind))
+                return false;
+            if (PromptIntentCapabilityRegistry.TryGetEffectSystemActionAuthoringId(normalizedEffectKind, out string _))
+                return false;
+            if (PromptIntentCapabilityRegistry.EffectBuildsActivationTarget(normalizedEffectKind))
+                return false;
+
+            string[] semanticTags = PromptIntentCapabilityRegistry.GetEffectSemanticTags(normalizedEffectKind);
+            for (int i = 0; i < semanticTags.Length; i++)
+            {
+                string tag = IntentAuthoringUtility.Normalize(semanticTags[i]);
+                if (string.IsNullOrEmpty(tag))
+                    continue;
+
+                actionKind = tag;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static StepConditionDefinition BuildEntryActionBeatEnterWhen(
+            ScenarioModelStageDefinition stage,
+            Dictionary<string, LoweredStageState> stageStatesById,
+            Dictionary<string, string> spawnKeys,
+            string firstPrerequisiteBeatId,
+            ScenarioModelLoweringResult result)
+        {
+            if (!string.IsNullOrEmpty(firstPrerequisiteBeatId))
+                return BuildBeatCompletedShowWhen(firstPrerequisiteBeatId);
+
+            return stage != null && stage.enterCondition != null
+                ? BuildStageEntryShowWhen(stage.enterCondition, stageStatesById, spawnKeys, result)
+                : new StepConditionDefinition { type = StepConditionRules.ALWAYS };
         }
 
         private static FlowBeatDefinition[] BuildCompletionFocusBeats(
@@ -667,6 +978,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                             movingTime = DefaultProperties.CameraMovingTime,
                             startDelay = 0f,
                             returnDelay = DefaultProperties.CameraReturnDelay,
+                            completeOnArrival = ShouldCompleteFocusOnArrivalForGuide(completionEffects, i),
                         },
                     },
                 });
@@ -677,8 +989,11 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static FlowBeatDefinition[] BuildEntryGuideBeats(
             ScenarioModelStageDefinition stage,
+            ScenarioModelStageDefinition nextStage,
+            ScenarioModelStageDefinition followingStage,
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
             string stageId,
             string lastIntroBeatId,
             List<FlowActionDefinition> actions,
@@ -686,9 +1001,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
         {
             return BuildGuideBeats(
                 stage != null ? stage.entryEffects : null,
+                stage != null ? stage.objectives : null,
+                nextStage != null ? nextStage.enterCondition : null,
+                nextStage != null ? nextStage.objectives : null,
+                followingStage != null ? followingStage.enterCondition : null,
                 stage != null ? stage.enterCondition : null,
                 stageStatesById,
                 spawnKeys,
+                objectiveGuideCapabilities,
                 stageId,
                 "__entry_guide_",
                 "__focus_",
@@ -709,7 +1029,12 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 stage != null ? stage.completionEffects : null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 spawnKeys,
+                null,
                 stageId,
                 "__completion_guide_",
                 "__completion_focus_",
@@ -720,9 +1045,14 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
         private static FlowBeatDefinition[] BuildGuideBeats(
             ScenarioModelEffectDefinition[] effects,
+            ScenarioModelObjectiveDefinition[] objectives,
+            ScenarioModelConditionDefinition nextStageEnterCondition,
+            ScenarioModelObjectiveDefinition[] nextStageObjectives,
+            ScenarioModelConditionDefinition followingStageEnterCondition,
             ScenarioModelConditionDefinition enterCondition,
             Dictionary<string, LoweredStageState> stageStatesById,
             Dictionary<string, string> spawnKeys,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
             string stageId,
             string beatIdPrefix,
             string focusBeatPrefix,
@@ -740,6 +1070,9 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
                 string beatId = stageId + beatIdPrefix + i.ToString("00");
                 string actionId = BuildBeatScopedFlowActionId(beatId, string.Empty, FlowActionKinds.ARROW_GUIDE);
+                ReactiveConditionGroupDefinition projectedCurrencyWhen =
+                    BuildProjectedCurrencyEntryGuideCondition(objectives, nextStageEnterCondition, effect, spawnKeys, objectiveGuideCapabilities, result, beatId) ??
+                    BuildProjectedCurrencyEntryGuideCondition(nextStageObjectives, followingStageEnterCondition, effect, spawnKeys, objectiveGuideCapabilities, result, beatId);
                 beats.Add(new FlowBeatDefinition
                 {
                     id = beatId,
@@ -754,8 +1087,8 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                     id = actionId,
                     ownerBeatId = beatId,
                     kind = FlowActionKinds.ARROW_GUIDE,
-                    triggerMode = FlowActionTriggerModes.ON_BEAT_ENTER,
-                    when = new ReactiveConditionGroupDefinition(),
+                    triggerMode = projectedCurrencyWhen != null ? FlowActionTriggerModes.REACTIVE : FlowActionTriggerModes.ON_BEAT_ENTER,
+                    when = projectedCurrencyWhen ?? new ReactiveConditionGroupDefinition(),
                     payload = new FlowActionPayloadDefinition
                     {
                         arrowGuide = new ArrowGuideActionPayload
@@ -769,6 +1102,78 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return beats.ToArray();
+        }
+
+        private static ReactiveConditionGroupDefinition BuildProjectedCurrencyEntryGuideCondition(
+            ScenarioModelObjectiveDefinition[] objectives,
+            ScenarioModelConditionDefinition nextStageEnterCondition,
+            ScenarioModelEffectDefinition effect,
+            Dictionary<string, string> spawnKeys,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
+            ScenarioModelLoweringResult result,
+            string beatId)
+        {
+            if (effect == null)
+                return null;
+
+            string effectEventKey = IntentAuthoringUtility.Normalize(effect.eventKey);
+            string effectTargetObjectId = IntentAuthoringUtility.Normalize(effect.targetObjectId);
+            if (string.IsNullOrEmpty(effectEventKey) || string.IsNullOrEmpty(effectTargetObjectId))
+                return null;
+
+            string effectTargetId = ResolveKnownSpawnKey(spawnKeys, effectTargetObjectId);
+            ScenarioModelObjectiveDefinition[] safeObjectives = objectives ?? new ScenarioModelObjectiveDefinition[0];
+            for (int i = 0; i < safeObjectives.Length; i++)
+            {
+                ScenarioModelObjectiveDefinition objective = safeObjectives[i];
+                if (objective == null)
+                    continue;
+
+                string objectiveKind = IntentAuthoringUtility.Normalize(objective.kind);
+                if (!TryGetObjectiveGuideCapability(objectiveGuideCapabilities, objectiveKind, out ObjectiveGuideCapability objectiveCapability))
+                    continue;
+
+                string objectiveTargetObjectId = IntentAuthoringUtility.Normalize(objective.targetObjectId);
+                string objectiveTargetId = ResolveKnownSpawnKey(spawnKeys, objectiveTargetObjectId);
+                if (string.IsNullOrEmpty(objectiveKind) ||
+                    !objectiveCapability.SupportsProjectedCurrencyGuide ||
+                    !string.Equals(IntentAuthoringUtility.Normalize(objectiveCapability.TargetEventKey), effectEventKey, StringComparison.Ordinal) ||
+                    !TargetsMatch(effectTargetObjectId, effectTargetId, objectiveTargetObjectId, objectiveTargetId) ||
+                    string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objective.currencyId)))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(objectiveCapability.CompletionStepConditionType, StepConditionRules.GAMEPLAY_SIGNAL, StringComparison.Ordinal) ||
+                    !PromptIntentCapabilityRegistry.GameplaySignalSupportsCurrencyId(objectiveCapability.CompletionGameplaySignalId))
+                {
+                    continue;
+                }
+
+                int amount = ResolveObjectiveAmountValue(objective);
+                if (amount <= 0)
+                    amount = ResolveCurrencyThresholdAmount(nextStageEnterCondition, objective.currencyId);
+                if (amount <= 0)
+                    continue;
+
+                return BuildProjectedCurrencyArrowCondition(objective, spawnKeys, result, beatId, amount);
+            }
+
+            return null;
+        }
+
+        private static bool TargetsMatch(string leftObjectId, string leftTargetId, string rightObjectId, string rightTargetId)
+        {
+            if (!string.IsNullOrEmpty(leftTargetId) && !string.IsNullOrEmpty(rightTargetId))
+                return string.Equals(leftTargetId, rightTargetId, StringComparison.Ordinal);
+
+            if (!string.IsNullOrEmpty(leftTargetId) && string.Equals(leftTargetId, rightObjectId, StringComparison.Ordinal))
+                return true;
+
+            if (!string.IsNullOrEmpty(rightTargetId) && string.Equals(rightTargetId, leftObjectId, StringComparison.Ordinal))
+                return true;
+
+            return string.Equals(leftObjectId, rightObjectId, StringComparison.Ordinal);
         }
 
         private static StepConditionDefinition BuildGuideBeatEnterWhen(
@@ -826,6 +1231,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             Dictionary<string, string> spawnKeys,
             Dictionary<string, ScenarioModelSaleValueDefinition> saleValuesByObjectId,
             Dictionary<string, ItemRef> outputItemsByTargetId,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
             List<FlowActionDefinition> actions,
             ScenarioModelLoweringResult result)
         {
@@ -838,40 +1244,206 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             if (objective.absorbsArrow)
             {
-                string arrowEventKey = IntentAuthoringUtility.Normalize(objective.arrowEventKey);
-                if (string.IsNullOrEmpty(arrowEventKey))
+                AddObjectiveArrowGuideAction(
+                    beatId,
+                    string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objective.arrowTargetObjectId))
+                        ? objective.targetObjectId
+                        : objective.arrowTargetObjectId,
+                    IntentAuthoringUtility.Normalize(objective.arrowEventKey),
+                    spawnKeys,
+                    actions,
+                    result,
+                    true);
+            }
+            else if (ShouldCreateProjectedCurrencyArrow(objective, objectiveGuideCapabilities, out ObjectiveGuideCapability objectiveCapability) && !HasOwnedArrowGuideAction(actions, beatId))
+            {
+                AddObjectiveArrowGuideAction(
+                    beatId,
+                    objective.targetObjectId,
+                    objectiveCapability.TargetEventKey,
+                    spawnKeys,
+                    actions,
+                    result,
+                    false,
+                    FlowActionTriggerModes.REACTIVE,
+                    BuildProjectedCurrencyArrowCondition(objective, spawnKeys, result, beatId));
+            }
+            else if (IsUnlockObjectObjective(objective) && !HasOwnedArrowGuideAction(actions, beatId))
+            {
+                AddObjectiveArrowGuideAction(
+                    beatId,
+                    objective.targetObjectId,
+                    FlowTargetEventKeys.ROOT,
+                    spawnKeys,
+                    actions,
+                    result,
+                    false);
+            }
+
+            return beat;
+        }
+
+        private static bool IsUnlockObjectObjective(ScenarioModelObjectiveDefinition objective)
+        {
+            return objective != null &&
+                string.Equals(
+                    IntentAuthoringUtility.Normalize(objective.kind),
+                    PromptIntentObjectiveKinds.UNLOCK_OBJECT,
+                    StringComparison.Ordinal);
+        }
+
+        private static bool ShouldCreateProjectedCurrencyArrow(
+            ScenarioModelObjectiveDefinition objective,
+            Dictionary<string, ObjectiveGuideCapability> objectiveGuideCapabilities,
+            out ObjectiveGuideCapability objectiveCapability)
+        {
+            objectiveCapability = null;
+            if (objective == null || ResolveObjectiveAmountValue(objective) <= 0)
+                return false;
+
+            string kind = IntentAuthoringUtility.Normalize(objective.kind);
+            if (!TryGetObjectiveGuideCapability(objectiveGuideCapabilities, kind, out objectiveCapability))
+                return false;
+
+            if (string.IsNullOrEmpty(kind) ||
+                !objectiveCapability.SupportsProjectedCurrencyGuide ||
+                string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objective.targetObjectId)) ||
+                string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objective.currencyId)) ||
+                string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objectiveCapability.TargetEventKey)))
+            {
+                return false;
+            }
+
+            return string.Equals(objectiveCapability.CompletionStepConditionType, StepConditionRules.GAMEPLAY_SIGNAL, StringComparison.Ordinal) &&
+                PromptIntentCapabilityRegistry.GameplaySignalSupportsCurrencyId(objectiveCapability.CompletionGameplaySignalId);
+        }
+
+        private static ReactiveConditionGroupDefinition BuildProjectedCurrencyArrowCondition(
+            ScenarioModelObjectiveDefinition objective,
+            Dictionary<string, string> spawnKeys,
+            ScenarioModelLoweringResult result,
+            string beatId)
+        {
+            return BuildProjectedCurrencyArrowCondition(objective, spawnKeys, result, beatId, ResolveObjectiveAmountValue(objective));
+        }
+
+        private static ReactiveConditionGroupDefinition BuildProjectedCurrencyArrowCondition(
+            ScenarioModelObjectiveDefinition objective,
+            Dictionary<string, string> spawnKeys,
+            ScenarioModelLoweringResult result,
+            string beatId,
+            int amount)
+        {
+            return new ReactiveConditionGroupDefinition
+            {
+                mode = ReactiveConditionRules.MODE_ALL,
+                conditions = new[]
+                {
+                    new ReactiveConditionDefinition
+                    {
+                        type = StepConditionRules.PROJECTED_CURRENCY_AT_LEAST,
+                        targetId = ResolveSpawnKey(
+                            spawnKeys,
+                            objective.targetObjectId,
+                            result,
+                            beatId + ".actions.arrow_guide.when.conditions[0].targetId"),
+                        currencyId = IntentAuthoringUtility.Normalize(objective.currencyId),
+                        amount = amount,
+                    },
+                },
+            };
+        }
+
+        private static int ResolveCurrencyThresholdAmount(ScenarioModelConditionDefinition condition, string currencyId)
+        {
+            if (condition == null)
+                return 0;
+
+            string conditionKind = IntentAuthoringUtility.Normalize(condition.kind);
+            if (!string.Equals(PromptIntentCapabilityRegistry.GetConditionStepConditionType(conditionKind), StepConditionRules.CURRENCY_AT_LEAST, StringComparison.Ordinal))
+                return 0;
+
+            if (!string.Equals(IntentAuthoringUtility.Normalize(condition.currencyId), IntentAuthoringUtility.Normalize(currencyId), StringComparison.Ordinal))
+                return 0;
+
+            return condition.amount > 0 ? condition.amount : condition.amountValue;
+        }
+
+        private static int ResolveObjectiveAmountValue(ScenarioModelObjectiveDefinition objective)
+        {
+            if (objective == null)
+                return 0;
+
+            return objective.amount > 0 ? objective.amount : objective.amountValue;
+        }
+
+        private static bool HasOwnedArrowGuideAction(List<FlowActionDefinition> actions, string beatId)
+        {
+            if (actions == null)
+                return false;
+
+            string normalizedBeatId = IntentAuthoringUtility.Normalize(beatId);
+            for (int i = 0; i < actions.Count; i++)
+            {
+                FlowActionDefinition action = actions[i];
+                if (action == null)
+                    continue;
+
+                if (string.Equals(IntentAuthoringUtility.Normalize(action.ownerBeatId), normalizedBeatId, StringComparison.Ordinal) &&
+                    string.Equals(IntentAuthoringUtility.Normalize(action.kind), FlowActionKinds.ARROW_GUIDE, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void AddObjectiveArrowGuideAction(
+            string beatId,
+            string targetObjectId,
+            string eventKey,
+            Dictionary<string, string> spawnKeys,
+            List<FlowActionDefinition> actions,
+            ScenarioModelLoweringResult result,
+            bool requireExplicitEventKey,
+            string triggerMode = FlowActionTriggerModes.ON_BEAT_ENTER,
+            ReactiveConditionGroupDefinition when = null)
+        {
+            string arrowEventKey = IntentAuthoringUtility.Normalize(eventKey);
+            if (string.IsNullOrEmpty(arrowEventKey))
+            {
+                if (requireExplicitEventKey)
                 {
                     result.Errors.Add(beatId + ".actions.arrow_guide.payload.arrowGuide.eventKey가 비어 있습니다. absorbed show_arrow는 explicit eventKey가 필요합니다.");
                     if (result.FailureCode == PlayableFailureCode.None)
                         result.FailureCode = PlayableFailureCode.LoweringFailed;
                 }
-
-                actions.Add(new FlowActionDefinition
+                else
                 {
-                    id = BuildBeatScopedFlowActionId(beatId, string.Empty, FlowActionKinds.ARROW_GUIDE),
-                    ownerBeatId = beatId,
-                    kind = FlowActionKinds.ARROW_GUIDE,
-                    triggerMode = FlowActionTriggerModes.ON_BEAT_ENTER,
-                    when = new ReactiveConditionGroupDefinition(),
-                    payload = new FlowActionPayloadDefinition
-                    {
-                        arrowGuide = new ArrowGuideActionPayload
-                        {
-                            targetId = ResolveSpawnKey(
-                                spawnKeys,
-                                string.IsNullOrEmpty(IntentAuthoringUtility.Normalize(objective.arrowTargetObjectId))
-                                    ? objective.targetObjectId
-                                    : objective.arrowTargetObjectId,
-                                result,
-                                beatId + ".actions.arrow_guide.payload.arrowGuide.targetId"),
-                            eventKey = arrowEventKey,
-                            autoHideOnBeatExit = true,
-                        },
-                    },
-                });
+                    arrowEventKey = FlowTargetEventKeys.ROOT;
+                }
             }
 
-            return beat;
+            actions.Add(new FlowActionDefinition
+            {
+                id = BuildBeatScopedFlowActionId(beatId, string.Empty, FlowActionKinds.ARROW_GUIDE),
+                ownerBeatId = beatId,
+                kind = FlowActionKinds.ARROW_GUIDE,
+                triggerMode = string.IsNullOrWhiteSpace(triggerMode) ? FlowActionTriggerModes.ON_BEAT_ENTER : triggerMode.Trim(),
+                when = when ?? new ReactiveConditionGroupDefinition(),
+                payload = new FlowActionPayloadDefinition
+                {
+                    arrowGuide = new ArrowGuideActionPayload
+                    {
+                        targetId = ResolveSpawnKey(
+                            spawnKeys,
+                            targetObjectId,
+                            result,
+                            beatId + ".actions.arrow_guide.payload.arrowGuide.targetId"),
+                        eventKey = arrowEventKey,
+                        autoHideOnBeatExit = true,
+                    },
+                },
+            });
         }
 
         private static StepConditionDefinition BuildFirstObjectiveShowWhen(
@@ -1055,7 +1627,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (!TryBuildActivationTarget(effect, spawnKeys, result, out ActivationTargetDefinition target) || target == null)
                     continue;
 
-                string uniqueKey = IntentAuthoringUtility.Normalize(target.kind) + ":" + IntentAuthoringUtility.Normalize(target.id);
+                string uniqueKey = BuildActivationTargetUniqueKey(target);
                 if (!seenTargetIds.Add(uniqueKey))
                     continue;
 
@@ -1090,7 +1662,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (!TryBuildActivationTarget(effect, spawnKeys, result, out ActivationTargetDefinition target))
                     continue;
 
-                string uniqueKey = IntentAuthoringUtility.Normalize(target.kind) + ":" + IntentAuthoringUtility.Normalize(target.id);
+                string uniqueKey = BuildActivationTargetUniqueKey(target);
                 if (!seenTargetIds.Add(uniqueKey))
                     continue;
 
@@ -1131,7 +1703,7 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                 if (!TryBuildActivationTarget(effect, spawnKeys, result, out ActivationTargetDefinition target))
                     continue;
 
-                string uniqueKey = IntentAuthoringUtility.Normalize(target.kind) + ":" + IntentAuthoringUtility.Normalize(target.id);
+                string uniqueKey = BuildActivationTargetUniqueKey(target);
                 if (!seenTargetIds.Add(uniqueKey))
                     continue;
 
@@ -1290,11 +1862,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         currencyId = IntentAuthoringUtility.Normalize(enterCondition.currencyId),
                         amount = enterCondition.amount,
                     };
+                case StepConditionRules.PROJECTED_CURRENCY_AT_LEAST:
+                    return new StepConditionDefinition
+                    {
+                        type = StepConditionRules.PROJECTED_CURRENCY_AT_LEAST,
+                        targetId = ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId"),
+                        currencyId = IntentAuthoringUtility.Normalize(enterCondition.currencyId),
+                        amount = enterCondition.amount,
+                    };
                 case StepConditionRules.UNLOCKER_UNLOCKED:
                     return new StepConditionDefinition
                     {
                         type = StepConditionRules.UNLOCKER_UNLOCKED,
                         unlockerId = ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId"),
+                    };
+                case StepConditionRules.CAPABILITY_LEVEL_AT_LEAST:
+                    return new StepConditionDefinition
+                    {
+                        type = StepConditionRules.CAPABILITY_LEVEL_AT_LEAST,
+                        targetId = IntentAuthoringUtility.Normalize(enterCondition.targetObjectId),
+                        amount = enterCondition.amount,
                     };
                 case StepConditionRules.GAMEPLAY_SIGNAL:
                     return new StepConditionDefinition
@@ -1341,11 +1928,26 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
                         currencyId = IntentAuthoringUtility.Normalize(enterCondition.currencyId),
                         amount = enterCondition.amount,
                     };
+                case StepConditionRules.PROJECTED_CURRENCY_AT_LEAST:
+                    return new ReactiveConditionDefinition
+                    {
+                        type = StepConditionRules.PROJECTED_CURRENCY_AT_LEAST,
+                        targetId = ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId"),
+                        currencyId = IntentAuthoringUtility.Normalize(enterCondition.currencyId),
+                        amount = enterCondition.amount,
+                    };
                 case StepConditionRules.UNLOCKER_UNLOCKED:
                     return new ReactiveConditionDefinition
                     {
                         type = StepConditionRules.UNLOCKER_UNLOCKED,
                         unlockerId = ResolveSpawnKey(spawnKeys, enterCondition.targetObjectId, result, "enterWhen.targetObjectId"),
+                    };
+                case StepConditionRules.CAPABILITY_LEVEL_AT_LEAST:
+                    return new ReactiveConditionDefinition
+                    {
+                        type = StepConditionRules.CAPABILITY_LEVEL_AT_LEAST,
+                        targetId = IntentAuthoringUtility.Normalize(enterCondition.targetObjectId),
+                        amount = enterCondition.amount,
                     };
                 case StepConditionRules.GAMEPLAY_SIGNAL:
                     return new ReactiveConditionDefinition
@@ -1466,6 +2068,18 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
 
             if (PromptIntentCapabilityRegistry.EffectBuildsSystemActionTarget(effectKind))
             {
+                if (string.Equals(effectKind, PromptIntentEffectKinds.SET_CAPABILITY_LEVEL, StringComparison.Ordinal))
+                {
+                    target = new ActivationTargetDefinition
+                    {
+                        kind = ActivationTargetKinds.SYSTEM_ACTION,
+                        id = SystemActionIds.SET_CAPABILITY_LEVEL,
+                        capabilityId = IntentAuthoringUtility.Normalize(effect.targetObjectId),
+                        level = Math.Max(0, effect.amount),
+                    };
+                    return true;
+                }
+
                 target = new ActivationTargetDefinition
                 {
                     kind = ActivationTargetKinds.SYSTEM_ACTION,
@@ -1475,6 +2089,17 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             }
 
             return false;
+        }
+
+        private static string BuildActivationTargetUniqueKey(ActivationTargetDefinition target)
+        {
+            if (target == null)
+                return string.Empty;
+
+            return IntentAuthoringUtility.Normalize(target.kind) +
+                ":" + IntentAuthoringUtility.Normalize(target.id) +
+                ":" + IntentAuthoringUtility.Normalize(target.capabilityId) +
+                ":" + Math.Max(0, target.level);
         }
 
         private static Dictionary<string, string> BuildSpawnKeyLookup(ScenarioModelObjectDefinition[] objects)
@@ -2367,6 +2992,24 @@ namespace Supercent.PlayableAI.Generation.Editor.Compile
             result.Errors.Add(label + "에서 알 수 없는 object id '" + normalizedObjectId + "'를 참조하고 있습니다.");
             if (result.FailureCode == PlayableFailureCode.None)
                 result.FailureCode = PlayableFailureCode.LoweringFailed;
+            return string.Empty;
+        }
+
+        private static string ResolveKnownSpawnKey(Dictionary<string, string> spawnKeys, string objectId)
+        {
+            string normalizedObjectId = IntentAuthoringUtility.Normalize(objectId);
+            if (spawnKeys != null && spawnKeys.TryGetValue(normalizedObjectId, out string spawnKey))
+                return spawnKey;
+
+            if (spawnKeys != null)
+            {
+                foreach (string knownSpawnKey in spawnKeys.Values)
+                {
+                    if (string.Equals(knownSpawnKey, normalizedObjectId, StringComparison.Ordinal))
+                        return normalizedObjectId;
+                }
+            }
+
             return string.Empty;
         }
 

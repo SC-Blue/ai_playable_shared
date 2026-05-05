@@ -8,7 +8,9 @@ namespace Supercent.PlayableAI.Common.Contracts
         public const string BEAT_COMPLETED = "beat_completed";
         public const string ACTION_STARTED = "action_started";
         public const string CURRENCY_AT_LEAST = "currency_at_least";
+        public const string PROJECTED_CURRENCY_AT_LEAST = "projected_currency_at_least";
         public const string UNLOCKER_UNLOCKED = "unlocker_unlocked";
+        public const string CAPABILITY_LEVEL_AT_LEAST = "capability_level_at_least";
         public const string TIMEOUT = "timeout";
         public const string ACTION_COMPLETED = "action_completed";
         public const string GAMEPLAY_SIGNAL = "gameplay_signal";
@@ -19,7 +21,9 @@ namespace Supercent.PlayableAI.Common.Contracts
             BEAT_COMPLETED,
             ACTION_STARTED,
             CURRENCY_AT_LEAST,
+            PROJECTED_CURRENCY_AT_LEAST,
             UNLOCKER_UNLOCKED,
+            CAPABILITY_LEVEL_AT_LEAST,
             ACTION_COMPLETED,
             GAMEPLAY_SIGNAL,
             TIMEOUT,
@@ -49,8 +53,18 @@ namespace Supercent.PlayableAI.Common.Contracts
                     return string.IsNullOrWhiteSpace(condition.targetId) ? label + ".targetId가 필요합니다." : null;
                 case CURRENCY_AT_LEAST:
                     return condition.amount < 0 ? label + ".amount는 0 이상이어야 합니다." : null;
+                case PROJECTED_CURRENCY_AT_LEAST:
+                    if (string.IsNullOrWhiteSpace(condition.targetId))
+                        return label + ".targetId가 필요합니다.";
+                    if (string.IsNullOrWhiteSpace(condition.currencyId))
+                        return label + ".currencyId가 필요합니다.";
+                    return condition.amount <= 0 ? label + ".amount는 0보다 커야 합니다." : null;
                 case UNLOCKER_UNLOCKED:
                     return string.IsNullOrWhiteSpace(condition.unlockerId) ? label + ".unlockerId가 필요합니다." : null;
+                case CAPABILITY_LEVEL_AT_LEAST:
+                    if (string.IsNullOrWhiteSpace(condition.targetId))
+                        return label + ".targetId(capabilityId)가 필요합니다.";
+                    return condition.amount < 0 ? label + ".amount는 0 이상이어야 합니다." : null;
                 case TIMEOUT:
                     return condition.seconds < 0f ? label + ".seconds는 0 이상이어야 합니다." : null;
                 case ACTION_COMPLETED:

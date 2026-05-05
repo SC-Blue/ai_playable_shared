@@ -650,7 +650,6 @@
 "contentStore.uploadJobIdMissing","upload queue 응답에서 job id를 확인하지 못했습니다.","Could not find job id in upload queue response.","Khong tim thay job id trong phan hoi upload queue.","Unity Content Store"
 "contentStore.serverUploadJobQueued","서버 upload job 등록됨: {0}","Server upload job queued: {0}","Da dang ky upload job tren server: {0}","Unity Content Store"
 "unity.tooltip.generatedBinding","생성 파이프라인이 자동으로 바인딩한 참조입니다. 이 인스펙터에서는 직접 수정하지 않습니다.","This reference is automatically bound by the generation pipeline and is not edited directly in this inspector.","Tham chieu nay duoc pipeline tao tu dong gan va khong chinh truc tiep trong inspector nay.","Unity Inspector"
-"unity.tooltip.manualField","포스트베이크/자동 생성이 아닌, prefab 또는 object authoring으로 직접 관리하는 필드입니다.","This field is managed directly by prefab or object authoring, not by post-bake or auto generation.","Truong nay duoc quan ly truc tiep bang prefab hoac object authoring, khong phai post-bake hoac auto generation.","Unity Inspector"
 "auth.serverUrlMissing","AIPS 서버 URL이 설정되지 않았습니다.","AIPS server URL is not configured.","Chua cau hinh URL server AIPS.","Unity auth"
 "auth.savedLoginMissing","저장된 로그인이 없습니다.","No saved login was found.","Khong tim thay dang nhap da luu.","Unity auth"
 "auth.savedLoginRequestFailed","저장된 로그인 확인 요청에 실패했습니다.\n\n{0}","Saved login check request failed.\n\n{0}","Yeu cau kiem tra dang nhap da luu that bai.\n\n{0}","Unity auth"

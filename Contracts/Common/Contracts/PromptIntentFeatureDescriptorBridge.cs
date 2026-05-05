@@ -185,6 +185,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                         existing.requiresItem = existing.requiresItem || (objective != null && objective.requiresItem);
                         existing.requiresInputItem = existing.requiresInputItem || (objective != null && objective.requiresInputItem);
                         existing.requiresCurrencyId = existing.requiresCurrencyId || (objective != null && objective.requiresCurrencyId);
+                        existing.supportsAmountValue = existing.supportsAmountValue || (objective != null && (objective.supportsAmountValue || objective.requiresAmountValue));
                         existing.requiresAmountValue = existing.requiresAmountValue || (objective != null && objective.requiresAmountValue);
                         existing.requiresSeconds = existing.requiresSeconds || (objective != null && objective.requiresSeconds);
                         existing.canAbsorbArrow = existing.canAbsorbArrow || (objective != null && (objective.canAbsorbArrow || objective.requiresAbsorbedArrow));
@@ -204,6 +205,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                             requiresItem = objective != null && objective.requiresItem,
                             requiresInputItem = objective != null && objective.requiresInputItem,
                             requiresCurrencyId = objective != null && objective.requiresCurrencyId,
+                            supportsAmountValue = objective != null && (objective.supportsAmountValue || objective.requiresAmountValue),
                             requiresAmountValue = objective != null && objective.requiresAmountValue,
                             requiresSeconds = objective != null && objective.requiresSeconds,
                             canAbsorbArrow = objective != null && (objective.canAbsorbArrow || objective.requiresAbsorbedArrow),
@@ -618,6 +620,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                         existing.completionStepConditionType = Prefer(Normalize(objective != null ? objective.completionStepConditionType : string.Empty), existing.completionStepConditionType);
                         existing.completionGameplaySignalId = Prefer(Normalize(objective != null ? objective.completionGameplaySignalId : string.Empty), existing.completionGameplaySignalId);
                         existing.targetEventKey = Prefer(Normalize(objective != null ? objective.targetEventKey : string.Empty), existing.targetEventKey);
+                        existing.supportsProjectedCurrencyGuide = existing.supportsProjectedCurrencyGuide || (objective != null && objective.supportsProjectedCurrencyGuide);
                         existing.requiresAbsorbedArrow = existing.requiresAbsorbedArrow || (objective != null && objective.requiresAbsorbedArrow);
                         existing.requiredArrowEventKey = Prefer(Normalize(objective != null ? objective.requiredArrowEventKey : string.Empty), existing.requiredArrowEventKey);
                         merged[key] = existing;
@@ -637,6 +640,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                             completionStepConditionType = Normalize(objective != null ? objective.completionStepConditionType : string.Empty),
                             completionGameplaySignalId = Normalize(objective != null ? objective.completionGameplaySignalId : string.Empty),
                             targetEventKey = Normalize(objective != null ? objective.targetEventKey : string.Empty),
+                            supportsProjectedCurrencyGuide = objective != null && objective.supportsProjectedCurrencyGuide,
                             requiresAbsorbedArrow = objective != null && objective.requiresAbsorbedArrow,
                             requiredArrowEventKey = Normalize(objective != null ? objective.requiredArrowEventKey : string.Empty),
                         });
@@ -919,6 +923,7 @@ namespace Supercent.PlayableAI.Common.Contracts
                         requiresItem = value.requiresItem,
                         requiresInputItem = value.requiresInputItem,
                         requiresCurrencyId = value.requiresCurrencyId,
+                        supportsAmountValue = value.supportsAmountValue,
                         requiresAmountValue = value.requiresAmountValue,
                         requiresSeconds = value.requiresSeconds,
                         canAbsorbArrow = value.canAbsorbArrow,
